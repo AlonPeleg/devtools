@@ -142,7 +142,17 @@
     .search-counter { font-size: 9px; padding: 0 5px; opacity: 0.6; font-family: var(--font-mono); white-space: nowrap; }
 
     /* ---------- Code display ---------- */
-    .content { flex-grow: 1; overflow: auto; background: var(--bg); position: relative; }
+    .content-row { flex: 1 1 auto; display: flex; min-height: 0; }
+    /* .content-wrap exists so the sticky-scroll breadcrumb can overlay .content from OUTSIDE its
+       scrollable box (see the sticky-scroll comment below) while still taking the same flex share
+       of .content-row that .content used to take directly. .content itself stays a normal (not
+       absolutely positioned) flex child inside it — it must keep contributing its real intrinsic
+       content size, since .entry only has a max-height, not a height: the flex column's auto
+       height is what clamps to that max-height in the first place, and it can only do that if a
+       descendant somewhere actually has real (large) content to clamp. Taking .content out of flow
+       here left nothing to measure and collapsed .entry down to its toolbars' height. */
+    .content-wrap { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; display: flex; }
+    .content { flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--bg); position: relative; }
     .code-block { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre; }
     .code-block.wrap-on { white-space: pre-wrap; word-break: break-word; }
     .code-line { display: flex; }
@@ -162,13 +172,42 @@
     .fold-controls { display: flex; align-items: center; gap: 2px; margin-left: auto; }
     .fold-controls .btn-icon { font-size: 10px; font-weight: 700; letter-spacing: -1px; padding: 4px 6px; }
 
-    /* ---------- Sticky scope scroll (VS Code-style breadcrumb of enclosing class/method/label) ---------- */
-    .entry-sticky-scroll { flex-shrink: 0; background: var(--bg); }
+    /* ---------- Sticky scope scroll (VS Code-style breadcrumb of enclosing class/method/label) ----------
+       This is a sibling of .content (both live inside .content-wrap), overlaid on top with
+       position:absolute — it is NOT a descendant of the scrollable .content box. That matters for
+       two separate reasons we hit in practice: (1) if it lived inside .content as a flex sibling,
+       its height (which changes as more/fewer ancestor lines qualify while you scroll) would
+       resize .content's own box, which the minimap mirrors via flex — constantly resizing the
+       minimap out from under itself. (2) if it lived inside .content as a position:sticky child
+       (an earlier attempt at fixing #1), it still reserved real box space in .content's normal
+       flow, so .content's scrollHeight and every code line's offsetTop shifted by however many
+       breadcrumb lines happened to be showing — which the minimap (and its viewport-highlight
+       math) both read directly, so that also drifted and jittered as you scrolled. Living outside
+       .content entirely means its size can never feed back into anything .content or the minimap
+       measure. */
+    .entry-sticky-scroll { position: absolute; top: 0; left: 0; right: 0; z-index: 3; background: var(--bg); }
     .entry-sticky-scroll:empty { display: none; }
     .sticky-line { display: flex; cursor: pointer; background: var(--bg-elevated); border-bottom: 1px solid var(--border-soft); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre; overflow: hidden; }
     .sticky-line:hover { background: var(--hover-bg); }
     .sticky-line .ln { flex: 0 0 auto; width: 4.6em; text-align: right; padding-right: 10px; color: var(--text-dim); opacity: 0.55; user-select: none; }
     .sticky-line .code-text { flex: 1 1 auto; padding-right: 12px; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ---------- Minimap (VS Code-style; one switch per snippet, off by default, only offered while
+       that snippet is focused/maximized — see .entry.focused-entry rules below) ---------- */
+    .minimap { width: 0; flex: 0 0 auto; overflow: hidden; position: relative; background: var(--bg); cursor: pointer; }
+    .entry.focused-entry .minimap.mm-visible { width: 150px; border-left: 1px solid var(--border-soft); }
+    .minimap-canvas { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    .minimap-canvas-blur { filter: blur(0.35px); opacity: 0.82; }
+    .minimap-canvas-sharp { clip-path: inset(0 0 100% 0); }
+    .minimap-viewport { position: absolute; left: 0; right: 0; top: 0; height: 20px; border: 1px solid rgba(255,255,255,0.5); box-sizing: border-box; pointer-events: none; }
+    .minimap:hover .minimap-viewport { border-color: rgba(255,255,255,0.75); }
+    /* Mirrors the current text selection (mouse-drag or Ctrl/Cmd+A) onto the minimap, VS Code-style —
+       see updateMinimapSelectionOverlay(). Hidden by default; shown only while that entry actually
+       has a selection. */
+    .minimap-selection { position: absolute; left: 0; right: 0; top: 0; height: 0; background: rgba(255,255,255,0.22); pointer-events: none; display: none; }
+    /* The minimap (and its per-snippet toggle) only ever appears once a snippet is focused/maximized */
+    .entry:not(.focused-entry) .minimap { display: none; }
+    .entry:not(.focused-entry) .minimap-toggle { display: none; }
     .tok-comment { color: var(--tok-comment); font-style: italic; }
     .tok-string { color: var(--tok-string); }
     .tok-keyword { color: var(--tok-keyword); font-weight: 600; }
@@ -994,6 +1033,7 @@ function createEntry(code, opts) {
         timeStr: opts.timeStr || new Date().toLocaleTimeString(),
         collapsed: false,
         wrap: false,
+        minimap: false,
         collapsedFolds: new Set()
     };
     postedEntries.push(item);
@@ -1059,7 +1099,10 @@ function buildEntryHtml(item) {
           <div class="btn-icon" title="Copy as Markdown code fence" onclick="copyEntryFence('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 2 8 5 12"/><polyline points="11 4 14 8 11 12"/></svg></div>
           <div class="btn-icon" title="Download as file" onclick="downloadEntry('${item.id}')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.25 1.5h1.5v6h2l-2.75 3-2.75-3h2v-6z"/><path d="M2 12h12v2.5H2V12z"/></svg></div>
           <label class="switch-container" style="margin:0 2px;" title="Wrap long lines">
-            <div class="switch"><input type="checkbox" ${item.wrap ? 'checked' : ''} onchange="toggleEntryWrap('${item.id}', this.checked)"><span class="slider"></span></div>
+            <div class="switch"><input type="checkbox" ${item.wrap ? 'checked' : ''} onchange="toggleEntryWrap('${item.id}', this.checked)"><span class="slider"></span></div>Wrap
+          </label>
+          <label class="switch-container minimap-toggle" style="margin:0 2px;" title="Show a VS Code-style minimap for this snippet">
+            <div class="switch"><input type="checkbox" ${item.minimap ? 'checked' : ''} onchange="toggleEntryMinimap('${item.id}', this.checked)"><span class="slider"></span></div>Map
           </label>
           <div class="btn-icon" title="Focus (maximize)" onclick="focusEntry(this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg></div>
         </div>
@@ -1075,13 +1118,25 @@ function buildEntryHtml(item) {
           <div class="btn-icon" title="Expand all functions / blocks / labels" onclick="expandAllFolds('${item.id}')">▾▾</div>
         </div>
       </div>
-      <div class="entry-sticky-scroll" id="sticky-${item.id}"></div>
-      <div class="content" id="content-${item.id}" onscroll="handleEntryScroll('${item.id}')"></div>
+      <div class="content-row">
+        <div class="content-wrap">
+          <div class="content" id="content-${item.id}" onscroll="handleEntryScroll('${item.id}')">
+            <div id="content-inner-${item.id}"></div>
+          </div>
+          <div class="entry-sticky-scroll" id="sticky-${item.id}"></div>
+        </div>
+        <div class="minimap" id="minimap-${item.id}" onmousedown="minimapPointerDown(event,'${item.id}')" title="Minimap — click or drag to jump">
+          <canvas class="minimap-canvas minimap-canvas-blur" id="minimap-canvas-blur-${item.id}"></canvas>
+          <canvas class="minimap-canvas minimap-canvas-sharp" id="minimap-canvas-sharp-${item.id}"></canvas>
+          <div class="minimap-selection" id="minimap-selection-${item.id}"></div>
+          <div class="minimap-viewport" id="minimap-viewport-${item.id}"></div>
+        </div>
+      </div>
     </div>`;
 }
 
 function renderEntryContent(item) {
-    const el = document.getElementById('content-' + item.id);
+    const el = document.getElementById('content-inner-' + item.id);
     if (!el) return;
     const effId = effectiveLangId(item);
     const langForHighlight = item.rawCode.length > 200000 ? 'plaintext' : effId;
@@ -1089,6 +1144,7 @@ function renderEntryContent(item) {
     item._foldRanges = computeFoldRanges(item.rawCode, langForHighlight);
     el.innerHTML = renderCodeBlockHTML(item.rawCode, langForHighlight, item.wrap, item.id, item.collapsedFolds, item._foldRanges);
     updateStickyScroll(item);
+    applyMinimapForEntry(item);
 }
 
 /* ---------- sticky scope scroll: breadcrumb of enclosing class/method/label ---------- */
@@ -1099,7 +1155,9 @@ function handleEntryScroll(entryId) {
     stickyScrollFrames[entryId] = requestAnimationFrame(() => {
         stickyScrollFrames[entryId] = null;
         const item = findEntry(entryId);
-        if (item) updateStickyScroll(item);
+        if (!item) return;
+        updateStickyScroll(item);
+        if (item.minimap) updateMinimapViewport(item);
     });
 }
 function findTopVisibleLineIndex(contentEl) {
@@ -1142,6 +1200,325 @@ function scrollEntryToLine(entryId, lineIdx) {
     setTimeout(() => lineEl.classList.remove('flash-active'), 900);
 }
 
+/* ---------- minimap: VS Code-style, one switch per snippet, off by default ---------- */
+const MINIMAP_WIDTH = 150;
+const MINIMAP_CHAR_W = 1.6;
+// Real VS Code doesn't squeeze the whole file into whatever box height happens to be available —
+// each line always gets the same small, fixed-height slice (independent of file length), and once
+// the file is longer than the visible minimap area it pans, scrolling in sync with the code, the
+// same way the code itself scrolls. That's what actually keeps a minimap legible: compressing a
+// long file down to fit forces every line's slice to sub-pixel height and everything overlaps into
+// a smear, no matter how the drawing is tuned. MINIMAP_SCALE is that fixed ratio (minimap px per
+// real content px) — ~0.14 puts a normal 18px code line at ~2.5px in the minimap, close to VS
+// Code's own default density.
+const MINIMAP_SCALE = 0.14;
+// A resize observer per entry keeps the canvas's backing resolution in sync with its actual
+// on-screen size. Without this, focusing/maximizing a snippet (or resizing the window) leaves
+// the canvas drawn at its old, smaller size while CSS stretches it to fill the new box — which
+// is what makes a minimap look blurry and its content drift out of alignment with the
+// viewport-highlight rectangle.
+const minimapResizeObservers = {};
+function observeMinimapResize(item) {
+    if (!('ResizeObserver' in window)) return;
+    const mm = document.getElementById('minimap-' + item.id);
+    if (!mm || minimapResizeObservers[item.id]) return;
+    let pending = null;
+    const ro = new ResizeObserver(() => {
+        if (pending) return;
+        pending = requestAnimationFrame(() => { pending = null; if (item.minimap) renderMinimap(item); });
+    });
+    ro.observe(mm);
+    minimapResizeObservers[item.id] = ro;
+}
+function applyMinimapForEntry(item) {
+    const mm = document.getElementById('minimap-' + item.id);
+    if (!mm) return;
+    mm.classList.toggle('mm-visible', !!item.minimap);
+    observeMinimapResize(item);
+    if (item.minimap) renderMinimap(item);
+}
+function toggleEntryMinimap(id, checked) {
+    const item = findEntry(id);
+    if (!item) return;
+    item.minimap = checked;
+    applyMinimapForEntry(item);
+}
+function minimapColorForCls(cls) {
+    switch (cls) {
+        case 'tok-comment': return '#6a9955';
+        case 'tok-string': return '#ce9178';
+        case 'tok-keyword': return '#569cd6';
+        case 'tok-number': return '#b5cea8';
+        case 'tok-type': return '#4ec9b0';
+        case 'tok-func': return '#dcdcaa';
+        case 'tok-tag': return '#569cd6';
+        case 'tok-key': return '#9cdcfe';
+        case 'tok-macro': return '#c586c0';
+        default: return '#d4d4d4';
+    }
+}
+// Shared drawing routine used for both the blurred background canvas and the sharp foreground
+// canvas — they must show pixel-identical content, since the only difference between them is
+// which one the CSS filter/clip-path applies to. Keeping one draw routine avoids re-running this
+// (and the whitespace-skip logic) twice with any chance of drifting out of sync.
+// `rows` is a list of { top, height, tokens } already expressed in canvas CSS-pixel coordinates;
+// a row with tokens === null is a fold placeholder / non-code gap and is left unpainted.
+function drawMinimapContent(ctx, rows, cssWidth, cssHeight) {
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    const NON_WHITESPACE = /\S+/g;
+    rows.forEach(row => {
+        if (!row.tokens) return;
+        const y = row.top;
+        // Cap at 2px for tall (wrapped) rows, but DON'T floor small rows up to a full 1px: once a
+        // file has more lines than the minimap has pixels for (any file over a few hundred lines,
+        // easily), each row's true proportional height is a fraction of a pixel — forcing every one
+        // of those up to a full 1px makes each row's rect overlap deep into its neighbors' territory
+        // (a 0.35px-tall row drawn at 1px reaches nearly 3 rows down), and all that stacked alpha
+        // overdraw is what was melting the whole thing into a smeared, hard-to-read blur. A tiny
+        // floor well below a pixel keeps genuinely-zero-height rows from vanishing outright while
+        // letting canvas's normal sub-pixel anti-aliasing represent everything else proportionally,
+        // same as a real minimap does once a file is too long to show one crisp row per line.
+        const h = Math.min(Math.max(row.height, 0.15), 2);
+        let x = 0;
+        for (const t of row.tokens) {
+            const tokenW = t.text.length * MINIMAP_CHAR_W;
+            // Only paint the actual characters, not the whitespace around/between them — code
+            // that pads with long runs of spaces for column alignment (common in this codebase's
+            // ObjectScript) would otherwise fill the whole row with a solid block of the default
+            // text color, drowning out everything real and making stretches of genuine code look
+            // like a blank gray gap. Whitespace still consumes its real width in x so later tokens
+            // land at their true column, it just isn't drawn.
+            if (x < cssWidth) {
+                NON_WHITESPACE.lastIndex = 0;
+                let m;
+                while ((m = NON_WHITESPACE.exec(t.text))) {
+                    const runX = x + m.index * MINIMAP_CHAR_W;
+                    if (runX >= cssWidth) break;
+                    const runW = Math.min(m[0].length * MINIMAP_CHAR_W, cssWidth - runX);
+                    if (runW > 0.4) {
+                        ctx.globalAlpha = t.cls ? 0.85 : 0.55;
+                        ctx.fillStyle = minimapColorForCls(t.cls);
+                        ctx.fillRect(runX, y, runW, h);
+                    }
+                }
+            }
+            x += tokenW;
+        }
+    });
+    ctx.globalAlpha = 1;
+}
+function renderMinimap(item) {
+    const mm = document.getElementById('minimap-' + item.id);
+    const blurCanvas = document.getElementById('minimap-canvas-blur-' + item.id);
+    const sharpCanvas = document.getElementById('minimap-canvas-sharp-' + item.id);
+    const contentEl = document.getElementById('content-' + item.id);
+    const innerEl = document.getElementById('content-inner-' + item.id);
+    if (!mm || !blurCanvas || !sharpCanvas || !contentEl || !innerEl || !mm.classList.contains('mm-visible')) return;
+    const effId = effectiveLangId(item);
+    const langForHighlight = item.rawCode.length > 200000 ? 'plaintext' : effId;
+    const allLines = highlightToLines(item.rawCode, langForHighlight);
+
+    const cssWidth = MINIMAP_WIDTH;
+    const dpr = window.devicePixelRatio || 1;
+    const scrollHeight = contentEl.scrollHeight || 1;
+    // The full map is drawn at a FIXED scale (see MINIMAP_SCALE) regardless of how tall the visible
+    // minimap box is — for a long file this canvas ends up taller than that box, and the box just
+    // pans over it (done in updateMinimapViewport) instead of squeezing every line down to fit.
+    const mapHeight = Math.max(1, Math.round(scrollHeight * MINIMAP_SCALE));
+    item._minimapContentHeight = mapHeight;
+
+    // Build the row list straight from the live DOM, in real document order, at each row's real
+    // pixel position and height scaled by the same fixed factor. This is what keeps the minimap
+    // pixel-aligned with the actual editor no matter what makes real rows uneven or changes their
+    // count versus a naive "N lines packed uniformly" model: a collapsed fold removes a run of
+    // lines and inserts a single placeholder bar in their place (a real, differently-sized row a
+    // line-count model never knew about), word-wrap turns one logical line into a taller
+    // multi-line row, etc. Reading each row's actual offsetTop/offsetHeight sidesteps modeling any
+    // of that — the minimap simply mirrors whatever the real editor laid out, just shrunk down.
+    const rows = [];
+    innerEl.querySelectorAll('.code-line, .fold-placeholder').forEach(el => {
+        if (el.style.display === 'none') return;
+        const top = el.offsetTop * MINIMAP_SCALE;
+        const height = Math.max(1, el.offsetHeight * MINIMAP_SCALE);
+        if (el.classList.contains('fold-placeholder')) {
+            rows.push({ top, height, tokens: null });
+        } else {
+            const lineIdx = Number(el.getAttribute('data-line'));
+            rows.push({ top, height, tokens: allLines[lineIdx] || [] });
+        }
+    });
+
+    [blurCanvas, sharpCanvas].forEach(canvas => {
+        canvas.width = Math.max(1, Math.round(cssWidth * dpr));
+        canvas.height = Math.max(1, Math.round(mapHeight * dpr));
+        canvas.style.width = cssWidth + 'px';
+        canvas.style.height = mapHeight + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawMinimapContent(ctx, rows, cssWidth, mapHeight);
+    });
+
+    updateMinimapViewport(item);
+}
+function updateMinimapViewport(item) {
+    const contentEl = document.getElementById('content-' + item.id);
+    const viewportEl = document.getElementById('minimap-viewport-' + item.id);
+    const mm = document.getElementById('minimap-' + item.id);
+    const blurCanvas = document.getElementById('minimap-canvas-blur-' + item.id);
+    const sharpCanvas = document.getElementById('minimap-canvas-sharp-' + item.id);
+    if (!contentEl || !viewportEl || !mm || !mm.classList.contains('mm-visible')) return;
+    const scrollHeight = contentEl.scrollHeight || 1;
+    const clientHeight = contentEl.clientHeight || 0;
+    const mmHeight = mm.clientHeight || 0;
+    const mapHeight = item._minimapContentHeight || Math.max(1, Math.round(scrollHeight * MINIMAP_SCALE));
+    const maxScroll = Math.max(1, scrollHeight - clientHeight);
+    const scrollFrac = Math.min(1, Math.max(0, contentEl.scrollTop / maxScroll));
+
+    // The box can only ever travel across whichever is smaller: the visible window, or (for a
+    // short file where the fixed-scale map doesn't even fill the box) the map's own extent — a
+    // short map just sits statically at the top with empty space below, it doesn't stretch out to
+    // let the box roam the whole visible box height.
+    const travelHeight = Math.min(mmHeight, mapHeight);
+    // Box height reflects "one screenful" at the SAME fixed scale as the map content, capped to
+    // that travel range (once the whole file fits on one screen, the box is just the whole thing).
+    const boxHeight = Math.min(travelHeight, Math.max(8, clientHeight * MINIMAP_SCALE));
+    // How far the (possibly much taller than the box) map has to pan to bring the current scroll
+    // position into view, and where the highlighted box then sits within the visible box — both
+    // are plain linear functions of scroll fraction, so this is exactly as simple as the old
+    // "whole file always fits" math, just against mapHeight instead of mmHeight.
+    const panRange = Math.max(0, mapHeight - mmHeight);
+    const panOffset = scrollFrac * panRange;
+    const boxTop = scrollFrac * Math.max(0, travelHeight - boxHeight);
+    item._minimapPanOffset = panOffset;
+
+    viewportEl.style.top = boxTop + 'px';
+    viewportEl.style.height = boxHeight + 'px';
+    if (blurCanvas) blurCanvas.style.top = (-panOffset) + 'px';
+    if (sharpCanvas) {
+        sharpCanvas.style.top = (-panOffset) + 'px';
+        // Reveal the sharp (crisp) canvas only within the viewport-indicator window; everywhere
+        // else shows through to the blurred canvas beneath it. The clip-path is relative to the
+        // canvas's OWN box, which is the full (panned) map, so it needs full-map-space coordinates
+        // — the visible box's position plus how far the map is currently panned — not the box's
+        // on-screen position within the small visible window.
+        const boxTopFullMap = panOffset + boxTop;
+        const bottomInset = Math.max(0, mapHeight - boxTopFullMap - boxHeight);
+        sharpCanvas.style.clipPath = 'inset(' + boxTopFullMap + 'px 0 ' + bottomInset + 'px 0)';
+    }
+}
+function minimapPointerDown(e, entryId) {
+    e.preventDefault();
+    const item = findEntry(entryId);
+    const mm = document.getElementById('minimap-' + entryId);
+    const contentEl = document.getElementById('content-' + entryId);
+    const viewportEl = document.getElementById('minimap-viewport-' + entryId);
+    if (!item || !mm || !contentEl || !viewportEl) return;
+
+    const mmRect = mm.getBoundingClientRect();
+    const vpRect = viewportEl.getBoundingClientRect();
+    const boxHeight = vpRect.height || 1;
+    const clickedInsideBox = e.clientY >= vpRect.top && e.clientY <= vpRect.bottom;
+    // Grabbing inside the highlighted box preserves the offset you grabbed it at, so it tracks
+    // the mouse 1:1 instead of re-centering under the cursor on every pixel of movement (which is
+    // what made dragging feel like it was "jumping around"). Clicking outside the box still jumps
+    // straight to that spot, centered — the usual "click elsewhere on the minimap" behavior.
+    const grabOffset = clickedInsideBox ? (e.clientY - vpRect.top) : (boxHeight / 2);
+
+    const move = (ev) => {
+        const scrollHeight = contentEl.scrollHeight;
+        const clientHeight = contentEl.clientHeight;
+        const mmHeight = mmRect.height || 1;
+        // The box only ever travels across min(visible box, map's own extent) — for a short file
+        // whose fixed-scale map doesn't fill the whole visible box, the box (and the draggable
+        // range) is confined to that shorter span too, exactly matching updateMinimapViewport.
+        const mapHeight = item._minimapContentHeight || mmHeight;
+        const travelHeight = Math.min(mmHeight, mapHeight);
+        const maxBoxTop = Math.max(0, travelHeight - boxHeight);
+        const boxTop = Math.min(Math.max(0, (ev.clientY - mmRect.top) - grabOffset), maxBoxTop);
+        const ratio = maxBoxTop > 0 ? boxTop / maxBoxTop : 0;
+        contentEl.scrollTop = ratio * Math.max(0, scrollHeight - clientHeight);
+        updateMinimapViewport(item);
+        updateStickyScroll(item);
+    };
+    move(e);
+    const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+}
+
+/* ---------- minimap selection mirroring (VS Code-style: a text selection, or Ctrl/Cmd+A,
+   highlights the corresponding lines in the minimap) ---------- */
+// Which entry's code area a Ctrl/Cmd+A should act on — plain code text isn't natively focusable,
+// so document.activeElement can't tell us that; we track the entry the user last clicked into
+// instead, same idea VS Code uses ("select all" applies to whichever editor you were last in).
+let lastActiveContentId = null;
+document.addEventListener('mousedown', (e) => {
+    const contentEl = e.target.closest && e.target.closest('.content');
+    if (contentEl && contentEl.id.startsWith('content-')) lastActiveContentId = contentEl.id.slice('content-'.length);
+});
+document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'a') return;
+    const activeTag = document.activeElement && document.activeElement.tagName;
+    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return; // let native select-all work in search/paste boxes
+    if (!lastActiveContentId) return;
+    const innerEl = document.getElementById('content-inner-' + lastActiveContentId);
+    if (!innerEl) return;
+    e.preventDefault();
+    const range = document.createRange();
+    range.selectNodeContents(innerEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+});
+// selectionchange fires continuously while dragging a selection, so coalesce to once per frame.
+let minimapSelectionFrame = null;
+document.addEventListener('selectionchange', () => {
+    if (minimapSelectionFrame) return;
+    minimapSelectionFrame = requestAnimationFrame(() => { minimapSelectionFrame = null; updateMinimapSelectionOverlay(); });
+});
+function updateMinimapSelectionOverlay() {
+    // Only one entry can hold the current selection at a time — hide every other entry's overlay,
+    // then (if there is a real, non-collapsed selection) show it for the entry that has it.
+    document.querySelectorAll('.minimap-selection').forEach(el => { el.style.display = 'none'; });
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    let node = sel.anchorNode;
+    let contentEl = null;
+    while (node) {
+        if (node.nodeType === 1 && node.id && node.id.indexOf('content-') === 0 && node.classList.contains('content')) { contentEl = node; break; }
+        node = node.parentNode;
+    }
+    if (!contentEl) return;
+    const entryId = contentEl.id.slice('content-'.length);
+    const item = findEntry(entryId);
+    const mm = document.getElementById('minimap-' + entryId);
+    const overlay = document.getElementById('minimap-selection-' + entryId);
+    if (!item || !item.minimap || !mm || !overlay || !mm.classList.contains('mm-visible')) return;
+
+    let minTop = Infinity, maxBottom = -Infinity;
+    contentEl.querySelectorAll('.code-line').forEach(el => {
+        if (el.style.display === 'none') return;
+        if (range.intersectsNode(el)) {
+            minTop = Math.min(minTop, el.offsetTop);
+            maxBottom = Math.max(maxBottom, el.offsetTop + el.offsetHeight);
+        }
+    });
+    if (!isFinite(minTop)) return;
+    // Same fixed MINIMAP_SCALE the map itself is drawn at, then shifted by however far the map is
+    // currently panned (item._minimapPanOffset, kept current by updateMinimapViewport) to land in
+    // the same on-screen coordinate space as the viewport-highlight box.
+    const panOffset = item._minimapPanOffset || 0;
+    const top = minTop * MINIMAP_SCALE - panOffset;
+    const height = Math.max(2, (maxBottom - minTop) * MINIMAP_SCALE);
+    overlay.style.top = top + 'px';
+    overlay.style.height = height + 'px';
+    overlay.style.display = 'block';
+}
+
 /* ---------- code folding: toggle / collapse-all / expand-all ---------- */
 function applyFoldVisibility(item) {
     const container = document.getElementById('content-' + item.id);
@@ -1167,6 +1544,7 @@ function applyFoldVisibility(item) {
         arrow.textContent = isCollapsed ? '▸' : '▾';
     });
     updateStickyScroll(item);
+    if (item.minimap) renderMinimap(item);
 }
 function toggleFold(entryId, foldStart) {
     const item = findEntry(entryId);
@@ -1437,6 +1815,18 @@ function updateEntryMatchHighlight(id) {
 }
 
 /* ---------- focus / maximize ---------- */
+function refreshEntryChromeAfterResize(entryId) {
+    // Focusing/closing changes the snippet's box size outside the normal render path, so the
+    // sticky-scroll breadcrumb and minimap (whose canvas has its own fixed-resolution backing
+    // store) need to be told explicitly — the ResizeObserver on the minimap catches this too, but
+    // doing it here as well means it's correct on the very next frame, not just eventually.
+    const item = findEntry(entryId);
+    if (!item) return;
+    requestAnimationFrame(() => {
+        updateStickyScroll(item);
+        if (item.minimap) renderMinimap(item);
+    });
+}
 function focusEntry(btn) {
     const entry = btn.closest('.entry');
     const overlay = document.getElementById('focus-overlay');
@@ -1446,6 +1836,7 @@ function focusEntry(btn) {
     overlay.appendChild(entry);
     overlay.classList.add('active');
     document.body.style.overflow = 'hidden';
+    refreshEntryChromeAfterResize(entry.dataset.entryId);
 }
 function closeFocusEntry() {
     const overlay = document.getElementById('focus-overlay');
@@ -1455,6 +1846,7 @@ function closeFocusEntry() {
         focusedEntryPlaceholder.parentNode.insertBefore(entry, focusedEntryPlaceholder);
         focusedEntryPlaceholder.remove();
         focusedEntryPlaceholder = null;
+        refreshEntryChromeAfterResize(entry.dataset.entryId);
     }
     overlay.classList.remove('active');
     document.body.style.overflow = '';
@@ -1845,6 +2237,11 @@ function init() {
     });
     document.getElementById('compareLeft').addEventListener('input', debouncedRefreshLeft);
     document.getElementById('compareRight').addEventListener('input', debouncedRefreshRight);
+    window.addEventListener('resize', debounce(() => {
+        // Fallback for browsers without ResizeObserver; the observer set up per entry (see
+        // observeMinimapResize) is what normally catches focus-mode and layout-driven resizes.
+        postedEntries.forEach(item => { if (item.minimap) renderMinimap(item); });
+    }, 200));
 }
 init();
 </script>
