@@ -142,14 +142,33 @@
     .search-counter { font-size: 9px; padding: 0 5px; opacity: 0.6; font-family: var(--font-mono); white-space: nowrap; }
 
     /* ---------- Code display ---------- */
-    .content { flex-grow: 1; overflow: auto; background: var(--bg); }
+    .content { flex-grow: 1; overflow: auto; background: var(--bg); position: relative; }
     .code-block { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre; }
     .code-block.wrap-on { white-space: pre-wrap; word-break: break-word; }
     .code-line { display: flex; }
     .code-line:hover { background: var(--hover-bg); }
-    .code-line .ln { flex: 0 0 auto; width: 3.4em; text-align: right; padding-right: 10px; color: var(--text-dim); opacity: 0.55; user-select: none; position: sticky; left: 0; background: var(--bg); }
+    .code-line .ln { flex: 0 0 auto; width: 4.6em; text-align: right; padding-right: 10px; color: var(--text-dim); opacity: 0.55; user-select: none; position: sticky; left: 0; background: var(--bg); }
     .code-line:hover .ln { background: var(--hover-bg); }
     .code-text { flex: 1 1 auto; padding-right: 12px; }
+
+    /* ---------- Code folding (functions / blocks / labels) ---------- */
+    .fold-arrow { display: inline-block; width: 11px; text-align: center; cursor: pointer; opacity: 0.5; font-size: 9px; margin-right: 1px; }
+    .fold-arrow:hover { opacity: 1; color: var(--accent-hover); }
+    .fold-arrow.fold-spacer { cursor: default; opacity: 0; }
+    .fold-arrow.fold-spacer:hover { opacity: 0; }
+    .fold-arrow.folded { color: var(--accent); opacity: 1; }
+    .fold-placeholder { padding: 2px 10px 2px calc(4.6em + 4px); font-size: 11px; color: var(--text-dim); font-style: italic; cursor: pointer; background: rgba(255,255,255,0.03); border-top: 1px dashed var(--border-soft); border-bottom: 1px dashed var(--border-soft); user-select: none; }
+    .fold-placeholder:hover { color: var(--text-bright); background: var(--hover-bg); }
+    .fold-controls { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+    .fold-controls .btn-icon { font-size: 10px; font-weight: 700; letter-spacing: -1px; padding: 4px 6px; }
+
+    /* ---------- Sticky scope scroll (VS Code-style breadcrumb of enclosing class/method/label) ---------- */
+    .entry-sticky-scroll { flex-shrink: 0; background: var(--bg); }
+    .entry-sticky-scroll:empty { display: none; }
+    .sticky-line { display: flex; cursor: pointer; background: var(--bg-elevated); border-bottom: 1px solid var(--border-soft); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre; overflow: hidden; }
+    .sticky-line:hover { background: var(--hover-bg); }
+    .sticky-line .ln { flex: 0 0 auto; width: 4.6em; text-align: right; padding-right: 10px; color: var(--text-dim); opacity: 0.55; user-select: none; }
+    .sticky-line .code-text { flex: 1 1 auto; padding-right: 12px; overflow: hidden; text-overflow: ellipsis; }
     .tok-comment { color: var(--tok-comment); font-style: italic; }
     .tok-string { color: var(--tok-string); }
     .tok-keyword { color: var(--tok-keyword); font-weight: 600; }
@@ -756,6 +775,80 @@ function highlightToLines(code, langId) {
 }
 function escapeHtml(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 
+/* ---------- code folding: detect foldable ranges (functions/methods/blocks/labels) ---------- */
+const FOLD_BRACE_LANGS = new Set(['typescript','javascript','java','csharp','cpp','c','go','rust','kotlin','swift','php','css','json','objectscript']);
+function foldIndentWidth(line) {
+    const m = /^[ \t]*/.exec(line)[0];
+    let w = 0;
+    for (const c of m) w += (c === '\t') ? 4 : 1;
+    return w;
+}
+function computeFoldRanges(code, langId) {
+    const rawLines = code.split('\n');
+    const n = rawLines.length;
+    if (n < 2) return [];
+    const ranges = [];
+    const startsUsed = new Set();
+
+    // Brace/bracket matching (skips braces inside strings/comments via the tokenizer's own classification)
+    if (FOLD_BRACE_LANGS.has(langId)) {
+        const tokenLines = highlightToLines(code, langId);
+        const stack = [];
+        let braceRanges = [];
+        tokenLines.forEach((lineTokens, li) => {
+            lineTokens.forEach(tok => {
+                if (tok.cls === 'tok-string' || tok.cls === 'tok-comment') return;
+                for (let ci = 0; ci < tok.text.length; ci++) {
+                    const ch = tok.text[ci];
+                    if (ch === '{' || ch === '[') stack.push({ ch, line: li });
+                    else if (ch === '}' || ch === ']') {
+                        const open = stack.pop();
+                        if (open && li > open.line) braceRanges.push({ start: open.line, end: li });
+                    }
+                }
+            });
+        });
+        // Allman-style formatting puts the opening brace alone on its own line (e.g. ObjectScript
+        // Class/ClassMethod bodies). Re-anchor those ranges to the declaration line above so the
+        // fold arrow and sticky-scroll header show "ClassMethod Foo(...)" rather than a bare "{".
+        braceRanges = braceRanges.map(r => {
+            startsUsed.add(r.start); // block the indentation pass from also claiming the bare-brace line
+            const braceOnly = /^[ \t]*[{[]+[ \t]*$/.test(rawLines[r.start]);
+            if (!braceOnly) return r;
+            let back = r.start - 1;
+            while (back >= 0 && rawLines[back].trim() === '') back--;
+            return back >= 0 ? { start: back, end: r.end } : r;
+        });
+        ranges.push(...braceRanges);
+        ranges.forEach(r => startsUsed.add(r.start));
+    }
+
+    // Indentation-based folding — the primary mechanism for Python/Ruby/label-style routines
+    // (e.g. ObjectScript .mac routines), and a supplement everywhere else.
+    const isBlank = rawLines.map(l => l.trim().length === 0);
+    const indents = rawLines.map(foldIndentWidth);
+    for (let i = 0; i < n; i++) {
+        if (isBlank[i] || startsUsed.has(i)) continue;
+        let j = i + 1;
+        while (j < n && isBlank[j]) j++;
+        if (j >= n || indents[j] <= indents[i]) continue;
+        let end = i, k = j;
+        while (k < n) {
+            if (isBlank[k]) { k++; continue; }
+            if (indents[k] > indents[i]) { end = k; k++; }
+            else break;
+        }
+        if (end > i) { ranges.push({ start: i, end }); startsUsed.add(i); }
+    }
+
+    // Dedupe by start line, keeping the outermost (largest-span) range for that line.
+    const byStart = new Map();
+    ranges.forEach(r => {
+        if (!byStart.has(r.start) || byStart.get(r.start).end < r.end) byStart.set(r.start, r);
+    });
+    return Array.from(byStart.values()).sort((a, b) => a.start - b.start);
+}
+
 /* ---------- Myers diff ---------- */
 function myersDiff(a, b) {
     const n = a.length, m = b.length;
@@ -824,17 +917,44 @@ function charDiff(sA, sB) {
 function escapeAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function debounce(fn, wait) { let t; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); }; }
 
-function renderCodeBlockHTML(code, langId, wrap) {
+function renderCodeBlockHTML(code, langId, wrap, entryId, collapsedFolds, foldRanges) {
     const lines = highlightToLines(code, langId);
+    collapsedFolds = collapsedFolds || new Set();
+    if (!foldRanges) foldRanges = entryId ? computeFoldRanges(code, langId) : [];
+    const foldByStart = new Map();
+    foldRanges.forEach(r => foldByStart.set(r.start, r));
+    const inFolds = lines.map(() => []);
+    foldRanges.forEach(r => {
+        for (let li = r.start + 1; li <= r.end && li < lines.length; li++) inFolds[li].push(r.start);
+    });
+
     let html = '<div class="code-block' + (wrap ? ' wrap-on' : '') + '">';
     lines.forEach((lineTokens, i) => {
-        html += '<div class="code-line"><span class="ln">' + (i + 1) + '</span><span class="code-text">';
+        const parents = inFolds[i];
+        const parentsAttr = parents.length ? ' data-in-folds="' + parents.join(',') + '"' : '';
+        const hiddenNow = parents.some(p => collapsedFolds.has(p));
+        const foldRange = foldByStart.get(i);
+        let gutter;
+        if (foldRange) {
+            const isCollapsed = collapsedFolds.has(i);
+            gutter = '<span class="fold-arrow' + (isCollapsed ? ' folded' : '') + '" data-fold="' + i + '" onclick="toggleFold(\'' + entryId + '\',' + i + ')" title="Fold / unfold">' + (isCollapsed ? '▸' : '▾') + '</span>';
+        } else {
+            gutter = '<span class="fold-arrow fold-spacer"></span>';
+        }
+        html += '<div class="code-line" data-line="' + i + '"' + parentsAttr + (hiddenNow ? ' style="display:none;"' : '') + '><span class="ln">' + gutter + (i + 1) + '</span><span class="code-text">';
         if (lineTokens.length === 0) html += '&nbsp;';
         else lineTokens.forEach(t => {
             const esc = escapeHtml(t.text);
             html += t.cls ? '<span class="' + t.cls + '">' + esc + '</span>' : esc;
         });
         html += '</span></div>';
+        if (foldRange) {
+            const count = foldRange.end - foldRange.start;
+            const collapsedNow = collapsedFolds.has(i);
+            const hiddenByAncestor = parents.some(p => collapsedFolds.has(p));
+            const parentsAttr2 = parents.length ? ' data-parent-folds="' + parents.join(',') + '"' : '';
+            html += '<div class="fold-placeholder" data-fold-placeholder="' + i + '"' + parentsAttr2 + ' style="display:' + ((collapsedNow && !hiddenByAncestor) ? 'block' : 'none') + ';" onclick="toggleFold(\'' + entryId + '\',' + i + ')">⋯ ' + count + ' line' + (count === 1 ? '' : 's') + ' hidden ⋯</div>';
+        }
     });
     html += '</div>';
     return html;
@@ -873,7 +993,8 @@ function createEntry(code, opts) {
         detected: detected,
         timeStr: opts.timeStr || new Date().toLocaleTimeString(),
         collapsed: false,
-        wrap: false
+        wrap: false,
+        collapsedFolds: new Set()
     };
     postedEntries.push(item);
     return item;
@@ -949,8 +1070,13 @@ function buildEntryHtml(item) {
           <input type="text" class="search-inline" placeholder="Find in code..." oninput="entrySearch('${item.id}', this)" onkeydown="entrySearchNav(event,'${item.id}')">
           <span class="search-counter" id="search-counter-${item.id}">0/0</span>
         </div>
+        <div class="fold-controls">
+          <div class="btn-icon" title="Collapse all functions / blocks / labels" onclick="collapseAllFolds('${item.id}')">▸▸</div>
+          <div class="btn-icon" title="Expand all functions / blocks / labels" onclick="expandAllFolds('${item.id}')">▾▾</div>
+        </div>
       </div>
-      <div class="content" id="content-${item.id}"></div>
+      <div class="entry-sticky-scroll" id="sticky-${item.id}"></div>
+      <div class="content" id="content-${item.id}" onscroll="handleEntryScroll('${item.id}')"></div>
     </div>`;
 }
 
@@ -959,7 +1085,109 @@ function renderEntryContent(item) {
     if (!el) return;
     const effId = effectiveLangId(item);
     const langForHighlight = item.rawCode.length > 200000 ? 'plaintext' : effId;
-    el.innerHTML = renderCodeBlockHTML(item.rawCode, langForHighlight, item.wrap);
+    if (!item.collapsedFolds) item.collapsedFolds = new Set();
+    item._foldRanges = computeFoldRanges(item.rawCode, langForHighlight);
+    el.innerHTML = renderCodeBlockHTML(item.rawCode, langForHighlight, item.wrap, item.id, item.collapsedFolds, item._foldRanges);
+    updateStickyScroll(item);
+}
+
+/* ---------- sticky scope scroll: breadcrumb of enclosing class/method/label ---------- */
+const STICKY_MAX_LINES = 5;
+const stickyScrollFrames = {};
+function handleEntryScroll(entryId) {
+    if (stickyScrollFrames[entryId]) return; // already scheduled for this frame
+    stickyScrollFrames[entryId] = requestAnimationFrame(() => {
+        stickyScrollFrames[entryId] = null;
+        const item = findEntry(entryId);
+        if (item) updateStickyScroll(item);
+    });
+}
+function findTopVisibleLineIndex(contentEl) {
+    const scrollTop = contentEl.scrollTop;
+    const lines = contentEl.querySelectorAll('.code-line');
+    for (const line of lines) {
+        if (line.style.display === 'none') continue;
+        if (line.offsetTop + line.offsetHeight - 1 >= scrollTop) return Number(line.getAttribute('data-line'));
+    }
+    return null;
+}
+function updateStickyScroll(item) {
+    const contentEl = document.getElementById('content-' + item.id);
+    const stickyEl = document.getElementById('sticky-' + item.id);
+    if (!contentEl || !stickyEl) return;
+    const topLineIdx = findTopVisibleLineIndex(contentEl);
+    if (topLineIdx === null) { stickyEl.innerHTML = ''; return; }
+    const ranges = item._foldRanges || [];
+    // Ancestor scopes whose header line has scrolled out of view above the current top line.
+    // Ranges come back sorted outer-to-inner (by start ascending); keep the outermost ones first
+    // when there are more than fit, since global orientation (class/file) matters more than the
+    // deepest nested wrapper — this matches VS Code's own sticky-scroll truncation behavior.
+    const ancestors = ranges.filter(r => r.start < topLineIdx && r.end >= topLineIdx).slice(0, STICKY_MAX_LINES);
+    if (!ancestors.length) { stickyEl.innerHTML = ''; return; }
+    stickyEl.innerHTML = ancestors.map(r => {
+        const lineEl = contentEl.querySelector('.code-line[data-line="' + r.start + '"]');
+        const codeHtml = lineEl ? lineEl.querySelector('.code-text').innerHTML : '';
+        return '<div class="sticky-line" onclick="scrollEntryToLine(\'' + item.id + '\',' + r.start + ')" title="Jump to line ' + (r.start + 1) + '"><span class="ln">' + (r.start + 1) + '</span><span class="code-text">' + codeHtml + '</span></div>';
+    }).join('');
+}
+function scrollEntryToLine(entryId, lineIdx) {
+    const contentEl = document.getElementById('content-' + entryId);
+    if (!contentEl) return;
+    const lineEl = contentEl.querySelector('.code-line[data-line="' + lineIdx + '"]');
+    if (!lineEl) return;
+    contentEl.scrollTop = lineEl.offsetTop;
+    const item = findEntry(entryId);
+    if (item) updateStickyScroll(item);
+    lineEl.classList.add('flash-active');
+    setTimeout(() => lineEl.classList.remove('flash-active'), 900);
+}
+
+/* ---------- code folding: toggle / collapse-all / expand-all ---------- */
+function applyFoldVisibility(item) {
+    const container = document.getElementById('content-' + item.id);
+    if (!container) return;
+    const collapsed = item.collapsedFolds || new Set();
+    container.querySelectorAll('.code-line').forEach(line => {
+        const attr = line.getAttribute('data-in-folds');
+        if (!attr) { line.style.display = ''; return; }
+        const parents = attr.split(',').map(Number);
+        line.style.display = parents.some(p => collapsed.has(p)) ? 'none' : '';
+    });
+    container.querySelectorAll('.fold-placeholder').forEach(ph => {
+        const foldStart = Number(ph.getAttribute('data-fold-placeholder'));
+        const parentsAttr = ph.getAttribute('data-parent-folds');
+        const parents = parentsAttr ? parentsAttr.split(',').map(Number) : [];
+        const hiddenByAncestor = parents.some(p => collapsed.has(p));
+        ph.style.display = (collapsed.has(foldStart) && !hiddenByAncestor) ? 'block' : 'none';
+    });
+    container.querySelectorAll('.fold-arrow[data-fold]').forEach(arrow => {
+        const foldStart = Number(arrow.getAttribute('data-fold'));
+        const isCollapsed = collapsed.has(foldStart);
+        arrow.classList.toggle('folded', isCollapsed);
+        arrow.textContent = isCollapsed ? '▸' : '▾';
+    });
+    updateStickyScroll(item);
+}
+function toggleFold(entryId, foldStart) {
+    const item = findEntry(entryId);
+    if (!item) return;
+    if (!item.collapsedFolds) item.collapsedFolds = new Set();
+    if (item.collapsedFolds.has(foldStart)) item.collapsedFolds.delete(foldStart);
+    else item.collapsedFolds.add(foldStart);
+    applyFoldVisibility(item);
+}
+function collapseAllFolds(entryId) {
+    const item = findEntry(entryId);
+    if (!item) return;
+    const ranges = computeFoldRanges(item.rawCode, effectiveLangId(item));
+    item.collapsedFolds = new Set(ranges.map(r => r.start));
+    applyFoldVisibility(item);
+}
+function expandAllFolds(entryId) {
+    const item = findEntry(entryId);
+    if (!item) return;
+    item.collapsedFolds = new Set();
+    applyFoldVisibility(item);
 }
 function renderEntryCard(item, prepend) {
     const container = document.getElementById('container');
@@ -1042,6 +1270,7 @@ function onEntryLangChange(id, value) {
     const item = findEntry(id);
     if (!item) return;
     item.override = (value === 'auto') ? null : value;
+    item.collapsedFolds = new Set(); // fold ranges depend on the language grammar, so reset on change
     rerenderEntryInPlace(item);
     saveEntriesToStorage();
     renderCompareChips();
@@ -1193,6 +1422,16 @@ function updateEntryMatchHighlight(id) {
     const current = state.matches[state.index];
     if (!current) return;
     current.classList.add('current');
+    const item = findEntry(id);
+    if (item && item.collapsedFolds && item.collapsedFolds.size) {
+        const lineEl = current.closest('.code-line');
+        const attr = lineEl && lineEl.getAttribute('data-in-folds');
+        if (attr) {
+            let changed = false;
+            attr.split(',').map(Number).forEach(p => { if (item.collapsedFolds.delete(p)) changed = true; });
+            if (changed) applyFoldVisibility(item); // auto-unfold so the match is actually visible
+        }
+    }
     current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     if (counter) counter.textContent = (state.index + 1) + '/' + state.matches.length;
 }
