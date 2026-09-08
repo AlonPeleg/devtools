@@ -1,0 +1,2851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSV/XLSX Viewer</title>
+<style>
+    :root {
+        --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --font-mono: "Cascadia Code", "SF Mono", Consolas, "Courier New", monospace;
+
+        --bg: #1e1e1e;
+        --bg-panel: #252526;
+        --bg-elevated: #2d2d30;
+        --border: #3c3c3c;
+        --border-soft: rgba(140,140,140,0.28);
+        --text: #cccccc;
+        --text-dim: #8a8a8a;
+        --text-bright: #ffffff;
+
+        --accent: #0e8fd9;
+        --accent-fg: #ffffff;
+        --accent-hover: #1ba1ec;
+        --input-bg: #3c3c3c;
+        --hover-bg: #2a2d2e;
+        --sel-bg: #04395e;
+        --focus: #0e8fd9;
+
+        --csv-color: #4fc3d9;
+        --tsv-color: #b18cd9;
+        --xlsx-color: #21a366;
+
+        --num-color: #b5cea8;
+        --bool-color: #6ab0f3;
+        --date-color: #dcb67a;
+        --empty-bg: rgba(255,255,255,0.02);
+
+        --diff-add: #4ec9b0;
+        --diff-remove: #f48771;
+        --diff-change: #dcdcaa;
+
+        --shadow: rgba(0,0,0,0.55);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+        font-family: var(--font-ui);
+        color: var(--text);
+        background: var(--bg);
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    ::selection { background: var(--sel-bg); }
+
+    /* ---------- Tabs ---------- */
+    .tabs-header { display: flex; background: var(--bg-panel); border-bottom: 1px solid var(--border-soft); flex-shrink: 0; }
+    .tab-link { padding: 9px 18px; cursor: pointer; color: var(--text-dim); border-right: 1px solid var(--border-soft); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; user-select: none; }
+    .tab-link:hover { background: var(--hover-bg); }
+    .tab-link.active { background: var(--bg); color: var(--text-bright); box-shadow: inset 0 -2px 0 var(--accent); }
+
+    .tab-viewport { flex-grow: 1; overflow: hidden; position: relative; }
+    .tab-pane { display: none; height: 100%; width: 100%; overflow-y: auto; padding: 14px; }
+    .tab-pane.active { display: block; }
+    #compare-pane.active { display: flex; flex-direction: column; overflow: hidden; }
+    #compare-pane.active > *:not(#compareResults) { flex-shrink: 0; }
+
+    h1, h2, h3 { text-wrap: balance; margin: 0; }
+
+    /* ---------- Toolbar / buttons ---------- */
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
+    .title-group { display: flex; align-items: baseline; gap: 8px; }
+    .title-group h3 { font-size: 14px; font-weight: 700; color: var(--text-bright); }
+    .title-sub { font-size: 11px; color: var(--text-dim); }
+    .btn-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .btn { border: none; padding: 5px 11px; cursor: pointer; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--accent); color: var(--accent-fg); font-family: var(--font-ui); }
+    .btn:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--input-bg); color: var(--text); }
+    .btn-secondary:hover { background: #48484b; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-global-icon { background: transparent; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px; opacity: 0.75; color: var(--text); }
+    .btn-global-icon:hover { background: var(--hover-bg); opacity: 1; }
+    .btn-global-icon svg { width: 15px; height: 15px; fill: currentColor; }
+    .storage-io-bar { margin-left: auto; display: flex; align-items: center; gap: 2px; padding-right: 8px; }
+
+    .drop-zone { background: var(--input-bg); border: 1px dashed var(--border-soft); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .drop-zone.file-drop-target { outline: 2px dashed var(--focus); outline-offset: 2px; }
+    .drop-zone textarea { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 8px; font-family: var(--font-mono); font-size: 11.5px; border-radius: 4px; outline: none; resize: vertical; min-height: 44px; unicode-bidi: plaintext; }
+    .drop-zone textarea:focus { border-color: var(--focus); }
+    .drop-zone-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .drop-zone-hint { font-size: 10.5px; color: var(--text-dim); }
+
+    /* ---------- Entry layout ---------- */
+    #container { display: flex; flex-direction: column; gap: 12px; }
+    #container.grid-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 12px; align-items: start; }
+    @media (min-width: 1500px) {
+        #container.grid-view { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .entry { border: 1px solid var(--border-soft); border-radius: 6px; overflow: hidden; background: var(--bg-panel); display: flex; flex-direction: column; max-height: 62vh; box-shadow: 0 1px 3px var(--shadow); }
+    .entry.collapsed-entry { max-height: none; }
+    .entry.collapsed-entry .content, .entry.collapsed-entry .sheet-tabs, .entry.collapsed-entry .status-bar, .entry.collapsed-entry .entry-toolbar-2 { display: none; }
+    .entry-header { background: var(--bg-elevated); padding: 4px 8px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border-soft); flex-shrink: 0; flex-wrap: wrap; }
+    .master-toggle { cursor: pointer; font-size: 9px; width: 12px; display: inline-flex; justify-content: center; opacity: 0.7; user-select: none; color: var(--text); }
+    .entry.collapsed-entry .master-toggle { transform: rotate(-90deg); }
+    .time-tag { font-size: 9px; opacity: 0.55; font-family: var(--font-mono); white-space: nowrap; }
+    .type-badge { font-size: 8.5px; padding: 2px 5px; border-radius: 3px; color: #0b0b0b; text-transform: uppercase; font-weight: 800; letter-spacing: 0.3px; }
+    .dims-tag { font-size: 9.5px; color: var(--text-dim); font-family: var(--font-mono); white-space: nowrap; }
+    .name-input { background: transparent; border: 1px solid transparent; color: var(--text-bright); font-size: 11.5px; font-weight: 700; padding: 2px 4px; width: 130px; border-radius: 3px; font-family: var(--font-ui); unicode-bidi: plaintext; }
+    .name-input:hover { border-color: var(--border); }
+    .name-input:focus { background: var(--input-bg); border-color: var(--focus); outline: none; }
+    .actions { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+    .btn-icon { cursor: pointer; display: flex; align-items: center; padding: 4px; border-radius: 4px; opacity: 0.75; color: var(--text); }
+    .btn-icon:hover { background: var(--hover-bg); opacity: 1; }
+    .btn-icon svg { width: 14px; height: 14px; }
+    .btn-delete { color: var(--diff-remove); cursor: pointer; font-weight: bold; font-size: 15px; line-height: 1; padding: 0 4px; opacity: 0.65; user-select: none; }
+    .btn-delete:hover { opacity: 1; }
+
+    .entry-toolbar-2 { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-bottom: 1px solid var(--border-soft); flex-shrink: 0; flex-wrap: wrap; background: var(--bg-panel); }
+    .switch-container { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text-dim); cursor: pointer; user-select: none; }
+    .switch { position: relative; display: inline-block; width: 26px; height: 15px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4a4a4a; transition: .15s; border-radius: 15px; }
+    .slider:before { position: absolute; content: ""; height: 11px; width: 11px; left: 2px; bottom: 2px; background-color: white; transition: .15s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--accent); }
+    input:checked + .slider:before { transform: translateX(11px); }
+
+    .search-container { display: flex; align-items: center; background: var(--input-bg); border: 1px solid var(--border); border-radius: 3px; width: 150px; }
+    .search-inline { width: 100%; background: transparent; color: var(--text); border: none; font-size: 10.5px; padding: 3px 6px; outline: none; font-family: var(--font-mono); }
+    .search-counter { font-size: 9px; padding: 0 5px; opacity: 0.6; font-family: var(--font-mono); white-space: nowrap; }
+
+    /* Formula bar (next to "Find in table") — mirrors whatever cell is currently focused;
+       editing it edits that cell, just like a real spreadsheet's formula bar. */
+    .formula-bar { display: flex; align-items: center; flex: 1 1 180px; min-width: 130px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 3px; }
+    .formula-bar-fx { flex-shrink: 0; padding: 3px 7px; font-family: var(--font-mono); font-style: italic; font-size: 11px; color: var(--accent); cursor: pointer; border-inline-end: 1px solid var(--border); user-select: none; border-radius: 3px 0 0 3px; }
+    .formula-bar-fx:hover { background: rgba(14,143,217,0.2); }
+    .formula-bar-input { flex: 1 1 auto; min-width: 0; background: transparent; color: var(--text); border: none; font-size: 10.5px; padding: 3px 6px; outline: none; font-family: var(--font-mono); }
+    .cell-formula { background: rgba(14,143,217,0.07); }
+    .cell-formula-error { color: var(--diff-remove); font-weight: 600; }
+
+    /* Floating "insert a function" reference list opened from the ƒx button. */
+    .formula-ref-panel { position: fixed; z-index: 500; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px var(--shadow); padding: 6px; width: 300px; max-height: 340px; overflow-y: auto; font-family: var(--font-ui); }
+    .formula-ref-item { padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+    .formula-ref-item:hover { background: var(--hover-bg); }
+    .formula-ref-name { font-family: var(--font-mono); font-size: 11.5px; color: var(--accent); font-weight: 700; }
+    .formula-ref-syntax { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+    .formula-ref-desc { font-size: 10.5px; color: var(--text); margin-top: 2px; line-height: 1.3; }
+
+    .sheet-tabs { display: flex; gap: 2px; padding: 5px 8px 0; flex-shrink: 0; overflow-x: auto; background: var(--bg-panel); }
+    .sheet-tab { padding: 4px 10px; font-size: 10.5px; border-radius: 4px 4px 0 0; cursor: pointer; color: var(--text-dim); background: var(--bg-elevated); white-space: nowrap; border: 1px solid var(--border-soft); border-bottom: none; }
+    .sheet-tab.active { color: var(--text-bright); background: var(--bg); font-weight: 700; }
+    .sheet-tab:hover { color: var(--text-bright); }
+
+    .content { flex-grow: 1; overflow: auto; background: var(--bg); }
+    .data-table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 11.5px; }
+    .data-table th, .data-table td { border-right: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); padding: 4px 8px; text-align: left; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; unicode-bidi: plaintext; }
+    .data-table thead th { position: sticky; top: 0; background: var(--bg-elevated); color: var(--text-bright); font-weight: 700; cursor: pointer; user-select: none; z-index: 2; font-family: var(--font-ui); font-size: 10.5px; letter-spacing: 0.2px; }
+    .data-table thead th:hover { background: #38383c; }
+    .data-table thead th .sort-arrow { opacity: 0.6; margin-left: 4px; font-size: 9px; }
+    .data-table .rownum-header, .data-table td.rownum { position: sticky; left: 0; background: var(--bg-elevated); color: var(--text-dim); text-align: right; font-size: 10px; z-index: 1; user-select: none; }
+    .data-table .rownum-header { z-index: 3; }
+    .data-table tbody tr:hover td { background: var(--hover-bg); }
+    .data-table tbody tr:hover td.rownum { background: #34383a; }
+    .cell-num, .cell-num-like { color: var(--num-color); font-variant-numeric: tabular-nums; }
+    .data-table td.cell-num, .data-table td.cell-num-like, .data-table td.cell-rtl, .data-table th.cell-rtl { text-align: right; }
+    .cell-bool { color: var(--bool-color); font-weight: 600; }
+    .cell-date { color: var(--date-color); }
+    .cell-empty { background: var(--empty-bg); }
+    .match { background-color: rgba(220, 190, 0, 0.4); border-radius: 1px; }
+    .match.current { background-color: #f7d75c; color: #000; border: 1px solid #ffaa00; font-weight: bold; }
+    /* Compare-panel search highlights the whole cell rather than the matched substring —
+       cells are contenteditable, and splicing <span> match markers into their content
+       would risk corrupting the DOM the moment the user starts typing in one. */
+    .data-table td.cell-search-match, .data-table th.cell-search-match { background: rgba(220, 190, 0, 0.30) !important; }
+    .data-table td.cell-search-match.current-match, .data-table th.cell-search-match.current-match { background: rgba(247, 215, 92, 0.5) !important; box-shadow: inset 0 0 0 1.5px #ffaa00; }
+
+    .status-bar { flex-shrink: 0; padding: 3px 8px; font-size: 9.5px; font-family: var(--font-mono); color: var(--accent); background: var(--bg); border-top: 1px solid var(--border-soft); display: flex; justify-content: space-between; }
+    .empty-state { padding: 30px 12px; text-align: center; color: var(--text-dim); font-size: 12px; }
+
+    /* ---------- Focus mode ---------- */
+    #focus-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 30px; }
+    #focus-overlay.active { display: flex; }
+    .entry.focused-entry { width: min(1200px, 94vw); max-height: 90vh; box-shadow: 0 10px 50px rgba(0,0,0,0.7); }
+    .focus-close-btn { position: absolute; top: 18px; right: 22px; z-index: 9001; background: var(--input-bg); color: var(--text); border: none; width: 28px; height: 28px; border-radius: 50%; font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .focus-close-btn:hover { background: #48484b; }
+
+    @keyframes flash-pulse { 0% { background-color: rgba(14,143,217,0.35); } 100% { background-color: transparent; } }
+    /* box-shadow rather than background so the pulse still reads over a cell/row that
+       already has an !important diff background (changed cell, extra column, added/
+       removed row) — an animated background-color can't win against !important. */
+    @keyframes flash-ring-pulse { 0% { box-shadow: inset 0 0 0 3px rgba(14,143,217,0.95), 0 0 10px 2px rgba(14,143,217,0.6); } 100% { box-shadow: inset 0 0 0 3px rgba(14,143,217,0); } }
+    .flash-row { animation: flash-pulse 1s ease-out, flash-ring-pulse 1s ease-out; }
+
+    /* ---------- Compare tab ---------- */
+    .chips-box { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; max-height: 84px; overflow-y: auto; padding: 8px; background: var(--bg-panel); border: 1px solid var(--border-soft); border-radius: 5px; }
+    .chips-empty { opacity: 0.5; font-size: 11px; padding: 4px; }
+    .chip { display: flex; align-items: center; gap: 5px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 12px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+    .chip:hover { border-color: var(--focus); background: var(--hover-bg); }
+    .chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .chip-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chip[draggable="true"] { cursor: grab; }
+    .chip[draggable="true"]:active { cursor: grabbing; }
+    .chip-hint { font-size: 10px; color: var(--text-dim); margin: -4px 0 10px 2px; }
+
+    /* Fixed viewport-relative height (not flex:1 1 auto) so a big table can never inflate
+       this row past the screen — the same approach the JSON tool uses for its editor grid.
+       With flex:1 1 auto here, #compare-pane's own ">*:not(#compareResults){flex-shrink:0}"
+       rule (below) would strip the shrink back out, leaving a grid that only grows to fit
+       its content and never shrinks — exactly the "box is too large, can't scroll" bug. */
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 52vh; flex-shrink: 0; }
+    .compare-col { display: flex; flex-direction: column; height: 100%; border: 1px solid var(--border-soft); border-radius: 6px; overflow: hidden; background: var(--bg-panel); min-height: 0; }
+    .compare-col.drop-target { outline: 2px dashed var(--focus); outline-offset: 3px; }
+    .compare-col-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border-soft); flex-wrap: wrap; flex-shrink: 0; }
+    .compare-col-toolbar-2 { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-bottom: 1px solid var(--border-soft); flex-shrink: 0; flex-wrap: wrap; background: var(--bg-panel); }
+    .compare-label { font-size: 10px; text-transform: uppercase; opacity: 0.7; font-weight: 800; letter-spacing: 0.4px; }
+    .compare-sheet-select { background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: 3px; font-size: 10.5px; padding: 2px 4px; font-family: var(--font-ui); }
+    .compare-col .content { flex-grow: 1; }
+    .editor-mode-btn { font-size: 10px; padding: 3px 9px; white-space: nowrap; }
+    #compareLeftContent [contenteditable="true"], #compareRightContent [contenteditable="true"] { cursor: text; outline: none; min-height: 1.3em; }
+    #compareLeftContent span.cell-edit, #compareRightContent span.cell-edit { display: inline-block; min-width: 8px; }
+    #compareLeftContent td[contenteditable]:focus, #compareRightContent td[contenteditable]:focus,
+    #compareLeftContent th:focus-within, #compareRightContent th:focus-within { background: var(--sel-bg); box-shadow: inset 0 0 0 1px var(--focus); }
+    #compareLeftContent .data-table th, #compareRightContent .data-table th { position: relative; }
+    #compareLeftContent .data-table th, #compareRightContent .data-table th, #compareLeftContent .data-table td.rownum, #compareRightContent .data-table td.rownum { padding-inline-end: 34px; }
+    .col-del, .row-del { position: absolute; top: 2px; inset-inline-end: 3px; opacity: 0; cursor: pointer; color: var(--diff-remove); font-weight: bold; font-size: 12px; line-height: 1.4; padding: 0 3px; border-radius: 3px; }
+    .col-ins, .row-ins { position: absolute; top: 2px; inset-inline-end: 18px; opacity: 0; cursor: pointer; color: var(--accent); font-weight: bold; font-size: 12px; line-height: 1.4; padding: 0 3px; border-radius: 3px; }
+    .col-del:hover, .row-del:hover { background: rgba(244, 135, 113, 0.25); }
+    .col-ins:hover, .row-ins:hover { background: rgba(14, 143, 217, 0.25); }
+    .data-table th:hover .col-del, .data-table td.rownum:hover .row-del,
+    .data-table th:hover .col-ins, .data-table td.rownum:hover .row-ins { opacity: 0.85; }
+
+    /* Small floating menu for "insert row/column" choices (above/below, left/right) —
+       positioned in fixed coordinates near the +/insert icon that opened it. */
+    .panel-ctx-menu { position: fixed; z-index: 500; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px var(--shadow); padding: 4px; min-width: 160px; font-family: var(--font-ui); font-size: 12px; }
+    .panel-ctx-menu .ctx-item { padding: 6px 10px; border-radius: 4px; cursor: pointer; color: var(--text); white-space: nowrap; }
+    .panel-ctx-menu .ctx-item:hover { background: var(--hover-bg); color: var(--text-bright); }
+    /* Marks left on the panel tables themselves after a compare, so a changed cell or a
+       column that only exists on one side is obvious at a glance, not just described in
+       the text results below. !important beats the table's own td/hover backgrounds. */
+    .data-table td.diff-cell-changed { background: rgba(220,220,170,0.30) !important; box-shadow: inset 0 0 0 2px var(--diff-change); }
+    tr.diff-row-added td { background: rgba(78,201,176,0.12) !important; }
+    tr.diff-row-removed td { background: rgba(244,135,113,0.12) !important; }
+    .data-table th.diff-col-onlyA, .data-table td.diff-col-onlyA { background: rgba(244,135,113,0.16) !important; box-shadow: inset 0 -2px 0 var(--diff-remove); }
+    .data-table th.diff-col-onlyB, .data-table td.diff-col-onlyB { background: rgba(78,201,176,0.16) !important; box-shadow: inset 0 -2px 0 var(--diff-add); }
+
+    .diff-output { margin-top: 10px; border: 1px solid var(--border-soft); padding: 8px; background: var(--bg-panel); font-family: var(--font-mono); font-size: 11.5px; border-radius: 6px; overflow-y: auto; flex: 1 1 auto; min-height: 100px; }
+    .diff-summary { font-weight: 700; margin-bottom: 8px; color: var(--text-bright); font-family: var(--font-ui); font-size: 12px; }
+    .diff-line { padding: 5px 8px; border-radius: 3px; margin-bottom: 2px; cursor: pointer; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; box-sizing: border-box; min-height: 26px; }
+    .diff-line:hover { background: var(--hover-bg); }
+    .diff-line-spacer { min-height: 26px; margin-bottom: 2px; }
+    .diff-content-box { display: flex; align-items: flex-start; gap: 8px; overflow: hidden; min-width: 0; flex: 1 1 auto; }
+    .diff-icon { font-weight: bold; width: 12px; text-align: center; flex-shrink: 0; }
+    .diff-text { overflow: hidden; min-width: 0; flex: 1 1 auto; }
+    .diff-text b { color: var(--text-bright); }
+    .diff-added { background: rgba(78,201,176,0.08); color: var(--diff-add); border-left: 3px solid var(--diff-add); }
+    .diff-removed { background: rgba(244,135,113,0.08); color: var(--diff-remove); border-left: 3px solid var(--diff-remove); }
+    .diff-changed { background: rgba(220,220,170,0.08); color: var(--diff-change); border-left: 3px solid var(--diff-change); }
+    .diff-tag { font-size: 9px; font-weight: 800; text-transform: uppercase; opacity: 0.85; flex-shrink: 0; }
+    .side-diff-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-width: 0; }
+    .side-diff-container > div { min-width: 0; }
+
+    ::-webkit-scrollbar { width: 11px; height: 11px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 6px; border: 3px solid var(--bg); }
+    ::-webkit-scrollbar-thumb:hover { background: #5c5c5c; }
+    /* The square where a horizontal and vertical scrollbar meet (e.g. a compare panel with
+       both) is its own element and defaults to the browser's light UI color if unstyled —
+       that's the stray white box in the bottom corner of a scrollable panel. */
+    ::-webkit-scrollbar-corner { background: var(--bg); }
+</style>
+</head>
+<body>
+    <div class="tabs-header">
+        <div class="tab-link active" data-tab="viewer-pane" onclick="switchTab('viewer-pane', this)">Viewer</div>
+        <div class="tab-link" data-tab="compare-pane" onclick="switchTab('compare-pane', this)">Compare</div>
+        <div class="storage-io-bar">
+            <button class="btn-global-icon" id="storageExportBtn" title="Export local storage to a file" onclick="exportLocalStorageBackup()">
+                <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+            </button>
+            <button class="btn-global-icon" id="storageImportBtn" title="Import local storage from a file" onclick="document.getElementById('storageImportInput').click()">                
+                <svg viewBox="0 0 16 16"><path d="M8.75 1v6.63l1.94-1.94 1.06 1.06L8 10.5 4.25 6.75l1.06-1.06L7.25 7.63V1h1.5zM2 12h12v2.5H2V12z"/></svg>
+            </button>
+            <input type="file" id="storageImportInput" accept=".json,application/json" style="display:none" onchange="importLocalStorageBackup(this)">
+        </div>
+    </div>
+
+    <div class="tab-viewport">
+        <div id="viewer-pane" class="tab-pane active">
+            <div class="toolbar">
+                <div class="title-group">
+                    <h3>CSV / XLSX Viewer</h3>
+                    <span class="title-sub">browse, search &amp; sort spreadsheet files</span>
+                </div>
+                <div class="btn-group">
+                    <button id="viewModeBtn" class="btn btn-secondary" onclick="toggleLayout()">View: Stack</button>
+                    <button class="btn-global-icon" title="Collapse all files" onclick="setAllCollapse(true)">
+                        <svg viewBox="0 0 16 16"><path d="M9 9H5V5h4v4zm5-7H2v12h12V2zM3 13V3h10v10H3z"/></svg>
+                    </button>
+                    <button class="btn-global-icon" title="Expand all files" onclick="setAllCollapse(false)">
+                        <svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg>
+                    </button>
+                    <button class="btn-global-icon" title="Upload CSV/TSV/JSON/XLSX file(s)" onclick="document.getElementById('fileInput').click()">
+                        <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+                    </button>
+                    <input type="file" id="fileInput" accept=".csv,.tsv,.txt,.json,.xlsx,.xls" multiple style="display:none" onchange="handleFileUpload(this.files)">
+                    <button class="btn btn-secondary" onclick="clearAllEntries()">Clear All</button>
+                </div>
+            </div>
+
+            <div class="drop-zone" id="pasteZone">
+                <textarea id="pasteInput" rows="2" placeholder="Paste CSV, TSV, or JSON (e.g. from &quot;Copy as JSON&quot;) here, or drop / upload a .csv, .tsv, .json or .xlsx file..."></textarea>
+                <div class="drop-zone-footer">
+                    <span class="drop-zone-hint">Drop a file anywhere in this box, or paste text (CSV/TSV/JSON) and click Add.</span>
+                    <button class="btn" onclick="addFromPasteBox()">Add Table</button>
+                </div>
+            </div>
+
+            <div id="container"><div class="empty-state">No files loaded yet — upload or paste a CSV/TSV/JSON, or drop an .xlsx workbook.</div></div>
+        </div>
+
+        <div id="compare-pane" class="tab-pane">
+            <div class="toolbar">
+                <div class="title-group">
+                    <h3>Compare Tables</h3>
+                    <span class="title-sub">Panel A vs Panel B</span>
+                </div>
+                <div class="btn-group">
+                    <label class="switch-container">
+                        <div class="switch"><input type="checkbox" id="compareSyncScrollToggle" checked><span class="slider"></span></div>
+                        Sync Scroll
+                    </label>
+                    <button class="btn btn-secondary" onclick="resetCompareSection()">Reset Both Panels</button>
+                </div>
+            </div>
+
+            <div id="compareChips" class="chips-box"></div>
+            <div class="chip-hint">Click a file above to choose a panel, or drag it straight onto Panel A or Panel B. Cells are editable directly in the table — click one to type.</div>
+
+            <div class="compare-grid">
+                <div class="compare-col" id="compareLeftCol" ondragover="allowCompareDrop(event)" ondrop="handleCompareDrop(event,'compareLeft')" ondragenter="this.classList.add('drop-target')" ondragleave="this.classList.remove('drop-target')">
+                    <div class="compare-col-toolbar">
+                        <span class="compare-label">Panel A</span>
+                        <select class="compare-sheet-select" id="compareLeftSheetSelect" onchange="setComparePanelSheet('compareLeft', this.value)" style="display:none;"></select>
+                        <button class="btn btn-secondary editor-mode-btn" onclick="addPanelRow('compareLeft')">+ Row</button>
+                        <button class="btn btn-secondary editor-mode-btn" onclick="addPanelColumn('compareLeft')">+ Col</button>
+                        <div class="actions">
+                            <div class="btn-icon" title="Copy as CSV" onclick="copyPanelAsCsv('compareLeft', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
+                            <div class="btn-icon" title="Copy as JSON" style="color:#e8b94a" onclick="copyPanelAsJson('compareLeft', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3c-1.5 0-2 1-2 2v4.5c0 1.5-1 2-1 2.5 0 .5 1 1 1 2.5V19c0 1 1 2 2 2M16 3c1.5 0 2 1 2 2v4.5c0 1.5-1 2-1 2.5 0 .5-1 1-1 2.5V19c0 1-1 2-2 2"/></svg></div>
+                            <div class="btn-icon" title="Copy as Markdown table" onclick="copyPanelAsMarkdown('compareLeft', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6.3" x2="14.5" y2="6.3"/><line x1="6.1" y1="6.3" x2="6.1" y2="13.5"/><line x1="10.3" y1="6.3" x2="10.3" y2="13.5"/></svg></div>
+                            <div class="btn-icon" title="Save as .xlsx" style="color:var(--xlsx-color)" onclick="savePanelAsXlsx('compareLeft')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="13" height="13" rx="1.5"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="1.5" y1="10.3" x2="14.5" y2="10.3"/><line x1="6.6" y1="1.5" x2="6.6" y2="14.5"/></svg></div>
+                            <div class="btn-icon" title="Save as .csv" onclick="savePanelAsCsv('compareLeft')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM4 1h8v4H4V1zm10 13H2V2h1v4h10V2h1v12zM5 10h6v3H5v-3z"/></svg></div>
+                            <div class="btn-icon" title="Save this panel as a new file in Viewer" onclick="savePanelToViewer('compareLeft', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l4.5 4.5-1.06 1.06L8.75 2.87V10h-1.5V2.87L4.56 5.56 3.5 4.5 8 0zM1 12h14v1.5H1V12z"/></svg></div>
+                        </div>
+                        <div class="btn-delete" title="Clear Panel A" onclick="clearComparePanel('compareLeft')">×</div>
+                    </div>
+                    <div class="compare-col-toolbar-2">
+                        <label class="switch-container">
+                            <div class="switch"><input type="checkbox" id="compareLeftHeaderToggle" checked onchange="toggleComparePanelHeader('compareLeft', this.checked)"><span class="slider"></span></div>
+                            Header row
+                        </label>
+                        <div class="formula-bar">
+                            <span class="formula-bar-fx" title="Insert a function" onclick="toggleFormulaRef(event, 'compareLeft')">ƒx</span>
+                            <input type="text" class="formula-bar-input" id="compareLeftFormulaBar" placeholder="Click a cell to view or edit its value or formula" title="While editing a formula, Ctrl/Cmd+click a cell to insert its reference" oninput="onFormulaBarInput('compareLeft', this.value)" onkeydown="onFormulaBarKeydown(event, 'compareLeft')" onblur="refreshFormulaDisplays('compareLeft')">
+                        </div>
+                        <div class="search-container">
+                            <input type="text" class="search-inline" placeholder="Find in table..." oninput="setPanelSearch('compareLeft', this.value)" onkeydown="panelSearchNav(event, 'compareLeft')">
+                            <span class="search-counter" id="compareLeftCounter">0/0</span>
+                        </div>
+                    </div>
+                    <div class="content" id="compareLeftContent"><div class="empty-state">Load a table into Panel A, or start a blank one</div></div>
+                </div>
+                <div class="compare-col" id="compareRightCol" ondragover="allowCompareDrop(event)" ondrop="handleCompareDrop(event,'compareRight')" ondragenter="this.classList.add('drop-target')" ondragleave="this.classList.remove('drop-target')">
+                    <div class="compare-col-toolbar">
+                        <span class="compare-label">Panel B</span>
+                        <select class="compare-sheet-select" id="compareRightSheetSelect" onchange="setComparePanelSheet('compareRight', this.value)" style="display:none;"></select>
+                        <button class="btn btn-secondary editor-mode-btn" onclick="addPanelRow('compareRight')">+ Row</button>
+                        <button class="btn btn-secondary editor-mode-btn" onclick="addPanelColumn('compareRight')">+ Col</button>
+                        <div class="actions">
+                            <div class="btn-icon" title="Copy as CSV" onclick="copyPanelAsCsv('compareRight', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
+                            <div class="btn-icon" title="Copy as JSON" style="color:#e8b94a" onclick="copyPanelAsJson('compareRight', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3c-1.5 0-2 1-2 2v4.5c0 1.5-1 2-1 2.5 0 .5 1 1 1 2.5V19c0 1 1 2 2 2M16 3c1.5 0 2 1 2 2v4.5c0 1.5-1 2-1 2.5 0 .5-1 1-1 2.5V19c0 1-1 2-2 2"/></svg></div>
+                            <div class="btn-icon" title="Copy as Markdown table" onclick="copyPanelAsMarkdown('compareRight', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6.3" x2="14.5" y2="6.3"/><line x1="6.1" y1="6.3" x2="6.1" y2="13.5"/><line x1="10.3" y1="6.3" x2="10.3" y2="13.5"/></svg></div>
+                            <div class="btn-icon" title="Save as .xlsx" style="color:var(--xlsx-color)" onclick="savePanelAsXlsx('compareRight')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="13" height="13" rx="1.5"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="1.5" y1="10.3" x2="14.5" y2="10.3"/><line x1="6.6" y1="1.5" x2="6.6" y2="14.5"/></svg></div>
+                            <div class="btn-icon" title="Save as .csv" onclick="savePanelAsCsv('compareRight')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM4 1h8v4H4V1zm10 13H2V2h1v4h10V2h1v12zM5 10h6v3H5v-3z"/></svg></div>
+                            <div class="btn-icon" title="Save this panel as a new file in Viewer" onclick="savePanelToViewer('compareRight', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l4.5 4.5-1.06 1.06L8.75 2.87V10h-1.5V2.87L4.56 5.56 3.5 4.5 8 0zM1 12h14v1.5H1V12z"/></svg></div>
+                        </div>
+                        <div class="btn-delete" title="Clear Panel B" onclick="clearComparePanel('compareRight')">×</div>
+                    </div>
+                    <div class="compare-col-toolbar-2">
+                        <label class="switch-container">
+                            <div class="switch"><input type="checkbox" id="compareRightHeaderToggle" checked onchange="toggleComparePanelHeader('compareRight', this.checked)"><span class="slider"></span></div>
+                            Header row
+                        </label>
+                        <div class="formula-bar">
+                            <span class="formula-bar-fx" title="Insert a function" onclick="toggleFormulaRef(event, 'compareRight')">ƒx</span>
+                            <input type="text" class="formula-bar-input" id="compareRightFormulaBar" placeholder="Click a cell to view or edit its value or formula" title="While editing a formula, Ctrl/Cmd+click a cell to insert its reference" oninput="onFormulaBarInput('compareRight', this.value)" onkeydown="onFormulaBarKeydown(event, 'compareRight')" onblur="refreshFormulaDisplays('compareRight')">
+                        </div>
+                        <div class="search-container">
+                            <input type="text" class="search-inline" placeholder="Find in table..." oninput="setPanelSearch('compareRight', this.value)" onkeydown="panelSearchNav(event, 'compareRight')">
+                            <span class="search-counter" id="compareRightCounter">0/0</span>
+                        </div>
+                    </div>
+                    <div class="content" id="compareRightContent"><div class="empty-state">Load a table into Panel B, or start a blank one</div></div>
+                </div>
+            </div>
+
+            <div class="toolbar" style="margin-top:10px;">
+                <div class="title-group">
+                    <h3 style="font-size:12px;">Panel A vs Panel B</h3>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" id="compareToggleDiffView" onclick="toggleCompareDiffMode()">View: List</button>
+                    <button class="btn" onclick="runCompare()">Compare Panels</button>
+                    <button class="btn btn-secondary" onclick="clearCompareResults()">Clear Results</button>
+                </div>
+            </div>
+            <div id="compareResults" class="diff-output">Load a table into each panel, then click "Compare Panels".</div>
+        </div>
+    </div>
+
+    <div id="focus-overlay" onclick="if(event.target === this) closeFocusEntry();">
+        <div class="focus-close-btn" title="Close (Esc)" onclick="closeFocusEntry()">×</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+    'use strict';
+    /* =========================================================================
+       Local storage backup (export / import)
+       ========================================================================= */
+    function flashStorageIoButton(btnId) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<span style="font-size:11px; font-weight:bold; color:#89d185;">&#10003;</span>';
+        setTimeout(() => { btn.innerHTML = original; }, 900);
+    }
+
+    function exportLocalStorageBackup() {
+        try {
+            const data = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                data[key] = localStorage.getItem(key);
+            }
+            const payload = {
+                __source: document.title || 'sheet-viewer',
+                __exportedAt: new Date().toISOString(),
+                localStorage: data
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const d = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sheet-viewer-backup-${stamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            flashStorageIoButton('storageExportBtn');
+        } catch (err) {
+            alert('Failed to export local storage: ' + err.message);
+        }
+    }
+
+    function importLocalStorageBackup(fileInput) {
+        const file = fileInput.files && fileInput.files[0];
+        fileInput.value = '';
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const parsed = JSON.parse(reader.result);
+                const data = (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.localStorage && typeof parsed.localStorage === 'object')
+                    ? parsed.localStorage
+                    : parsed;
+                if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                    throw new Error('That file does not look like a local storage backup.');
+                }
+                const keys = Object.keys(data);
+                if (keys.length === 0) {
+                    alert('That backup file has no saved data.');
+                    return;
+                }
+                const ok = confirm(`Import ${keys.length} saved item(s) from this backup?\n\nThis will overwrite any matching data already stored here, and the page will reload.`);
+                if (!ok) return;
+                keys.forEach(key => {
+                    const value = data[key];
+                    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+                });
+                location.reload();
+            } catch (err) {
+                alert('Failed to import backup: ' + err.message);
+            }
+        };
+        reader.onerror = () => alert('Failed to read the selected file.');
+        reader.readAsText(file);
+    }
+
+    /* =========================================================================
+       State & constants
+       ========================================================================= */
+    const STORAGE_KEY = 'sheet_viewer_entries_v1';
+    const LAYOUT_KEY = 'sheet_viewer_layout_mode';
+    const TYPE_COLORS = { csv: 'var(--csv-color)', tsv: 'var(--tsv-color)', xlsx: 'var(--xlsx-color)', json: '#e8b94a' };
+
+    let postedEntries = [];   // { id, name, type, timeStr, sheets:[Sheet], activeSheet }
+    let entryIdCounter = 0;
+    let isGridView = false;
+
+    // Sheet = { name, allRows: [[...]], hasHeader: bool, sortCol: number|null, sortDir: 1|-1, filterQuery: '' }
+
+    // Each compare panel holds its own editable copy of a table, decoupled from any Viewer
+    // entry once loaded — editing a panel never mutates the original file. Cells are edited
+    // directly in the rendered table (no separate raw-text mode).
+    // { allRows: [[...]], hasHeader: bool, sourceEntryId: string|null, sourceSheetIdx: number }
+    // activeCell is the cell literally focused right now (raw formula text shows there, and
+    // it's skipped by the recompute pass); selectedCell is "sticky" across a blur caused by
+    // clicking a non-focusable control in the same panel (the formula bar's ƒx button, or an
+    // item in its function list) — those clicks blur the cell without anything else taking
+    // focus, so without a separate sticky field the formula bar/ƒx menu would lose track of
+    // which cell they're editing the instant you click either of them.
+    function emptyPanelState() { return { allRows: [], hasHeader: true, sourceEntryId: null, sourceSheetIdx: 0, tabAnchorCol: null, internalFocus: false, searchQuery: '', activeCell: null, selectedCell: null }; }
+    const comparePanels = { compareLeft: emptyPanelState(), compareRight: emptyPanelState() };
+
+    /* ================= Formula engine =================
+       A small spreadsheet-style formula evaluator for the Compare panels. Any cell whose raw
+       text starts with "=" is treated as a formula and shows its computed result once you
+       click away from it; while it's focused, it shows the raw formula text so you can edit
+       it (the formula bar mirrors the same raw text). Supports +, -, *, /, ^ (power),
+       & (text concat), comparisons (= <> < > <= >=), parentheses, single cell references
+       (A1) and rectangular ranges (A1:B10), and the function list in FORMULA_REFERENCE below
+       (kept in sync with the switch in formulaCallFunction). */
+    const FORMULA_REFERENCE = [
+        { name: 'SUM', syntax: 'SUM(value1, [value2, ...])', desc: 'Adds all the numbers among the given cells or ranges.' },
+        { name: 'AVERAGE', syntax: 'AVERAGE(value1, [value2, ...])', desc: 'Returns the average (mean) of the given numbers.' },
+        { name: 'MIN', syntax: 'MIN(value1, [value2, ...])', desc: 'Returns the smallest number among the given values.' },
+        { name: 'MAX', syntax: 'MAX(value1, [value2, ...])', desc: 'Returns the largest number among the given values.' },
+        { name: 'COUNT', syntax: 'COUNT(value1, [value2, ...])', desc: 'Counts how many of the given values are numbers.' },
+        { name: 'COUNTA', syntax: 'COUNTA(value1, [value2, ...])', desc: 'Counts how many of the given values are non-empty.' },
+        { name: 'IF', syntax: 'IF(condition, value_if_true, value_if_false)', desc: 'Returns one value if the condition is true, otherwise the other.' },
+        { name: 'CONCAT', syntax: 'CONCAT(value1, [value2, ...])', desc: 'Joins values together as text (alias: CONCATENATE).' },
+        { name: 'ROUND', syntax: 'ROUND(number, digits)', desc: 'Rounds a number to the given number of decimal places.' },
+        { name: 'ABS', syntax: 'ABS(number)', desc: 'Returns the absolute (positive) value of a number.' },
+        { name: 'LEN', syntax: 'LEN(text)', desc: 'Returns the number of characters in a text value.' },
+        { name: 'UPPER', syntax: 'UPPER(text)', desc: 'Converts text to all uppercase.' },
+        { name: 'LOWER', syntax: 'LOWER(text)', desc: 'Converts text to all lowercase.' },
+        { name: 'TRIM', syntax: 'TRIM(text)', desc: 'Removes leading and trailing whitespace from text.' },
+        { name: 'AND', syntax: 'AND(value1, [value2, ...])', desc: 'Returns TRUE only if every argument is true.' },
+        { name: 'OR', syntax: 'OR(value1, [value2, ...])', desc: 'Returns TRUE if any argument is true.' },
+        { name: 'NOT', syntax: 'NOT(value)', desc: 'Reverses a boolean value.' },
+        { name: 'TODAY', syntax: 'TODAY()', desc: "Returns today's date." },
+        { name: 'NOW', syntax: 'NOW()', desc: 'Returns the current date and time.' },
+        { name: 'SQRT', syntax: 'SQRT(number)', desc: 'Returns the square root of a number.' },
+        { name: 'POWER', syntax: 'POWER(number, exponent)', desc: 'Raises a number to the given power.' },
+        { name: 'MOD', syntax: 'MOD(number, divisor)', desc: 'Returns the remainder after division.' },
+        { name: 'IFERROR', syntax: 'IFERROR(value, value_if_error)', desc: 'Returns value, or a fallback if value is an error.' },
+    ];
+
+    class FormulaError { constructor(code) { this.code = code; } }
+
+    function colLetterToIndex(letters) {
+        let n = 0;
+        for (let i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) - 64);
+        return n - 1;
+    }
+
+    function formulaParseRef(ref) {
+        const m = /^\$?([A-Za-z]+)\$?([0-9]+)$/.exec(ref);
+        if (!m) throw new FormulaError('#REF!');
+        return { row: parseInt(m[2], 10) - 1, col: colLetterToIndex(m[1].toUpperCase()) };
+    }
+
+    function formulaTokenize(src) {
+        const tokens = [];
+        let i = 0;
+        const n = src.length;
+        while (i < n) {
+            const c = src[i];
+            if (/\s/.test(c)) { i++; continue; }
+            if (c === '"') {
+                let j = i + 1, s = '';
+                while (j < n && src[j] !== '"') {
+                    if (src[j] === '\\' && src[j + 1] === '"') { s += '"'; j += 2; continue; }
+                    s += src[j]; j++;
+                }
+                tokens.push({ type: 'string', value: s });
+                i = j + 1;
+                continue;
+            }
+            if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(src[i + 1] || ''))) {
+                let j = i;
+                while (j < n && /[0-9.]/.test(src[j])) j++;
+                tokens.push({ type: 'number', value: parseFloat(src.slice(i, j)) });
+                i = j;
+                continue;
+            }
+            if (/[A-Za-z_$]/.test(c)) {
+                let j = i;
+                while (j < n && /[A-Za-z0-9_$]/.test(src[j])) j++;
+                const word = src.slice(i, j);
+                i = j;
+                if (src[i] === ':' && /^\$?[A-Za-z]+\$?[0-9]+$/.test(word)) {
+                    let k = i + 1;
+                    while (k < n && /[A-Za-z0-9$]/.test(src[k])) k++;
+                    const word2 = src.slice(i + 1, k);
+                    if (/^\$?[A-Za-z]+\$?[0-9]+$/.test(word2)) {
+                        tokens.push({ type: 'range', value: word + ':' + word2 });
+                        i = k;
+                        continue;
+                    }
+                }
+                if (/^\$?[A-Za-z]+\$?[0-9]+$/.test(word)) tokens.push({ type: 'ref', value: word });
+                else tokens.push({ type: 'ident', value: word.toUpperCase() });
+                continue;
+            }
+            if (c === '(') { tokens.push({ type: 'lparen' }); i++; continue; }
+            if (c === ')') { tokens.push({ type: 'rparen' }); i++; continue; }
+            if (c === ',') { tokens.push({ type: 'comma' }); i++; continue; }
+            if (c === '<' && src[i + 1] === '=') { tokens.push({ type: 'op', value: '<=' }); i += 2; continue; }
+            if (c === '>' && src[i + 1] === '=') { tokens.push({ type: 'op', value: '>=' }); i += 2; continue; }
+            if (c === '<' && src[i + 1] === '>') { tokens.push({ type: 'op', value: '<>' }); i += 2; continue; }
+            if ('+-*/^&=<>'.includes(c)) { tokens.push({ type: 'op', value: c }); i++; continue; }
+            throw new FormulaError('#ERROR!');
+        }
+        return tokens;
+    }
+
+    function formulaParse(tokens) {
+        let pos = 0;
+        const peek = () => tokens[pos];
+        const next = () => tokens[pos++];
+        const expect = (type) => { const t = next(); if (!t || t.type !== type) throw new FormulaError('#ERROR!'); return t; };
+        const isOp = (...vals) => { const t = peek(); return t && t.type === 'op' && vals.includes(t.value); };
+
+        function parseExpr() { return parseCompare(); }
+        function parseCompare() {
+            let left = parseConcat();
+            while (isOp('=', '<>', '<', '>', '<=', '>=')) { const op = next().value; left = { type: 'compare', op, left, right: parseConcat() }; }
+            return left;
+        }
+        function parseConcat() {
+            let left = parseAdditive();
+            while (isOp('&')) { next(); left = { type: 'concat', left, right: parseAdditive() }; }
+            return left;
+        }
+        function parseAdditive() {
+            let left = parseTerm();
+            while (isOp('+', '-')) { const op = next().value; left = { type: 'binop', op, left, right: parseTerm() }; }
+            return left;
+        }
+        function parseTerm() {
+            let left = parsePower();
+            while (isOp('*', '/')) { const op = next().value; left = { type: 'binop', op, left, right: parsePower() }; }
+            return left;
+        }
+        function parsePower() {
+            let left = parseUnary();
+            while (isOp('^')) { next(); left = { type: 'binop', op: '^', left, right: parseUnary() }; }
+            return left;
+        }
+        function parseUnary() {
+            if (isOp('-')) { next(); return { type: 'neg', value: parseUnary() }; }
+            if (isOp('+')) { next(); return parseUnary(); }
+            return parsePrimary();
+        }
+        function parsePrimary() {
+            const t = peek();
+            if (!t) throw new FormulaError('#ERROR!');
+            if (t.type === 'number') { next(); return { type: 'number', value: t.value }; }
+            if (t.type === 'string') { next(); return { type: 'string', value: t.value }; }
+            if (t.type === 'ref') { next(); return { type: 'ref', value: t.value }; }
+            if (t.type === 'range') { next(); return { type: 'range', value: t.value }; }
+            if (t.type === 'lparen') { next(); const e = parseExpr(); expect('rparen'); return e; }
+            if (t.type === 'ident') {
+                next();
+                if (t.value === 'TRUE') return { type: 'bool', value: true };
+                if (t.value === 'FALSE') return { type: 'bool', value: false };
+                if (peek() && peek().type === 'lparen') {
+                    next();
+                    const args = [];
+                    if (peek() && peek().type !== 'rparen') {
+                        args.push(parseExpr());
+                        while (peek() && peek().type === 'comma') { next(); args.push(parseExpr()); }
+                    }
+                    expect('rparen');
+                    return { type: 'call', name: t.value, args };
+                }
+                throw new FormulaError('#NAME?');
+            }
+            throw new FormulaError('#ERROR!');
+        }
+        const ast = parseExpr();
+        if (pos !== tokens.length) throw new FormulaError('#ERROR!');
+        return ast;
+    }
+
+    function formulaToNumber(v) {
+        if (v instanceof FormulaError) throw v;
+        if (v === null || v === undefined || v === '') return 0;
+        if (typeof v === 'number') return v;
+        if (typeof v === 'boolean') return v ? 1 : 0;
+        if (v instanceof Date) return v.getTime() / 86400000;
+        if (Array.isArray(v)) return NaN;
+        const n = parseFloat(v);
+        return isNaN(n) ? NaN : n;
+    }
+    function formulaToText(v) {
+        if (v instanceof FormulaError) return v.code;
+        if (v === null || v === undefined) return '';
+        if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+        if (v instanceof Date) return formatDate(v);
+        if (Array.isArray(v)) return v.map(formulaToText).join(', ');
+        return String(v);
+    }
+    function formulaToBool(v) {
+        if (v instanceof FormulaError) throw v;
+        if (typeof v === 'boolean') return v;
+        if (typeof v === 'number') return v !== 0;
+        if (typeof v === 'string') return /^true$/i.test(v.trim());
+        return !!v;
+    }
+    function formulaCompare(op, l, r) {
+        if (l instanceof FormulaError) throw l;
+        if (r instanceof FormulaError) throw r;
+        const numericish = x => x === null || typeof x === 'number' || typeof x === 'boolean' || x instanceof Date;
+        let a, b;
+        if (numericish(l) && numericish(r)) { a = formulaToNumber(l); b = formulaToNumber(r); }
+        else { a = formulaToText(l).toLowerCase(); b = formulaToText(r).toLowerCase(); }
+        switch (op) {
+            case '=': return a === b;
+            case '<>': return a !== b;
+            case '<': return a < b;
+            case '>': return a > b;
+            case '<=': return a <= b;
+            case '>=': return a >= b;
+        }
+        throw new FormulaError('#ERROR!');
+    }
+
+    function formulaGetRaw(panelId, row, col) {
+        const r = comparePanels[panelId].allRows[row];
+        return r ? r[col] : undefined;
+    }
+    function formulaCoerceRaw(raw) {
+        if (raw === undefined || raw === null || raw === '') return null;
+        if (typeof raw === 'number' || typeof raw === 'boolean' || raw instanceof Date) return raw;
+        if (typeof raw === 'string') {
+            const trimmed = raw.trim();
+            if (trimmed !== '' && /^-?\d+(\.\d+)?$/.test(trimmed)) return parseFloat(trimmed);
+            if (/^true$/i.test(trimmed)) return true;
+            if (/^false$/i.test(trimmed)) return false;
+            return raw;
+        }
+        return raw;
+    }
+    function formulaIsFormulaText(raw) { return typeof raw === 'string' && raw.trim().startsWith('='); }
+
+    // Evaluates cell (row, col) in panelId's grid, recursing into other formula cells it
+    // references. ctx.cache memoizes results within one top-level evaluation; ctx.visiting
+    // detects reference cycles (A1 referring to itself via B1, etc.) as a #CIRCULAR! error.
+    function formulaEvalCell(panelId, row, col, ctx) {
+        const key = row + ',' + col;
+        if (ctx.cache.has(key)) return ctx.cache.get(key);
+        if (ctx.visiting.has(key)) throw new FormulaError('#CIRCULAR!');
+        const raw = formulaGetRaw(panelId, row, col);
+        let result;
+        if (formulaIsFormulaText(raw)) {
+            ctx.visiting.add(key);
+            try {
+                const ast = formulaParse(formulaTokenize(raw.trim().slice(1)));
+                result = formulaEvalNode(ast, panelId, ctx);
+            } catch (e) {
+                result = e instanceof FormulaError ? e : new FormulaError('#ERROR!');
+            } finally {
+                ctx.visiting.delete(key);
+            }
+        } else {
+            result = formulaCoerceRaw(raw);
+        }
+        ctx.cache.set(key, result);
+        return result;
+    }
+
+    function formulaEvalRangeValues(rangeStr, panelId, ctx) {
+        const [a, b] = rangeStr.split(':');
+        const ra = formulaParseRef(a), rb = formulaParseRef(b);
+        const r1 = Math.min(ra.row, rb.row), r2 = Math.max(ra.row, rb.row);
+        const c1 = Math.min(ra.col, rb.col), c2 = Math.max(ra.col, rb.col);
+        const vals = [];
+        for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) vals.push(formulaEvalCell(panelId, r, c, ctx));
+        return vals;
+    }
+
+    function formulaFlattenArgs(argNodes, panelId, ctx) {
+        const out = [];
+        argNodes.forEach(node => {
+            if (node.type === 'range') out.push(...formulaEvalRangeValues(node.value, panelId, ctx));
+            else out.push(formulaEvalNode(node, panelId, ctx));
+        });
+        return out;
+    }
+
+    function formulaCallFunction(name, argNodes, panelId, ctx) {
+        // Blank cells are dropped before coercion (not just filtered by isNaN afterward) —
+        // otherwise formulaToNumber's null->0 coercion would make AVERAGE/COUNT/etc. treat
+        // an empty cell the same as an explicit 0, which real spreadsheets never do.
+        const nums = () => formulaFlattenArgs(argNodes, panelId, ctx).filter(v => v !== null && v !== '' && v !== undefined).map(formulaToNumber).filter(n => !isNaN(n));
+        const allVals = () => formulaFlattenArgs(argNodes, panelId, ctx);
+        switch (name) {
+            case 'SUM': return nums().reduce((a, b) => a + b, 0);
+            case 'AVERAGE': case 'AVG': { const ns = nums(); if (!ns.length) throw new FormulaError('#DIV/0!'); return ns.reduce((a, b) => a + b, 0) / ns.length; }
+            case 'MIN': { const ns = nums(); return ns.length ? Math.min(...ns) : 0; }
+            case 'MAX': { const ns = nums(); return ns.length ? Math.max(...ns) : 0; }
+            case 'COUNT': return nums().length;
+            case 'COUNTA': return allVals().filter(v => v !== null && v !== '' && v !== undefined).length;
+            case 'IF': {
+                if (argNodes.length < 2) throw new FormulaError('#ERROR!');
+                const cond = formulaToBool(formulaEvalNode(argNodes[0], panelId, ctx));
+                if (cond) return formulaEvalNode(argNodes[1], panelId, ctx);
+                return argNodes[2] !== undefined ? formulaEvalNode(argNodes[2], panelId, ctx) : false;
+            }
+            case 'CONCAT': case 'CONCATENATE': return allVals().map(formulaToText).join('');
+            case 'ROUND': { const a = formulaFlattenArgs(argNodes, panelId, ctx).map(formulaToNumber); const mult = Math.pow(10, isNaN(a[1]) ? 0 : a[1]); return Math.round(a[0] * mult) / mult; }
+            case 'ABS': return Math.abs(formulaToNumber(formulaEvalNode(argNodes[0], panelId, ctx)));
+            case 'LEN': return formulaToText(formulaEvalNode(argNodes[0], panelId, ctx)).length;
+            case 'UPPER': return formulaToText(formulaEvalNode(argNodes[0], panelId, ctx)).toUpperCase();
+            case 'LOWER': return formulaToText(formulaEvalNode(argNodes[0], panelId, ctx)).toLowerCase();
+            case 'TRIM': return formulaToText(formulaEvalNode(argNodes[0], panelId, ctx)).trim();
+            case 'AND': return allVals().every(formulaToBool);
+            case 'OR': return allVals().some(formulaToBool);
+            case 'NOT': return !formulaToBool(formulaEvalNode(argNodes[0], panelId, ctx));
+            case 'TODAY': return new Date(new Date().toDateString());
+            case 'NOW': return new Date();
+            case 'SQRT': { const v = formulaToNumber(formulaEvalNode(argNodes[0], panelId, ctx)); if (v < 0) throw new FormulaError('#NUM!'); return Math.sqrt(v); }
+            case 'POWER': { const a = formulaFlattenArgs(argNodes, panelId, ctx).map(formulaToNumber); return Math.pow(a[0], a[1]); }
+            case 'MOD': { const a = formulaFlattenArgs(argNodes, panelId, ctx).map(formulaToNumber); if (a[1] === 0) throw new FormulaError('#DIV/0!'); return a[0] % a[1]; }
+            case 'IFERROR': {
+                try { return formulaEvalNode(argNodes[0], panelId, ctx); }
+                catch (e) { return argNodes[1] !== undefined ? formulaEvalNode(argNodes[1], panelId, ctx) : ''; }
+            }
+            default: throw new FormulaError('#NAME?');
+        }
+    }
+
+    function formulaEvalNode(node, panelId, ctx) {
+        switch (node.type) {
+            case 'number': return node.value;
+            case 'string': return node.value;
+            case 'bool': return node.value;
+            case 'ref': { const { row, col } = formulaParseRef(node.value); return formulaEvalCell(panelId, row, col, ctx); }
+            case 'range': return formulaEvalRangeValues(node.value, panelId, ctx);
+            case 'neg': return -formulaToNumber(formulaEvalNode(node.value, panelId, ctx));
+            case 'binop': {
+                const a = formulaToNumber(formulaEvalNode(node.left, panelId, ctx));
+                const b = formulaToNumber(formulaEvalNode(node.right, panelId, ctx));
+                switch (node.op) {
+                    case '+': return a + b;
+                    case '-': return a - b;
+                    case '*': return a * b;
+                    case '/': if (b === 0) throw new FormulaError('#DIV/0!'); return a / b;
+                    case '^': return Math.pow(a, b);
+                }
+                break;
+            }
+            case 'concat': return formulaToText(formulaEvalNode(node.left, panelId, ctx)) + formulaToText(formulaEvalNode(node.right, panelId, ctx));
+            case 'compare': return formulaCompare(node.op, formulaEvalNode(node.left, panelId, ctx), formulaEvalNode(node.right, panelId, ctx));
+            case 'call': return formulaCallFunction(node.name, node.args, panelId, ctx);
+        }
+        throw new FormulaError('#ERROR!');
+    }
+
+    // Top-level entry point: computes the displayed result of the formula (or plain value)
+    // stored at (row, col) in panelId's grid. row/col are absolute grid coordinates (row 0 is
+    // the very first row of allRows, header included) — the same numbering the "#" column and
+    // A1-style references both use.
+    function computeFormulaCell(panelId, row, col) {
+        const ctx = { cache: new Map(), visiting: new Set() };
+        try { return formulaEvalCell(panelId, row, col, ctx); }
+        catch (e) { return e instanceof FormulaError ? e : new FormulaError('#ERROR!'); }
+    }
+    function formulaResultText(v) { return v instanceof FormulaError ? v.code : displayValue(v); }
+    function formulaResultClass(v) { return v instanceof FormulaError ? 'cell-formula-error' : cellClass(v); }
+
+    const icons = {
+        save: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM4 1h8v4H4V1zm10 13H2V2h1v4h10V2h1v12zM5 10h6v3H5v-3z"/></svg>`,
+        copy: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg>`,
+        json: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3c-1.5 0-2 1-2 2v4.5c0 1.5-1 2-1 2.5 0 .5 1 1 1 2.5V19c0 1 1 2 2 2M16 3c1.5 0 2 1 2 2v4.5c0 1.5-1 2-1 2.5 0 .5-1 1-1 2.5V19c0 1-1 2-2 2"/></svg>`,
+        md: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6.3" x2="14.5" y2="6.3"/><line x1="6.1" y1="6.3" x2="6.1" y2="13.5"/><line x1="10.3" y1="6.3" x2="10.3" y2="13.5"/></svg>`,
+        xlsx: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="13" height="13" rx="1.5"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="1.5" y1="10.3" x2="14.5" y2="10.3"/><line x1="6.6" y1="1.5" x2="6.6" y2="14.5"/></svg>`,
+        focus: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg>`
+    };
+
+    /* =========================================================================
+       Small utilities
+       ========================================================================= */
+    function escapeHtml(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function colLetter(n) {
+        let s = '', num = n + 1;
+        while (num > 0) {
+            const rem = (num - 1) % 26;
+            s = String.fromCharCode(65 + rem) + s;
+            num = Math.floor((num - 1) / 26);
+        }
+        return s;
+    }
+
+    function isDateVal(v) { return v instanceof Date && !isNaN(v.getTime()); }
+
+    function formatDate(d) {
+        const pad = n => String(n).padStart(2, '0');
+        const hasTime = d.getHours() || d.getMinutes() || d.getSeconds();
+        const datePart = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        return hasTime ? `${datePart} ${pad(d.getHours())}:${pad(d.getMinutes())}` : datePart;
+    }
+
+    function displayValue(v) {
+        if (v === null || v === undefined) return '';
+        if (isDateVal(v)) return formatDate(v);
+        if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+        return String(v);
+    }
+
+    function cellClass(v) {
+        if (v === null || v === undefined || v === '') return 'cell-empty';
+        if (isDateVal(v)) return 'cell-date';
+        if (typeof v === 'boolean') return 'cell-bool';
+        if (typeof v === 'number') return 'cell-num';
+        if (typeof v === 'string' && v.trim() !== '' && /^-?\d+(\.\d+)?$/.test(v.trim())) return 'cell-num-like';
+        return '';
+    }
+
+    // Approximates the Unicode "first strong character" rule to right-align cells whose
+    // content reads as Hebrew/Arabic, skipping leading neutral characters (digits, quotes,
+    // punctuation, currency) the way a real bidi paragraph-direction check would.
+    function isRtlText(s) {
+        if (!s) return false;
+        const m = String(s).match(/[^\s\d.,;:\-+$€₪%()#'"\/\\]/);
+        if (!m) return false;
+        const code = m[0].codePointAt(0);
+        return (code >= 0x0590 && code <= 0x05FF) || (code >= 0x0600 && code <= 0x06FF) ||
+               (code >= 0x0750 && code <= 0x077F) || (code >= 0xFB1D && code <= 0xFDFF) || (code >= 0xFE70 && code <= 0xFEFF);
+    }
+
+    function normalizeForCompare(v) {
+        if (v === null || v === undefined || v === '') return '';
+        if (isDateVal(v)) return formatDate(v);
+        if (typeof v === 'boolean') return v ? 'true' : 'false';
+        if (typeof v === 'string') {
+            const t = v.trim().toLowerCase();
+            if (t === 'true' || t === 'false') return t;
+        }
+        return String(v);
+    }
+
+    function valuesEqual(a, b) {
+        return normalizeForCompare(a) === normalizeForCompare(b);
+    }
+
+    function csvEscapeField(v) {
+        if (v === null || v === undefined) v = '';
+        if (isDateVal(v)) v = formatDate(v);
+        const s = String(v);
+        if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+    }
+
+    function debounce(fn, ms) {
+        let t;
+        return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
+    }
+
+    /* =========================================================================
+       JSON paste/upload — the reverse of "Copy as JSON": turns pasted or uploaded
+       JSON back into a table, so a round trip through this tool (copy as JSON, edit
+       the text elsewhere, paste it back) works the same way CSV/TSV already does.
+       ========================================================================= */
+    function looksLikeJson(text) {
+        const t = text.trim();
+        return t.length > 0 && (t[0] === '[' || t[0] === '{');
+    }
+
+    // Mirrors copyAsJsonData's two shapes (array-of-objects when hasHeader, array-of-arrays
+    // otherwise) plus a couple of forgiving extras (a single bare object, or an array of
+    // plain scalars) so most JSON someone might paste in "just works". Returns null when the
+    // JSON parses fine but isn't a shape that reads as tabular data.
+    function jsonToSheetRows(json) {
+        const scalar = v => (v === undefined || v === null) ? '' : (typeof v === 'object' ? JSON.stringify(v) : v);
+        if (Array.isArray(json)) {
+            if (json.length === 0) return { rows: [['']], hasHeader: false };
+            if (json.every(v => v !== null && typeof v === 'object' && !Array.isArray(v))) {
+                // Array of objects: header row is the ordered union of every key seen, so
+                // objects with slightly different keys (missing/extra fields here and there)
+                // still line up into one table instead of failing the paste.
+                const headers = [];
+                json.forEach(obj => Object.keys(obj).forEach(k => { if (!headers.includes(k)) headers.push(k); }));
+                const rows = [headers, ...json.map(obj => headers.map(h => scalar(obj[h])))];
+                return { rows, hasHeader: true };
+            }
+            if (json.every(v => Array.isArray(v))) {
+                const colCount = Math.max(0, ...json.map(r => r.length));
+                const rows = json.map(r => {
+                    const padded = r.map(scalar);
+                    while (padded.length < colCount) padded.push('');
+                    return padded;
+                });
+                return { rows, hasHeader: false };
+            }
+            // Array of plain scalars ("a", "b", 3, ...) -> a single column.
+            return { rows: json.map(v => [scalar(v)]), hasHeader: false };
+        }
+        if (json !== null && typeof json === 'object') {
+            // A single object (not wrapped in an array) becomes a one-row table.
+            const headers = Object.keys(json);
+            if (!headers.length) return null;
+            return { rows: [headers, headers.map(h => scalar(json[h]))], hasHeader: true };
+        }
+        return null;
+    }
+
+    /* =========================================================================
+       Delimited text parsing (CSV / TSV)
+       ========================================================================= */
+    function detectDelimiter(text) {
+        const firstLine = (text.split(/\r\n|\r|\n/)[0]) || '';
+        const counts = {
+            ',': (firstLine.match(/,/g) || []).length,
+            '\t': (firstLine.match(/\t/g) || []).length,
+            ';': (firstLine.match(/;/g) || []).length
+        };
+        let best = ',', bestCount = counts[','];
+        for (const d of ['\t', ';']) { if (counts[d] > bestCount) { best = d; bestCount = counts[d]; } }
+        return best;
+    }
+
+    function parseDelimited(text, delimiter) {
+        const rows = [];
+        let row = [], field = '', inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+            const c = text[i];
+            if (inQuotes) {
+                if (c === '"') {
+                    if (text[i + 1] === '"') { field += '"'; i++; }
+                    else inQuotes = false;
+                } else field += c;
+            } else if (c === '"') {
+                inQuotes = true;
+            } else if (c === delimiter) {
+                row.push(field); field = '';
+            } else if (c === '\r') {
+                // swallow, \n (or end) closes the row
+            } else if (c === '\n') {
+                row.push(field); rows.push(row); row = []; field = '';
+            } else {
+                field += c;
+            }
+        }
+        if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+        // drop a single trailing fully-empty row (from a trailing newline)
+        if (rows.length && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === '') rows.pop();
+        // pad ragged rows to the widest row
+        const width = rows.reduce((m, r) => Math.max(m, r.length), 0);
+        rows.forEach(r => { while (r.length < width) r.push(''); });
+        return rows;
+    }
+
+    function makeSheet(name, allRows, hasHeader = true) {
+        return { name, allRows, hasHeader, sortCol: null, sortDir: 1, filterQuery: '' };
+    }
+
+    /* =========================================================================
+       Persistence
+       ========================================================================= */
+    function saveEntriesToStorage() {
+        try {
+            const serializable = postedEntries.map(e => ({
+                id: e.id, name: e.name || '', type: e.type, timeStr: e.timeStr,
+                activeSheet: e.activeSheet,
+                sheets: e.sheets.map(s => ({ name: s.name, allRows: s.allRows, hasHeader: s.hasHeader }))
+            }));
+            const payload = JSON.stringify(serializable);
+            if (payload.length > 4_000_000) { localStorage.removeItem(STORAGE_KEY); return; } // too big to persist safely
+            localStorage.setItem(STORAGE_KEY, payload);
+        } catch (err) {
+            console.warn('Could not persist entries (storage full or unavailable):', err);
+        }
+    }
+
+    function loadEntriesFromStorage() {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (!saved) return;
+            const items = JSON.parse(saved);
+            if (!Array.isArray(items)) return;
+            items.forEach(item => {
+                const sheets = item.sheets.map(s => makeSheet(s.name, s.allRows, s.hasHeader));
+                addEntry(item.name, item.type, sheets, item.timeStr, item.id, false);
+            });
+        } catch (err) {
+            console.warn('Failed to load entries from storage:', err);
+        }
+    }
+
+    function clearAllEntries() {
+        postedEntries = [];
+        localStorage.removeItem(STORAGE_KEY);
+        renderAllEntries();
+        renderCompareChips();
+    }
+
+    /* =========================================================================
+       Layout / tabs
+       ========================================================================= */
+    function switchTab(paneId, el) {
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
+        document.getElementById(paneId).classList.add('active');
+        el.classList.add('active');
+        if (paneId === 'compare-pane') renderCompareChips();
+    }
+
+    function toggleLayout() {
+        isGridView = !isGridView;
+        applyLayout();
+        try { localStorage.setItem(LAYOUT_KEY, isGridView ? 'grid' : 'stack'); } catch (e) {}
+    }
+
+    function applyLayout() {
+        const c = document.getElementById('container');
+        const btn = document.getElementById('viewModeBtn');
+        c.classList.toggle('grid-view', isGridView);
+        btn.textContent = isGridView ? 'View: Grid' : 'View: Stack';
+    }
+
+    function loadLayout() {
+        try { if (localStorage.getItem(LAYOUT_KEY) === 'grid') isGridView = true; } catch (e) {}
+        applyLayout();
+    }
+
+    function setAllCollapse(collapsed) {
+        document.querySelectorAll('.entry').forEach(entry => entry.classList.toggle('collapsed-entry', collapsed));
+    }
+
+    /* =========================================================================
+       File / paste ingestion
+       ========================================================================= */
+    function extOf(filename) {
+        const m = /\.([a-z0-9]+)$/i.exec(filename || '');
+        return m ? m[1].toLowerCase() : '';
+    }
+
+    function handleFileUpload(fileList) {
+        if (!fileList || !fileList.length) return;
+        Array.from(fileList).forEach(file => {
+            const ext = extOf(file.name);
+            const name = file.name.replace(/\.[^/.]+$/, '');
+            if (ext === 'xlsx' || ext === 'xls') {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    try {
+                        if (typeof XLSX === 'undefined') throw new Error('The XLSX engine did not load (no network access to the CDN).');
+                        const data = new Uint8Array(e.target.result);
+                        const wb = XLSX.read(data, { type: 'array', cellDates: true });
+                        const sheets = wb.SheetNames.map(sn => {
+                            const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '', raw: true, blankrows: false });
+                            return makeSheet(sn, aoa.length ? aoa : [['']], true);
+                        });
+                        addEntry(name, 'xlsx', sheets);
+                    } catch (err) {
+                        alert('Could not read "' + file.name + '": ' + err.message);
+                    }
+                };
+                reader.onerror = () => alert('Failed to read file: ' + file.name);
+                reader.readAsArrayBuffer(file);
+            } else {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const raw = (e.target.result || '');
+                    if (!raw.trim()) return;
+                    if (ext === 'json' || looksLikeJson(raw)) {
+                        try {
+                            const sheet = jsonToSheetRows(JSON.parse(raw));
+                            if (sheet) { addEntry(name, 'json', [makeSheet('Sheet1', sheet.rows, sheet.hasHeader)]); return; }
+                            if (ext === 'json') { alert('"' + file.name + '" parsed as JSON but isn\'t shaped like a table (expected an array of objects, an array of arrays, or a single object).'); return; }
+                            // else: not a .json file, just happened to start with [ or { -- fall through to delimited parsing below
+                        } catch (err) {
+                            if (ext === 'json') { alert('Could not parse "' + file.name + '" as JSON: ' + err.message); return; }
+                            // else fall through: looked JSON-ish but didn't parse, try as delimited text
+                        }
+                    }
+                    const delim = ext === 'tsv' ? '\t' : detectDelimiter(raw);
+                    const rows = parseDelimited(raw, delim);
+                    addEntry(name, delim === '\t' ? 'tsv' : 'csv', [makeSheet('Sheet1', rows, true)]);
+                };
+                reader.onerror = () => alert('Failed to read file: ' + file.name);
+                reader.readAsText(file);
+            }
+        });
+        const input = document.getElementById('fileInput');
+        if (input) input.value = '';
+    }
+
+    function addFromPasteBox() {
+        const box = document.getElementById('pasteInput');
+        const raw = box.value;
+        if (!raw.trim()) return;
+        if (looksLikeJson(raw)) {
+            let parsed, parseError = null;
+            try { parsed = JSON.parse(raw); } catch (e) { parseError = e; }
+            if (!parseError) {
+                const sheet = jsonToSheetRows(parsed);
+                if (!sheet) {
+                    alert('That JSON parsed fine, but isn\'t shaped like a table — expected an array of objects (like "Copy as JSON" produces), an array of arrays, or a single object.');
+                    return;
+                }
+                addEntry('', 'json', [makeSheet('Sheet1', sheet.rows, sheet.hasHeader)]);
+                box.value = '';
+                return;
+            }
+            // Looked like JSON (starts with [ or {) but didn't parse — fall through to the
+            // delimited-text path below in case it's actually CSV/TSV that happens to start
+            // with one of those characters in its first cell.
+        }
+        const delim = detectDelimiter(raw);
+        const rows = parseDelimited(raw, delim);
+        const type = delim === '\t' ? 'tsv' : 'csv';
+        addEntry('', type, [makeSheet('Sheet1', rows, true)]);
+        box.value = '';
+    }
+
+    const pasteZone = document.getElementById('pasteZone');
+    const pasteInput = document.getElementById('pasteInput');
+
+    pasteInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addFromPasteBox(); }
+    });
+    pasteInput.addEventListener('paste', e => {
+        if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+            e.preventDefault();
+            handleFileUpload(e.clipboardData.files);
+        }
+    });
+    ['dragover'].forEach(evt => pasteZone.addEventListener(evt, e => { e.preventDefault(); pasteZone.classList.add('file-drop-target'); }));
+    pasteZone.addEventListener('dragleave', () => pasteZone.classList.remove('file-drop-target'));
+    pasteZone.addEventListener('drop', e => {
+        e.preventDefault();
+        pasteZone.classList.remove('file-drop-target');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) handleFileUpload(e.dataTransfer.files);
+    });
+
+    /* =========================================================================
+       Entries
+       ========================================================================= */
+    function findEntry(id) { return postedEntries.find(e => e.id === id); }
+
+    function addEntry(name, type, sheets, savedTimeStr = null, savedId = null, saveToStorage = true) {
+        const timeStr = savedTimeStr || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        let entryId = savedId;
+        if (!entryId) {
+            entryId = 'e' + (++entryIdCounter);
+        } else {
+            const num = parseInt(entryId.replace('e', ''), 10);
+            if (!isNaN(num) && num >= entryIdCounter) entryIdCounter = num;
+        }
+        postedEntries.push({ id: entryId, name: name || '', type, timeStr, sheets, activeSheet: 0, searchQuery: '', filterRows: false });
+        renderAllEntries();
+        if (saveToStorage) saveEntriesToStorage();
+        renderCompareChips();
+        return entryId;
+    }
+
+    function removeEntry(id) {
+        postedEntries = postedEntries.filter(e => e.id !== id);
+        // The compare panels hold their own decoupled copy of the data, so removing the
+        // source file only disconnects the sheet-picker — any edits already made stay put.
+        ['compareLeft', 'compareRight'].forEach(p => { if (comparePanels[p].sourceEntryId === id) comparePanels[p].sourceEntryId = null; });
+        renderAllEntries();
+        saveEntriesToStorage();
+        renderCompareChips();
+        renderComparePanel('compareLeft');
+        renderComparePanel('compareRight');
+    }
+
+    function updateEntryName(id, value) {
+        const entry = findEntry(id);
+        if (!entry) return;
+        entry.name = value;
+        saveEntriesToStorage();
+        renderCompareChips();
+    }
+
+    function entryDisplayName(entry) {
+        return (entry.name && entry.name.trim()) ? entry.name.trim() : `${entry.type.toUpperCase()} @ ${entry.timeStr}`;
+    }
+
+    // Only strips characters that are actually illegal in filenames (and collapses
+    // whitespace) — it used to strip anything outside \w (ASCII letters/digits/underscore),
+    // which turned every non-Latin name (Hebrew, Arabic, CJK, accented text, ...) into a
+    // string of underscores. Unicode letters/digits are left alone.
+    function defaultFilename(entry) {
+        if (!(entry.name && entry.name.trim())) return 'table_export';
+        return entry.name.trim()
+            .replace(/[\\/:*?"<>|]+/g, '_')
+            .replace(/\s+/g, '_')
+            .slice(0, 150) || 'table_export';
+    }
+
+    /* ---- rendering the full entry list ---- */
+    function renderAllEntries() {
+        const container = document.getElementById('container');
+        container.innerHTML = '';
+        if (postedEntries.length === 0) {
+            container.innerHTML = '<div class="empty-state">No files loaded yet — upload or paste a CSV/TSV, or drop an .xlsx workbook.</div>';
+            return;
+        }
+        postedEntries.slice().reverse().forEach(entry => container.appendChild(buildEntryEl(entry)));
+    }
+
+    function buildEntryEl(entry) {
+        const el = document.createElement('div');
+        el.className = 'entry';
+        el.dataset.entryId = entry.id;
+
+        const totalRows = entry.sheets.reduce((m, s) => Math.max(m, s.hasHeader ? s.allRows.length - 1 : s.allRows.length), 0);
+        const sheet0 = entry.sheets[entry.activeSheet] || entry.sheets[0];
+        const colorVar = TYPE_COLORS[entry.type] || TYPE_COLORS.csv;
+
+        el.innerHTML = `
+            <div class="entry-header">
+                <span class="master-toggle" onclick="this.closest('.entry').classList.toggle('collapsed-entry')">▼</span>
+                <span class="time-tag">${entry.timeStr}</span>
+                <span class="type-badge" style="background:${colorVar}">${entry.type}</span>
+                <input type="text" class="name-input" placeholder="Name file..." value="${escapeHtml(entry.name)}" oninput="updateEntryName('${entry.id}', this.value)">
+                <span class="dims-tag" data-dims></span>
+                <div class="actions">
+                    <div class="btn-icon" title="Copy as CSV" onclick="copyAsCsv('${entry.id}', this)">${icons.copy}</div>
+                    <div class="btn-icon" title="Copy as JSON" style="color:#e8b94a" onclick="copyAsJson('${entry.id}', this)">${icons.json}</div>
+                    <div class="btn-icon" title="Copy as Markdown table" onclick="copyAsMarkdown('${entry.id}', this)">${icons.md}</div>
+                    <div class="btn-icon" title="Save as .xlsx" style="color:var(--xlsx-color)" onclick="saveAsXlsx('${entry.id}')">${icons.xlsx}</div>
+                    <div class="btn-icon" title="Save as .csv" onclick="saveAsCsv('${entry.id}')">${icons.save}</div>
+                    <div class="btn-icon" title="Focus" onclick="focusEntry(this)">${icons.focus}</div>
+                </div>
+                <div class="btn-delete" title="Remove" onclick="removeEntry('${entry.id}')">×</div>
+            </div>
+            <div class="entry-toolbar-2">
+                <label class="switch-container">
+                    <div class="switch"><input type="checkbox" ${sheet0.hasHeader ? 'checked' : ''} onchange="toggleEntryHeader('${entry.id}', this.checked)"><span class="slider"></span></div>
+                    Header row
+                </label>
+                <label class="switch-container">
+                    <div class="switch"><input type="checkbox" ${entry.filterRows ? 'checked' : ''} onchange="toggleFilterRows('${entry.id}', this.checked)"><span class="slider"></span></div>
+                    Only matches
+                </label>
+                <div class="search-container">
+                    <input type="text" class="search-inline" placeholder="Find in table..." value="${escapeHtml(entry.searchQuery || '')}" oninput="setEntrySearch('${entry.id}', this.value)" onkeydown="entrySearchNav(event, '${entry.id}')">
+                    <span class="search-counter" data-counter>0/0</span>
+                </div>
+            </div>
+            <div class="sheet-tabs" data-sheet-tabs></div>
+            <div class="content" data-content></div>
+            <div class="status-bar"><span data-status-left></span><span data-status-right></span></div>
+        `;
+
+        el.querySelector('[data-dims]').textContent = `${entry.sheets.length > 1 ? entry.sheets.length + ' sheets · ' : ''}${totalRows} row${totalRows === 1 ? '' : 's'}`;
+
+        renderSheetTabs(el, entry);
+        renderEntryTable(el, entry);
+        return el;
+    }
+
+    function renderSheetTabs(el, entry) {
+        const box = el.querySelector('[data-sheet-tabs]');
+        if (entry.sheets.length <= 1) { box.style.display = 'none'; return; }
+        box.style.display = 'flex';
+        box.innerHTML = entry.sheets.map((s, i) =>
+            `<div class="sheet-tab ${i === entry.activeSheet ? 'active' : ''}" onclick="switchSheet('${entry.id}', ${i})">${escapeHtml(s.name)}</div>`
+        ).join('');
+    }
+
+    function switchSheet(entryId, idx) {
+        const entry = findEntry(entryId);
+        if (!entry) return;
+        entry.activeSheet = idx;
+        entry.searchQuery = '';
+        rerenderEntry(entryId);
+    }
+
+    function toggleEntryHeader(entryId, checked) {
+        const entry = findEntry(entryId);
+        if (!entry) return;
+        entry.sheets[entry.activeSheet].hasHeader = checked;
+        saveEntriesToStorage();
+        rerenderEntry(entryId);
+    }
+
+    function toggleFilterRows(entryId, checked) {
+        const entry = findEntry(entryId);
+        if (!entry) return;
+        entry.filterRows = checked;
+        rerenderEntry(entryId);
+    }
+
+    function setEntrySearch(entryId, value) {
+        const entry = findEntry(entryId);
+        if (!entry) return;
+        entry.searchQuery = value;
+        rerenderEntry(entryId, true);
+    }
+
+    function entrySearchNav(e, entryId) {
+        if (e.key !== 'Enter') return;
+        const entry = findEntry(entryId);
+        if (!entry) return;
+        jumpToNextMatch(entryId);
+    }
+
+    function rerenderEntry(entryId, keepFocus = false) {
+        const entry = findEntry(entryId);
+        if (!entry) return;
+        const oldEl = document.querySelector(`.entry[data-entry-id="${CSS.escape(entryId)}"]`);
+        if (!oldEl) return;
+        const focusInput = keepFocus ? oldEl.querySelector('.search-inline') : null;
+        const selStart = focusInput ? focusInput.selectionStart : null;
+        const wasCollapsed = oldEl.classList.contains('collapsed-entry');
+        const newEl = buildEntryEl(entry);
+        if (wasCollapsed) newEl.classList.add('collapsed-entry');
+        oldEl.replaceWith(newEl);
+        if (keepFocus) {
+            const inp = newEl.querySelector('.search-inline');
+            if (inp) { inp.focus(); if (selStart !== null) inp.setSelectionRange(selStart, selStart); }
+        }
+    }
+
+    /* ---- building & sorting the visible row set ---- */
+    function getVisibleRows(sheet) {
+        const header = sheet.hasHeader ? sheet.allRows[0] : null;
+        const dataRows = sheet.hasHeader ? sheet.allRows.slice(1) : sheet.allRows.slice();
+        const colCount = Math.max(header ? header.length : 0, ...dataRows.map(r => r.length), 1);
+        const headerLabels = Array.from({ length: colCount }, (_, i) => (header && header[i] !== undefined && header[i] !== '') ? String(header[i]) : colLetter(i));
+
+        let indexed = dataRows.map((r, i) => ({ row: r, orig: i }));
+
+        const query = (sheet.filterQuery || '').toLowerCase();
+        if (query) {
+            indexed = indexed.filter(({ row }) => row.some(v => displayValue(v).toLowerCase().includes(query)));
+        }
+
+        if (sheet.sortCol !== null && sheet.sortCol !== undefined) {
+            const c = sheet.sortCol;
+            indexed = indexed.slice().sort((a, b) => {
+                const va = a.row[c], vb = b.row[c];
+                const na = parseFloat(va), nb = parseFloat(vb);
+                const bothNumeric = va !== '' && vb !== '' && va !== undefined && vb !== undefined && !isNaN(na) && !isNaN(nb) && /^-?\d+(\.\d+)?$/.test(String(va).trim()) && /^-?\d+(\.\d+)?$/.test(String(vb).trim());
+                let cmp;
+                if (bothNumeric) cmp = na - nb;
+                else cmp = displayValue(va).localeCompare(displayValue(vb), undefined, { numeric: true, sensitivity: 'base' });
+                return cmp * sheet.sortDir;
+            });
+        }
+
+        return { headerLabels, indexed, hasHeader: sheet.hasHeader, colCount };
+    }
+
+    function renderEntryTable(el, entry) {
+        const sheet = entry.sheets[entry.activeSheet];
+        sheet.filterQuery = entry.filterRows ? (entry.searchQuery || '') : '';
+        const { headerLabels, indexed, hasHeader, colCount } = getVisibleRows(sheet);
+        const contentEl = el.querySelector('[data-content]');
+        const highlightQuery = entry.searchQuery || '';
+
+        if (!indexed.length && !headerLabels.length) {
+            contentEl.innerHTML = '<div class="empty-state">This sheet is empty.</div>';
+        } else {
+            const table = document.createElement('table');
+            table.className = 'data-table';
+
+            const thead = document.createElement('thead');
+            const trh = document.createElement('tr');
+            const thRow = document.createElement('th');
+            thRow.className = 'rownum-header';
+            thRow.textContent = '#';
+            trh.appendChild(thRow);
+            headerLabels.forEach((label, ci) => {
+                const th = document.createElement('th');
+                if (isRtlText(label)) th.classList.add('cell-rtl');
+                th.onclick = () => sortByColumn(entry.id, ci);
+                let arrow = '';
+                if (sheet.sortCol === ci) arrow = `<span class="sort-arrow">${sheet.sortDir === 1 ? '▲' : '▼'}</span>`;
+                th.innerHTML = escapeHtml(label) + arrow;
+                trh.appendChild(th);
+            });
+            thead.appendChild(trh);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            indexed.forEach(({ row, orig }) => {
+                const tr = document.createElement('tr');
+                const rowNum = orig + (hasHeader ? 2 : 1);
+                const tdNum = document.createElement('td');
+                tdNum.className = 'rownum';
+                tdNum.textContent = rowNum;
+                tr.appendChild(tdNum);
+                for (let ci = 0; ci < colCount; ci++) {
+                    const v = row[ci];
+                    const td = document.createElement('td');
+                    const text = displayValue(v);
+                    const classes = [cellClass(v), isRtlText(text) ? 'cell-rtl' : ''].filter(Boolean);
+                    if (classes.length) td.className = classes.join(' ');
+                    td.title = text;
+                    td.innerHTML = highlightQuery ? highlightMatches(text, highlightQuery) : escapeHtml(text);
+                    tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            contentEl.innerHTML = '';
+            contentEl.appendChild(table);
+        }
+
+        const totalDataRows = sheet.hasHeader ? sheet.allRows.length - 1 : sheet.allRows.length;
+        const statusLeft = el.querySelector('[data-status-left]');
+        const statusRight = el.querySelector('[data-status-right]');
+        statusLeft.textContent = `Sheet: ${sheet.name}`;
+        statusRight.textContent = entry.filterRows && highlightQuery
+            ? `showing ${indexed.length} of ${totalDataRows} rows`
+            : `${totalDataRows} row${totalDataRows === 1 ? '' : 's'} · ${headerLabels.length} column${headerLabels.length === 1 ? '' : 's'}`;
+
+        const counter = el.querySelector('[data-counter]');
+        const matches = contentEl.querySelectorAll('.match');
+        counter.textContent = matches.length ? `1/${matches.length}` : '0/0';
+        if (matches.length) { matches[0].classList.add('current'); entry._matchIndex = 0; }
+    }
+
+    function highlightMatches(text, query) {
+        if (!query) return escapeHtml(text);
+        const lower = text.toLowerCase(), q = query.toLowerCase();
+        let result = '', pos = 0, idx;
+        while ((idx = lower.indexOf(q, pos)) !== -1) {
+            result += escapeHtml(text.slice(pos, idx));
+            result += '<span class="match">' + escapeHtml(text.slice(idx, idx + q.length)) + '</span>';
+            pos = idx + q.length;
+        }
+        result += escapeHtml(text.slice(pos));
+        return result;
+    }
+
+    function jumpToNextMatch(entryId) {
+        const el = document.querySelector(`.entry[data-entry-id="${CSS.escape(entryId)}"]`);
+        if (!el) return;
+        const matches = Array.from(el.querySelectorAll('.match'));
+        if (!matches.length) return;
+        const entry = findEntry(entryId);
+        let idx = (entry._matchIndex === undefined ? -1 : entry._matchIndex) + 1;
+        if (idx >= matches.length) idx = 0;
+        matches.forEach(m => m.classList.remove('current'));
+        matches[idx].classList.add('current');
+        matches[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        entry._matchIndex = idx;
+        const counter = el.querySelector('[data-counter]');
+        if (counter) counter.textContent = `${idx + 1}/${matches.length}`;
+    }
+
+    function sortByColumn(entryId, colIdx) {
+        const entry = findEntry(entryId);
+        if (!entry) return;
+        const sheet = entry.sheets[entry.activeSheet];
+        if (sheet.sortCol === colIdx) {
+            if (sheet.sortDir === 1) { sheet.sortDir = -1; }
+            else { sheet.sortCol = null; sheet.sortDir = 1; }
+        } else {
+            sheet.sortCol = colIdx; sheet.sortDir = 1;
+        }
+        rerenderEntry(entryId);
+    }
+
+    /* =========================================================================
+       Focus mode
+       ========================================================================= */
+    let focusPlaceholder = null;
+
+    function focusEntry(btn) {
+        const entry = btn.closest('.entry');
+        const overlay = document.getElementById('focus-overlay');
+        focusPlaceholder = document.createComment('focus-placeholder');
+        entry.parentNode.insertBefore(focusPlaceholder, entry);
+        entry.classList.add('focused-entry');
+        overlay.appendChild(entry);
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeFocusEntry() {
+        const overlay = document.getElementById('focus-overlay');
+        const entry = overlay.querySelector('.entry.focused-entry');
+        if (entry && focusPlaceholder) {
+            entry.classList.remove('focused-entry');
+            focusPlaceholder.parentNode.insertBefore(entry, focusPlaceholder);
+            focusPlaceholder.remove();
+            focusPlaceholder = null;
+        }
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && document.getElementById('focus-overlay').classList.contains('active')) closeFocusEntry();
+    });
+
+    /* =========================================================================
+       Export / copy
+       ========================================================================= */
+    function flashIcon(btn, ok = true) {
+        if (!btn) return;
+        const original = btn.innerHTML;
+        btn.innerHTML = ok ? '<span style="color:#89d185;font-size:11px;font-weight:bold;">✓</span>' : '<span style="color:var(--diff-remove);font-size:11px;font-weight:bold;">!</span>';
+        setTimeout(() => btn.innerHTML = original, 800);
+    }
+
+    function activeSheetData(entryId) {
+        const entry = findEntry(entryId);
+        const sheet = entry.sheets[entry.activeSheet];
+        const header = sheet.hasHeader ? sheet.allRows[0] : null;
+        const dataRows = sheet.hasHeader ? sheet.allRows.slice(1) : sheet.allRows.slice();
+        const colCount = Math.max(header ? header.length : 0, ...dataRows.map(r => r.length), 1);
+        const headers = Array.from({ length: colCount }, (_, i) => (header && header[i] !== undefined && header[i] !== '') ? String(header[i]) : colLetter(i));
+        return { headers, rows: dataRows, hasHeader: sheet.hasHeader, name: sheet.name };
+    }
+
+    // Each export/copy action works from a plain {headers, rows, hasHeader} shape — the
+    // *Data() core, shared by the Viewer's per-entry actions and the Compare tab's
+    // per-panel actions below, which just supply that shape from a different source
+    // (activeSheetData() for an entry, panelDisplayData() for a compare panel).
+    function copyAsCsvData(sheetData, btn) {
+        const { headers, rows, hasHeader } = sheetData;
+        const lines = [];
+        if (hasHeader) lines.push(headers.map(csvEscapeField).join(','));
+        rows.forEach(r => lines.push(headers.map((_, i) => csvEscapeField(r[i])).join(',')));
+        navigator.clipboard.writeText(lines.join('\r\n')).then(() => flashIcon(btn));
+    }
+    function copyAsCsv(entryId, btn) { copyAsCsvData(activeSheetData(entryId), btn); }
+    function copyPanelAsCsv(panelId, btn) { copyAsCsvData(panelDisplayDataResolved(panelId), btn); }
+
+    function copyAsJsonData(sheetData, btn) {
+        const { headers, rows, hasHeader } = sheetData;
+        let out;
+        if (hasHeader) {
+            out = rows.map(r => {
+                const obj = {};
+                headers.forEach((h, i) => { obj[h] = r[i] === undefined ? '' : (isDateVal(r[i]) ? formatDate(r[i]) : r[i]); });
+                return obj;
+            });
+        } else {
+            out = rows.map(r => r.map(v => isDateVal(v) ? formatDate(v) : v));
+        }
+        navigator.clipboard.writeText(JSON.stringify(out, null, 2)).then(() => flashIcon(btn));
+    }
+    function copyAsJson(entryId, btn) { copyAsJsonData(activeSheetData(entryId), btn); }
+    function copyPanelAsJson(panelId, btn) { copyAsJsonData(panelDisplayDataResolved(panelId), btn); }
+
+    function copyAsMarkdownData(sheetData, btn) {
+        const { headers, rows, hasHeader } = sheetData;
+        const esc = s => String(s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+        const lines = [];
+        const cols = hasHeader ? headers : headers.map((_, i) => colLetter(i));
+        lines.push('| ' + cols.map(esc).join(' | ') + ' |');
+        lines.push('| ' + cols.map(() => '---').join(' | ') + ' |');
+        rows.forEach(r => lines.push('| ' + cols.map((_, i) => esc(displayValue(r[i]))).join(' | ') + ' |'));
+        navigator.clipboard.writeText(lines.join('\n')).then(() => flashIcon(btn));
+    }
+    function copyAsMarkdown(entryId, btn) { copyAsMarkdownData(activeSheetData(entryId), btn); }
+    function copyPanelAsMarkdown(panelId, btn) { copyAsMarkdownData(panelDisplayDataResolved(panelId), btn); }
+
+    function saveAsCsvData(sheetData, filename) {
+        const { headers, rows, hasHeader } = sheetData;
+        const lines = [];
+        if (hasHeader) lines.push(headers.map(csvEscapeField).join(','));
+        rows.forEach(r => lines.push(headers.map((_, i) => csvEscapeField(r[i])).join(',')));
+        const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename + '.csv'; a.click();
+        URL.revokeObjectURL(url);
+    }
+    function saveAsCsv(entryId) { saveAsCsvData(activeSheetData(entryId), defaultFilename(findEntry(entryId))); }
+    function savePanelAsCsv(panelId) { saveAsCsvData(panelDisplayDataResolved(panelId), panelFilename(panelId)); }
+
+    function saveAsXlsx(entryId) {
+        if (typeof XLSX === 'undefined') { alert('The XLSX engine did not load (no network access to the CDN in this environment).'); return; }
+        const entry = findEntry(entryId);
+        const wb = XLSX.utils.book_new();
+        entry.sheets.forEach(sheet => {
+            const ws = XLSX.utils.aoa_to_sheet(sheet.allRows.map(r => r.map(v => isDateVal(v) ? formatDate(v) : v)));
+            XLSX.utils.book_append_sheet(wb, ws, (sheet.name || 'Sheet1').slice(0, 31));
+        });
+        XLSX.writeFile(wb, defaultFilename(entry) + '.xlsx');
+    }
+
+    function panelFilename(panelId) {
+        const p = comparePanels[panelId];
+        if (p.sourceEntryId) {
+            const entry = findEntry(p.sourceEntryId);
+            if (entry) return defaultFilename(entry) + (panelId === 'compareLeft' ? '_A' : '_B');
+        }
+        return panelId === 'compareLeft' ? 'panel_a' : 'panel_b';
+    }
+
+    // Builds the worksheet from the *computed* values (so numbers/dates get proper xlsx
+    // cell types, same as every other export here) and then stamps a real Excel formula
+    // (the ".f" property) onto every formula cell — its computed value stays as the shown
+    // result, but the formula itself round-trips into Excel/Sheets as a live, editable
+    // formula rather than dead text, since our A1/range addressing is the same convention.
+    function savePanelAsXlsx(panelId) {
+        if (typeof XLSX === 'undefined') { alert('The XLSX engine did not load (no network access to the CDN in this environment).'); return; }
+        const p = comparePanels[panelId];
+        const computedRows = p.allRows.map((row, r) => row.map((v, c) => {
+            if (formulaIsFormulaText(v)) {
+                const result = computeFormulaCell(panelId, r, c);
+                if (result instanceof FormulaError) return result.code;
+                return isDateVal(result) ? formatDate(result) : result;
+            }
+            return isDateVal(v) ? formatDate(v) : v;
+        }));
+        const ws = XLSX.utils.aoa_to_sheet(computedRows);
+        p.allRows.forEach((row, r) => row.forEach((v, c) => {
+            if (formulaIsFormulaText(v)) {
+                const addr = XLSX.utils.encode_cell({ r, c });
+                if (ws[addr]) ws[addr].f = v.trim().slice(1);
+            }
+        }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, (panelId === 'compareLeft' ? 'Panel A' : 'Panel B'));
+        XLSX.writeFile(wb, panelFilename(panelId) + '.xlsx');
+    }
+
+    /* =========================================================================
+       Compare tab
+       ========================================================================= */
+    function renderCompareChips() {
+        const box = document.getElementById('compareChips');
+        if (postedEntries.length === 0) {
+            box.innerHTML = '<span class="chips-empty">No files loaded yet — add some in the Viewer tab, then come back here to compare them.</span>';
+            return;
+        }
+        box.innerHTML = '';
+        postedEntries.slice().reverse().forEach(entry => {
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.draggable = true;
+            chip.title = 'Click to choose a panel, or drag onto Panel A / Panel B';
+            const dot = document.createElement('span');
+            dot.className = 'chip-dot';
+            dot.style.background = TYPE_COLORS[entry.type] || TYPE_COLORS.csv;
+            const label = document.createElement('span');
+            label.className = 'chip-name';
+            label.textContent = entryDisplayName(entry);
+            chip.appendChild(dot); chip.appendChild(label);
+            chip.onclick = e => showCompareTargetMenu(e, entry.id);
+            chip.ondragstart = e => { e.dataTransfer.setData('text/plain', entry.id); e.dataTransfer.effectAllowed = 'copy'; };
+            box.appendChild(chip);
+        });
+    }
+
+    function showCompareTargetMenu(e, entryId) {
+        e.stopPropagation();
+        let menu = document.getElementById('compare-target-menu');
+        if (!menu) {
+            menu = document.createElement('div');
+            menu.id = 'compare-target-menu';
+            menu.style.cssText = 'position:fixed;z-index:10000;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border-soft);box-shadow:0 2px 8px rgba(0,0,0,0.4);border-radius:5px;padding:4px 0;min-width:150px;font-size:12px;';
+            document.body.appendChild(menu);
+        }
+        menu.innerHTML = `
+            <div class="ctx-item" data-target="compareLeft" style="padding:6px 12px;cursor:pointer;">Load into Panel A</div>
+            <div class="ctx-item" data-target="compareRight" style="padding:6px 12px;cursor:pointer;">Load into Panel B</div>
+        `;
+        menu.querySelectorAll('.ctx-item').forEach(item => {
+            item.onmouseenter = () => item.style.background = 'var(--hover-bg)';
+            item.onmouseleave = () => item.style.background = 'transparent';
+            item.onclick = () => { loadIntoComparePanel(entryId, item.dataset.target); menu.style.display = 'none'; };
+        });
+        menu.style.display = 'block';
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+        setTimeout(() => {
+            const hide = () => { menu.style.display = 'none'; document.removeEventListener('click', hide); };
+            document.addEventListener('click', hide);
+        }, 0);
+    }
+
+    function allowCompareDrop(e) { e.preventDefault(); }
+    function handleCompareDrop(e, panelId) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drop-target');
+        const entryId = e.dataTransfer.getData('text/plain');
+        if (entryId) loadIntoComparePanel(entryId, panelId);
+    }
+
+    function loadIntoComparePanel(entryId, panelId) {
+        const entry = findEntry(entryId);
+        if (!entry) return;
+        const sheetIdx = entry.activeSheet || 0;
+        const sheet = entry.sheets[sheetIdx];
+        const p = comparePanels[panelId];
+        p.allRows = sheet.allRows.map(r => r.slice());
+        p.hasHeader = sheet.hasHeader;
+        p.sourceEntryId = entryId;
+        p.sourceSheetIdx = sheetIdx;
+        p.activeCell = null;
+        p.selectedCell = null;
+        renderComparePanel(panelId);
+    }
+
+    function clearComparePanel(panelId) {
+        comparePanels[panelId] = emptyPanelState();
+        renderComparePanel(panelId);
+    }
+
+    function resetCompareSection() {
+        clearComparePanel('compareLeft');
+        clearComparePanel('compareRight');
+        clearCompareResults();
+    }
+
+    function startBlankPanel(panelId) {
+        const p = comparePanels[panelId];
+        p.allRows = [['Column A', 'Column B', 'Column C'], ['', '', '']];
+        p.hasHeader = true;
+        p.sourceEntryId = null;
+        p.activeCell = null;
+        p.selectedCell = null;
+        renderComparePanel(panelId);
+        focusPanelCell(panelId, 'header', 0, 0);
+    }
+
+    function setComparePanelSheet(panelId, sheetIdxStr) {
+        const p = comparePanels[panelId];
+        if (!p.sourceEntryId) return;
+        const entry = findEntry(p.sourceEntryId);
+        if (!entry) return;
+        const idx = parseInt(sheetIdxStr, 10);
+        const sheet = entry.sheets[idx];
+        if (!sheet) return;
+        p.allRows = sheet.allRows.map(r => r.slice());
+        p.hasHeader = sheet.hasHeader;
+        p.sourceSheetIdx = idx;
+        p.activeCell = null;
+        p.selectedCell = null;
+        renderComparePanel(panelId);
+    }
+
+    function toggleComparePanelHeader(panelId, checked) {
+        comparePanels[panelId].hasHeader = checked;
+        comparePanels[panelId].activeCell = null;
+        comparePanels[panelId].selectedCell = null;
+        renderComparePanel(panelId);
+    }
+
+    // Every structural mutation below clears p.activeCell first: once rows/columns shift,
+    // whatever coordinate was "active" no longer means the same cell, and the render right
+    // after (or the focusPanelCell call following it) re-establishes it correctly via a
+    // fresh focus event rather than carrying a stale, possibly-wrong reference forward.
+    function addPanelRow(panelId, focusCol) {
+        const p = comparePanels[panelId];
+        const colCount = Math.max(1, ...p.allRows.map(r => r.length));
+        p.allRows.push(new Array(colCount).fill(''));
+        p.activeCell = null;
+        p.selectedCell = null;
+        renderComparePanel(panelId);
+        const newDataRowIdx = p.hasHeader ? p.allRows.length - 2 : p.allRows.length - 1;
+        focusPanelCell(panelId, 'data', newDataRowIdx, focusCol || 0);
+    }
+
+    function addPanelColumn(panelId) {
+        const p = comparePanels[panelId];
+        if (p.allRows.length === 0) p.allRows.push([]);
+        const newColIdx = Math.max(0, ...p.allRows.map(r => r.length));
+        p.allRows.forEach(r => { while (r.length < newColIdx) r.push(''); r.push(''); });
+        p.activeCell = null;
+        p.selectedCell = null;
+        renderComparePanel(panelId);
+        focusPanelCell(panelId, p.hasHeader ? 'header' : 'data', 0, newColIdx);
+    }
+
+    function deletePanelRow(panelId, actualRowIdx) {
+        const p = comparePanels[panelId];
+        p.allRows.splice(actualRowIdx, 1);
+        p.activeCell = null;
+        p.selectedCell = null;
+        renderComparePanel(panelId);
+    }
+
+    function deletePanelColumn(panelId, colIdx) {
+        const p = comparePanels[panelId];
+        p.allRows.forEach(r => r.splice(colIdx, 1));
+        p.activeCell = null;
+        p.selectedCell = null;
+        renderComparePanel(panelId);
+    }
+
+    // Inserts a blank row at a specific position in allRows (not just at the end, like
+    // addPanelRow) — atActualIdx is an index into allRows itself, so it already accounts
+    // for the header row when hasHeader is true.
+    function insertPanelRow(panelId, atActualIdx) {
+        const p = comparePanels[panelId];
+        const colCount = Math.max(1, ...p.allRows.map(r => r.length));
+        atActualIdx = Math.max(0, Math.min(atActualIdx, p.allRows.length));
+        p.allRows.splice(atActualIdx, 0, new Array(colCount).fill(''));
+        p.activeCell = null;
+        p.selectedCell = null;
+        renderComparePanel(panelId);
+        const newDataRowIdx = p.hasHeader ? atActualIdx - 1 : atActualIdx;
+        if (newDataRowIdx >= 0) focusPanelCell(panelId, 'data', newDataRowIdx, 0);
+    }
+
+    // Inserts a blank column at atColIdx across every row (header included), padding any
+    // ragged shorter rows out to that index first so the new column lines up everywhere.
+    function insertPanelColumn(panelId, atColIdx) {
+        const p = comparePanels[panelId];
+        if (p.allRows.length === 0) p.allRows.push([]);
+        atColIdx = Math.max(0, atColIdx);
+        p.allRows.forEach(r => { while (r.length < atColIdx) r.push(''); r.splice(atColIdx, 0, ''); });
+        p.activeCell = null;
+        p.selectedCell = null;
+        renderComparePanel(panelId);
+        focusPanelCell(panelId, p.hasHeader ? 'header' : 'data', 0, atColIdx);
+    }
+
+    // Small floating menu used to offer "insert above/below" or "insert left/right" choices
+    // from the +/insert icon on a row-number cell or column header. Closes on the next click
+    // or scroll anywhere, or on Escape.
+    let activePanelCtxMenu = null;
+    function closePanelCtxMenu() {
+        if (!activePanelCtxMenu) return;
+        activePanelCtxMenu.remove();
+        activePanelCtxMenu = null;
+        document.removeEventListener('click', closePanelCtxMenu);
+        document.removeEventListener('keydown', panelCtxMenuKeydown);
+    }
+    function panelCtxMenuKeydown(e) { if (e.key === 'Escape') closePanelCtxMenu(); }
+    function showPanelCtxMenu(x, y, items) {
+        closePanelCtxMenu();
+        const menu = document.createElement('div');
+        menu.className = 'panel-ctx-menu';
+        items.forEach(it => {
+            const item = document.createElement('div');
+            item.className = 'ctx-item';
+            item.textContent = it.label;
+            item.onclick = (e) => { e.stopPropagation(); closePanelCtxMenu(); it.action(); };
+            menu.appendChild(item);
+        });
+        document.body.appendChild(menu);
+        const rect = menu.getBoundingClientRect();
+        let left = x, top = y;
+        if (left + rect.width > window.innerWidth) left = Math.max(4, window.innerWidth - rect.width - 6);
+        if (top + rect.height > window.innerHeight) top = Math.max(4, window.innerHeight - rect.height - 6);
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+        activePanelCtxMenu = menu;
+        setTimeout(() => {
+            document.addEventListener('click', closePanelCtxMenu);
+            document.addEventListener('keydown', panelCtxMenuKeydown);
+        }, 0);
+    }
+    // A scroll anywhere ELSE invalidates the menu's fixed-position anchor, so close it — but
+    // scrolling inside the menu itself (the function reference list is a tall, scrollable
+    // panel) must not close it, or the list could never be scrolled at all.
+    document.addEventListener('scroll', (e) => {
+        if (activePanelCtxMenu && activePanelCtxMenu.contains(e.target)) return;
+        closePanelCtxMenu();
+    }, true);
+
+    function openRowInsertMenu(e, panelId, actualRowIdx) {
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        showPanelCtxMenu(rect.left, rect.bottom + 4, [
+            { label: 'Insert row above', action: () => insertPanelRow(panelId, actualRowIdx) },
+            { label: 'Insert row below', action: () => insertPanelRow(panelId, actualRowIdx + 1) },
+        ]);
+    }
+
+    function openColInsertMenu(e, panelId, colIdx) {
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        showPanelCtxMenu(rect.left, rect.bottom + 4, [
+            { label: 'Insert column left', action: () => insertPanelColumn(panelId, colIdx) },
+            { label: 'Insert column right', action: () => insertPanelColumn(panelId, colIdx + 1) },
+        ]);
+    }
+
+    // The ƒx button's function reference list — a richer floating panel than the plain
+    // insert-row/column menu above, so it's built directly rather than through
+    // showPanelCtxMenu, but it still shares that same activePanelCtxMenu/closePanelCtxMenu
+    // bookkeeping so it closes the same way (outside click, scroll, Escape, or opening
+    // something else).
+    function toggleFormulaRef(e, panelId) {
+        e.stopPropagation();
+        if (activePanelCtxMenu && activePanelCtxMenu.dataset.formulaRefFor === panelId) { closePanelCtxMenu(); return; }
+        closePanelCtxMenu();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const menu = document.createElement('div');
+        menu.className = 'formula-ref-panel';
+        menu.dataset.formulaRefFor = panelId;
+        FORMULA_REFERENCE.forEach(fn => {
+            const item = document.createElement('div');
+            item.className = 'formula-ref-item';
+            item.innerHTML = `<div class="formula-ref-name">${escapeHtml(fn.name)}</div>` +
+                `<div class="formula-ref-syntax">${escapeHtml(fn.syntax)}</div>` +
+                `<div class="formula-ref-desc">${escapeHtml(fn.desc)}</div>`;
+            item.onclick = (ev) => { ev.stopPropagation(); closePanelCtxMenu(); insertFormulaTemplate(panelId, fn.name); };
+            menu.appendChild(item);
+        });
+        document.body.appendChild(menu);
+        const mrect = menu.getBoundingClientRect();
+        let left = rect.left, top = rect.bottom + 4;
+        if (left + mrect.width > window.innerWidth) left = Math.max(4, window.innerWidth - mrect.width - 6);
+        if (top + mrect.height > window.innerHeight) top = Math.max(4, rect.top - mrect.height - 4);
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+        activePanelCtxMenu = menu;
+        setTimeout(() => {
+            document.addEventListener('click', closePanelCtxMenu);
+            document.addEventListener('keydown', panelCtxMenuKeydown);
+        }, 0);
+    }
+
+    // Inserts "FUNC()" into the formula bar (appended if it's already a formula, or started
+    // fresh with "=" otherwise) and into the currently-selected cell, then leaves the caret
+    // between the parens so you can type the arguments right away.
+    function insertFormulaTemplate(panelId, fnName) {
+        const p = comparePanels[panelId];
+        if (!p.selectedCell) { alert('Click a cell first, then choose a function to insert into it.'); return; }
+        const bar = document.getElementById(panelId + 'FormulaBar');
+        const current = bar ? bar.value : '';
+        const template = fnName + '()';
+        const newVal = (current && current.trim().startsWith('=')) ? current + template : '=' + template;
+        if (bar) bar.value = newVal;
+        onFormulaBarInput(panelId, newVal);
+        if (bar) {
+            bar.focus();
+            const caretPos = newVal.length - 1;
+            bar.setSelectionRange(caretPos, caretPos);
+        }
+    }
+
+    /* ---- "Point mode": Ctrl (or Cmd) + click a cell while editing a formula inserts that
+       cell's reference at the caret, instead of navigating to it — the same quick way real
+       spreadsheets let you build a formula by clicking cells rather than typing addresses.
+       Works whether the formula is being edited in the formula bar or directly in a cell. ---- */
+
+    // Whichever of "the formula bar" or "a grid cell being edited in place" currently holds
+    // an in-progress formula (its text starts with "="), if any — that's where a
+    // Ctrl/Cmd-click's cell reference gets inserted.
+    function getFormulaEditTarget(panelId) {
+        const bar = document.getElementById(panelId + 'FormulaBar');
+        if (bar && document.activeElement === bar && bar.value.trim().startsWith('=')) {
+            return { kind: 'bar', el: bar };
+        }
+        const p = comparePanels[panelId];
+        if (p.activeCell) {
+            const { rowType, dataRowIdx, colIdx } = p.activeCell;
+            const sel = `#${panelId}Content [data-row-type="${rowType}"][data-row-idx="${dataRowIdx}"][data-col-idx="${colIdx}"]`;
+            const cell = document.querySelector(sel);
+            if (cell && cell.textContent.trim().startsWith('=')) return { kind: 'cell', el: cell };
+        }
+        return null;
+    }
+
+    function cellAddressFromCellEl(panelId, el) {
+        const p = comparePanels[panelId];
+        const rowType = el.dataset.rowType;
+        const dataRowIdx = parseInt(el.dataset.rowIdx, 10);
+        const colIdx = parseInt(el.dataset.colIdx, 10);
+        const actualRow = rowType === 'header' ? 0 : dataRowIdx + (p.hasHeader ? 1 : 0);
+        return colLetter(colIdx) + (actualRow + 1);
+    }
+
+    // "=", "(", ",", and every operator are followed directly by the next token with no
+    // joiner; anything else (a digit, letter, "$", ")", ...) means we're right after a
+    // finished value, so a "+" goes in first — that's what turns SUM() + click A9 + click B9
+    // into SUM(A9+B9) rather than SUM(A9B9).
+    function formulaJoinPrefix(beforeText) {
+        const trimmed = beforeText.replace(/\s+$/, '');
+        if (trimmed === '' || trimmed === '=') return '';
+        const lastChar = trimmed[trimmed.length - 1];
+        if ('(,+-*/^&=<>'.includes(lastChar)) return '';
+        return '+';
+    }
+
+    function getContentEditableCaretOffset(el) {
+        const sel = window.getSelection();
+        if (!sel.rangeCount) return el.textContent.length;
+        const range = sel.getRangeAt(0);
+        if (!el.contains(range.startContainer)) return el.textContent.length;
+        const preRange = range.cloneRange();
+        preRange.selectNodeContents(el);
+        preRange.setEnd(range.startContainer, range.startOffset);
+        return preRange.toString().length;
+    }
+
+    // Our cells only ever hold a single plain text node (set via textContent), so placing
+    // the caret is just finding that node and an offset into it.
+    function setContentEditableCaret(el, offset) {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        const textNode = el.firstChild && el.firstChild.nodeType === 3 ? el.firstChild : null;
+        if (textNode) {
+            range.setStart(textNode, Math.max(0, Math.min(offset, textNode.length)));
+            range.collapse(true);
+        } else {
+            range.selectNodeContents(el);
+            range.collapse(false);
+        }
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+
+    function insertFormulaRef(panelId, target, addr) {
+        if (target.kind === 'bar') {
+            const bar = target.el;
+            const start = bar.selectionStart, end = bar.selectionEnd;
+            const text = bar.value;
+            const before = text.slice(0, start), after = text.slice(end);
+            const insertStr = formulaJoinPrefix(before) + addr;
+            const newVal = before + insertStr + after;
+            bar.value = newVal;
+            bar.focus();
+            const newPos = before.length + insertStr.length;
+            bar.setSelectionRange(newPos, newPos);
+            onFormulaBarInput(panelId, newVal);
+        } else {
+            const cell = target.el;
+            const offset = getContentEditableCaretOffset(cell);
+            const text = cell.textContent;
+            const before = text.slice(0, offset), after = text.slice(offset);
+            const insertStr = formulaJoinPrefix(before) + addr;
+            cell.textContent = before + insertStr + after;
+            cell.focus();
+            setContentEditableCaret(cell, before.length + insertStr.length);
+            onPanelCellInput(panelId, cell);
+        }
+    }
+
+    // Delegated so it survives renderComparePanel's innerHTML rebuilds without needing to be
+    // rewired every render — contentEl itself is stable across renders, only its children
+    // are replaced. Only intercepts when a formula is actually being edited right now
+    // (getFormulaEditTarget); otherwise a Ctrl/Cmd-click behaves exactly as a plain click.
+    function setupFormulaPointClick(panelId) {
+        const contentEl = document.getElementById(panelId + 'Content');
+        if (!contentEl) return;
+        contentEl.addEventListener('mousedown', (e) => {
+            if (!(e.ctrlKey || e.metaKey)) return;
+            const cellEl = e.target.closest('[data-col-idx]');
+            if (!cellEl) return;
+            const target = getFormulaEditTarget(panelId);
+            if (!target) return;
+            e.preventDefault();
+            e.stopPropagation();
+            insertFormulaRef(panelId, target, cellAddressFromCellEl(panelId, cellEl));
+        });
+    }
+
+    // Focuses a cell and selects its full contents — like landing on a cell in a real
+    // spreadsheet, so the very next keystroke overwrites it rather than inserting into
+    // whatever the caret happened to land on. DOM updates from render() are synchronous,
+    // so this can run immediately with no deferral (avoiding any race with fast typing).
+    function focusPanelCell(panelId, rowType, dataRowIdx, colIdx) {
+        const sel = `#${panelId}Content [data-row-type="${rowType}"][data-row-idx="${dataRowIdx}"][data-col-idx="${colIdx}"]`;
+        const cell = document.querySelector(sel);
+        if (!cell) return;
+        const p = comparePanels[panelId];
+        if (p) p.internalFocus = true;
+        cell.focus();
+        selectAllInCell(cell);
+        if (p) p.internalFocus = false;
+    }
+
+    function selectAllInCell(el) {
+        try {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        } catch (e) {}
+    }
+
+    // Derives the display header/rows purely from a panel's current allRows + hasHeader —
+    // there's no separate parsed/raw representation to keep in sync since cells are edited
+    // in place.
+    function panelDisplayData(panelId) {
+        const p = comparePanels[panelId];
+        const header = p.hasHeader ? p.allRows[0] : null;
+        const dataRows = p.hasHeader ? p.allRows.slice(1) : p.allRows.slice();
+        const colCount = Math.max(header ? header.length : 0, ...dataRows.map(r => r.length), 0);
+        const headers = Array.from({ length: colCount }, (_, i) => (header && header[i] !== undefined && header[i] !== '') ? String(header[i]) : colLetter(i));
+        return { headers, rows: dataRows, hasHeader: p.hasHeader };
+    }
+
+    // Same shape as panelDisplayData, but every formula cell is replaced with its computed
+    // result. Used by every plain export/copy action (CSV, JSON, Markdown, "save to Viewer")
+    // since none of those formats has a concept of a live formula — they should show the
+    // number or text the user actually sees, not the literal "=..." text. XLSX export is the
+    // one exception (see savePanelAsXlsx), since a real .xlsx file *can* carry a live formula.
+    function panelDisplayDataResolved(panelId) {
+        const { headers, rows, hasHeader } = panelDisplayData(panelId);
+        const resolvedRows = rows.map((row, orig) => {
+            const actualRow = orig + (hasHeader ? 1 : 0);
+            return row.map((v, ci) => {
+                if (!formulaIsFormulaText(v)) return v;
+                const result = computeFormulaCell(panelId, actualRow, ci);
+                return result instanceof FormulaError ? result.code : result;
+            });
+        });
+        return { headers, rows: resolvedRows, hasHeader };
+    }
+
+    function savePanelToViewer(panelId, btn) {
+        const p = comparePanels[panelId];
+        if (!p.allRows.length) { alert('Nothing to save — this panel is empty.'); return; }
+        const sourceEntry = p.sourceEntryId ? findEntry(p.sourceEntryId) : null;
+        const baseName = sourceEntry ? entryDisplayName(sourceEntry) + '_edited' : '';
+        const resolvedAllRows = p.allRows.map((row, r) => row.map((v, c) => {
+            if (!formulaIsFormulaText(v)) return v;
+            const result = computeFormulaCell(panelId, r, c);
+            return result instanceof FormulaError ? result.code : result;
+        }));
+        addEntry(baseName, 'csv', [makeSheet('Sheet1', resolvedAllRows, p.hasHeader)]);
+        flashIcon(btn);
+    }
+
+    // Commits an edited cell's text back into the panel's data model, and refreshes just
+    // that cell's formatting classes — never a full re-render, so focus/tab order and the
+    // caret position are never disturbed while typing.
+    function onPanelCellInput(panelId, cellEl) {
+        const p = comparePanels[panelId];
+        const rowType = cellEl.dataset.rowType;
+        const dataRowIdx = parseInt(cellEl.dataset.rowIdx, 10);
+        const colIdx = parseInt(cellEl.dataset.colIdx, 10);
+        if (p.tabAnchorCol === null) p.tabAnchorCol = colIdx;
+        const actualRowIdx = rowType === 'header' ? 0 : dataRowIdx + (p.hasHeader ? 1 : 0);
+        if (!p.allRows[actualRowIdx]) p.allRows[actualRowIdx] = [];
+        const value = cellEl.textContent;
+        p.allRows[actualRowIdx][colIdx] = value;
+        const rtl = isRtlText(value);
+        if (rowType === 'header') {
+            cellEl.classList.toggle('cell-rtl', rtl);
+        } else {
+            cellEl.className = [cellClass(value), rtl ? 'cell-rtl' : ''].filter(Boolean).join(' ');
+            cellEl.title = value;
+        }
+        // className above wholesale-replaces the cell's classes (wiping any search-match
+        // marker it had), so re-derive matches after — cheap enough at typical table sizes.
+        if (p.searchQuery) updatePanelSearch(panelId);
+        // Mirrors every keystroke into the formula bar too — this cell is what's being typed
+        // into, so it's necessarily the current selection.
+        updateFormulaBar(panelId);
+    }
+
+    // Enter moves down a column (adding a row past the last one); Tab / Shift+Tab move
+    // across columns and wrap to the next/previous row, like a real spreadsheet — both
+    // override the browser's native behavior so the destination cell's text is selected
+    // (see focusPanelCell) rather than just placing a caret. Like Excel/Sheets, once you
+    // start editing cells in a row, Enter returns to the column of the first cell you
+    // edited in that run (p.tabAnchorCol, set on input — not on Tab, so navigating around
+    // without typing never establishes an anchor) instead of the column you happened to
+    // end on — otherwise typing a row via Tab, Tab, ... Enter would misalign the next row.
+    function onPanelCellKeydown(e, panelId) {
+        const cellEl = e.target;
+        const rowType = cellEl.dataset.rowType;
+        const dataRowIdx = parseInt(cellEl.dataset.rowIdx, 10);
+        const colIdx = parseInt(cellEl.dataset.colIdx, 10);
+        const p = comparePanels[panelId];
+        const { headers, rows } = panelDisplayData(panelId);
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const targetCol = p.tabAnchorCol !== null ? p.tabAnchorCol : colIdx;
+            p.tabAnchorCol = null;
+            const nextDataRowIdx = rowType === 'header' ? 0 : dataRowIdx + 1;
+            if (nextDataRowIdx >= rows.length) { addPanelRow(panelId, targetCol); return; }
+            focusPanelCell(panelId, 'data', nextDataRowIdx, targetCol);
+            return;
+        }
+
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const forward = !e.shiftKey;
+            let nextRowType = rowType, nextRowIdx = dataRowIdx, nextColIdx = colIdx + (forward ? 1 : -1);
+            if (nextColIdx >= headers.length) {
+                nextColIdx = 0;
+                if (rowType === 'header') { nextRowType = 'data'; nextRowIdx = 0; }
+                else {
+                    nextRowIdx = dataRowIdx + 1;
+                    if (nextRowIdx >= rows.length) { addPanelRow(panelId); return; }
+                }
+            } else if (nextColIdx < 0) {
+                nextColIdx = headers.length - 1;
+                if (rowType === 'header') return;
+                if (dataRowIdx === 0) {
+                    if (!p.hasHeader) return;
+                    nextRowType = 'header'; nextRowIdx = 0;
+                } else {
+                    nextRowIdx = dataRowIdx - 1;
+                }
+            }
+            focusPanelCell(panelId, nextRowType, nextRowIdx, nextColIdx);
+        }
+    }
+
+    function wireEditableCells(contentEl, panelId) {
+        contentEl.querySelectorAll('[contenteditable]').forEach(cell => {
+            cell.addEventListener('input', () => onPanelCellInput(panelId, cell));
+            cell.addEventListener('keydown', e => onPanelCellKeydown(e, panelId));
+            cell.addEventListener('focus', () => {
+                const p = comparePanels[panelId];
+                if (!p) return;
+                if (!p.internalFocus) p.tabAnchorCol = null;
+                const rowType = cell.dataset.rowType;
+                const dataRowIdx = parseInt(cell.dataset.rowIdx, 10);
+                const colIdx = parseInt(cell.dataset.colIdx, 10);
+                const loc = { rowType, dataRowIdx, colIdx };
+                p.activeCell = loc;
+                p.selectedCell = loc;
+                // Formula cells show their computed result until you focus them — then, like
+                // a real spreadsheet, the cell itself flips to showing the raw "=..." text so
+                // you can edit it (the formula bar mirrors the same raw text either way).
+                if (rowType === 'data') {
+                    const actualRow = dataRowIdx + (p.hasHeader ? 1 : 0);
+                    const raw = (p.allRows[actualRow] || [])[colIdx];
+                    if (formulaIsFormulaText(raw) && cell.textContent !== raw) {
+                        cell.textContent = raw;
+                        selectAllInCell(cell);
+                    }
+                }
+                updateFormulaBar(panelId);
+            });
+            cell.addEventListener('blur', () => {
+                const p = comparePanels[panelId];
+                if (!p) return;
+                const rowType = cell.dataset.rowType;
+                const dataRowIdx = parseInt(cell.dataset.rowIdx, 10);
+                const colIdx = parseInt(cell.dataset.colIdx, 10);
+                // Only activeCell clears here — that's what makes the cell itself flip back
+                // to showing its computed result. selectedCell deliberately stays put: a
+                // click on the formula bar or the ƒx function list also blurs this cell (a
+                // plain <span>/<div> isn't focusable, so focus falls back to <body>) without
+                // truly "deselecting" it from the user's point of view, and those two rely on
+                // selectedCell to know which cell they're still editing.
+                if (p.activeCell && p.activeCell.rowType === rowType && p.activeCell.dataRowIdx === dataRowIdx && p.activeCell.colIdx === colIdx) {
+                    p.activeCell = null;
+                }
+                refreshFormulaDisplays(panelId);
+            });
+        });
+    }
+
+    // Recomputes and redraws every formula cell's shown result in place (no full table
+    // rebuild — that would tear down and recreate DOM nodes mid-focus-transfer and risk
+    // losing keyboard navigation). Called whenever a cell or the formula bar commits an
+    // edit, since any cell's new value can change what other formula cells that reference it
+    // display. The cell currently being edited (p.activeCell) is left untouched.
+    function refreshFormulaDisplays(panelId) {
+        const p = comparePanels[panelId];
+        if (!p) return;
+        const contentEl = document.getElementById(panelId + 'Content');
+        if (!contentEl) return;
+        contentEl.querySelectorAll('td[data-row-type="data"]').forEach(td => {
+            const dataRowIdx = parseInt(td.dataset.rowIdx, 10);
+            const colIdx = parseInt(td.dataset.colIdx, 10);
+            const isActive = p.activeCell && p.activeCell.rowType === 'data' && p.activeCell.dataRowIdx === dataRowIdx && p.activeCell.colIdx === colIdx;
+            if (isActive) return;
+            const actualRow = dataRowIdx + (p.hasHeader ? 1 : 0);
+            const raw = (p.allRows[actualRow] || [])[colIdx];
+            let text, classes;
+            if (formulaIsFormulaText(raw)) {
+                const result = computeFormulaCell(panelId, actualRow, colIdx);
+                text = formulaResultText(result);
+                classes = [formulaResultClass(result), 'cell-formula', isRtlText(text) ? 'cell-rtl' : ''].filter(Boolean).join(' ');
+            } else {
+                text = displayValue(raw);
+                classes = [cellClass(raw), isRtlText(text) ? 'cell-rtl' : ''].filter(Boolean).join(' ');
+            }
+            if (td.textContent !== text) td.textContent = text;
+            td.title = text;
+            td.className = classes;
+        });
+        if (p.searchQuery) updatePanelSearch(panelId);
+    }
+
+    // The formula bar mirrors whatever cell is currently selected (p.selectedCell, which —
+    // unlike p.activeCell — survives the blur caused by clicking the bar or the ƒx menu
+    // themselves) — reading a formula cell's raw "=..." text there without having to focus
+    // the cell itself, and editing it there keystroke-for-keystroke updates the cell (see
+    // onFormulaBarInput).
+    function updateFormulaBar(panelId) {
+        const bar = document.getElementById(panelId + 'FormulaBar');
+        if (!bar) return;
+        const p = comparePanels[panelId];
+        if (!p || !p.selectedCell) { bar.value = ''; return; }
+        const { rowType, dataRowIdx, colIdx } = p.selectedCell;
+        const actualRow = rowType === 'header' ? 0 : dataRowIdx + (p.hasHeader ? 1 : 0);
+        const raw = (p.allRows[actualRow] || [])[colIdx];
+        bar.value = (raw === undefined || raw === null) ? '' : String(raw);
+    }
+
+    function onFormulaBarInput(panelId, value) {
+        const p = comparePanels[panelId];
+        if (!p || !p.selectedCell) return;
+        const { rowType, dataRowIdx, colIdx } = p.selectedCell;
+        const sel = `#${panelId}Content [data-row-type="${rowType}"][data-row-idx="${dataRowIdx}"][data-col-idx="${colIdx}"]`;
+        const cell = document.querySelector(sel);
+        if (!cell) return;
+        cell.textContent = value;
+        onPanelCellInput(panelId, cell);
+    }
+
+    function onFormulaBarKeydown(e, panelId) {
+        if (e.key === 'Enter' || e.key === 'Escape') {
+            e.preventDefault();
+            e.target.blur();
+        }
+    }
+
+    function renderComparePanel(panelId) {
+        const contentEl = document.getElementById(panelId + 'Content');
+        const selectEl = document.getElementById(panelId + 'SheetSelect');
+        const headerToggle = document.getElementById(panelId + 'HeaderToggle');
+        const p = comparePanels[panelId];
+        const panelLabel = panelId === 'compareLeft' ? 'Panel A' : 'Panel B';
+
+        const sourceEntry = p.sourceEntryId ? findEntry(p.sourceEntryId) : null;
+        if (sourceEntry && sourceEntry.sheets.length > 1) {
+            selectEl.style.display = 'inline-block';
+            selectEl.innerHTML = sourceEntry.sheets.map((s, i) => `<option value="${i}" ${i === p.sourceSheetIdx ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+        } else {
+            selectEl.style.display = 'none';
+        }
+        headerToggle.checked = p.hasHeader;
+
+        if (!p.allRows.length) {
+            contentEl.innerHTML = `<div class="empty-state">Load a table into ${panelLabel}, or <a href="javascript:void(0)" onclick="startBlankPanel('${panelId}')" style="color:var(--accent)">start a blank one</a></div>`;
+            const counterEl = document.getElementById(panelId + 'Counter');
+            if (counterEl) counterEl.textContent = '0/0';
+            updateFormulaBar(panelId);
+            return;
+        }
+
+        const { headers, rows, hasHeader } = panelDisplayData(panelId);
+        const table = document.createElement('table');
+        table.className = 'data-table';
+        const thead = document.createElement('thead');
+        const trh = document.createElement('tr');
+        let headHtml = '<th class="rownum-header">#</th>';
+        headers.forEach((h, ci) => {
+            headHtml += `<th data-col="${ci}"${isRtlText(h) ? ' class="cell-rtl"' : ''}>` +
+                (hasHeader
+                    ? `<span class="cell-edit" contenteditable="true" spellcheck="false" data-row-type="header" data-row-idx="0" data-col-idx="${ci}">${escapeHtml(h)}</span>`
+                    : escapeHtml(h)) +
+                `<span class="col-ins" title="Insert column" onclick="openColInsertMenu(event, '${panelId}', ${ci})">+</span>` +
+                `<span class="col-del" title="Delete column" onclick="deletePanelColumn('${panelId}', ${ci})">×</span></th>`;
+        });
+        trh.innerHTML = headHtml;
+        thead.appendChild(trh);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        rows.forEach((row, orig) => {
+            const tr = document.createElement('tr');
+            tr.dataset.origRow = orig;
+            const actualRowIdx = orig + (hasHeader ? 1 : 0);
+            let cells = `<td class="rownum">${orig + (hasHeader ? 2 : 1)}<span class="row-ins" title="Insert row" onclick="openRowInsertMenu(event, '${panelId}', ${actualRowIdx})">+</span><span class="row-del" title="Delete row" onclick="deletePanelRow('${panelId}', ${actualRowIdx})">×</span></td>`;
+            for (let ci = 0; ci < headers.length; ci++) {
+                const v = row[ci];
+                const isFormula = formulaIsFormulaText(v);
+                const isActive = p.activeCell && p.activeCell.rowType === 'data' && p.activeCell.dataRowIdx === orig && p.activeCell.colIdx === ci;
+                let text, classes;
+                if (isFormula && !isActive) {
+                    const result = computeFormulaCell(panelId, actualRowIdx, ci);
+                    text = formulaResultText(result);
+                    classes = [formulaResultClass(result), 'cell-formula', isRtlText(text) ? 'cell-rtl' : ''].filter(Boolean).join(' ');
+                } else {
+                    text = displayValue(v);
+                    classes = [cellClass(v), isFormula ? 'cell-formula' : '', isRtlText(text) ? 'cell-rtl' : ''].filter(Boolean).join(' ');
+                }
+                cells += `<td ${classes ? `class="${classes}"` : ''} contenteditable="true" spellcheck="false" data-row-type="data" data-row-idx="${orig}" data-col-idx="${ci}" data-col="${ci}" title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
+            }
+            tr.innerHTML = cells;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        contentEl.innerHTML = '';
+        contentEl.appendChild(table);
+        wireEditableCells(contentEl, panelId);
+        updatePanelSearch(panelId);
+        // Keeps the formula bar in sync with p.selectedCell on every render — most render
+        // callers that clear the selection (Reset/Clear panel, loading a new file, deleting
+        // a row/col, toggling the header) don't also refocus a cell afterward, so without
+        // this the bar would keep showing stale text from before the reset.
+        updateFormulaBar(panelId);
+    }
+
+    // Highlights whole cells (not substrings — see the CSS note on .cell-search-match)
+    // matching the panel's current search query, tracks them for Enter-to-jump navigation,
+    // and updates the "x/y" counter. Called after every re-render and every keystroke in
+    // either the search box or a table cell, so it always reflects what's on screen.
+    function updatePanelSearch(panelId) {
+        const p = comparePanels[panelId];
+        const q = (p.searchQuery || '').toLowerCase();
+        const cells = document.querySelectorAll(`#${panelId}Content thead th[data-col], #${panelId}Content tbody td[data-col]`);
+        const matches = [];
+        cells.forEach(cell => {
+            const isMatch = !!q && cell.textContent.toLowerCase().includes(q);
+            cell.classList.toggle('cell-search-match', isMatch);
+            cell.classList.remove('current-match');
+            if (isMatch) matches.push(cell);
+        });
+        p._searchMatches = matches;
+        p._searchIndex = matches.length ? 0 : -1;
+        if (matches.length) matches[0].classList.add('current-match');
+        const counter = document.getElementById(panelId + 'Counter');
+        if (counter) counter.textContent = matches.length ? `1/${matches.length}` : '0/0';
+    }
+
+    function setPanelSearch(panelId, value) {
+        comparePanels[panelId].searchQuery = value;
+        updatePanelSearch(panelId);
+    }
+
+    function panelSearchNav(e, panelId) {
+        if (e.key !== 'Enter') return;
+        const p = comparePanels[panelId];
+        const matches = p._searchMatches || [];
+        if (!matches.length) return;
+        if (p._searchIndex >= 0 && matches[p._searchIndex]) matches[p._searchIndex].classList.remove('current-match');
+        p._searchIndex = (p._searchIndex + 1) % matches.length;
+        const cell = matches[p._searchIndex];
+        cell.classList.add('current-match');
+        cell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        const counter = document.getElementById(panelId + 'Counter');
+        if (counter) counter.textContent = `${p._searchIndex + 1}/${matches.length}`;
+    }
+
+    function clearCompareResults() {
+        document.getElementById('compareResults').innerHTML = 'Load a table into each panel, then click "Compare Panels".';
+        document.querySelectorAll('.diff-row-added, .diff-row-removed, .diff-cell-changed, .diff-col-onlyA, .diff-col-onlyB').forEach(el => {
+            el.classList.remove('diff-row-added', 'diff-row-removed', 'diff-cell-changed', 'diff-col-onlyA', 'diff-col-onlyB');
+        });
+    }
+
+    // Aligns two row lists with an LCS (longest-common-subsequence) instead of comparing
+    // row N of A against row N of B position-by-position. Positional comparison means one
+    // deleted row shifts everything after it out of alignment, so a single deletion shows
+    // up as one "removed" entry PLUS a false "changed" entry for every row that follows
+    // (they're really unchanged, just sitting one slot earlier/later). LCS instead finds
+    // the longest run of rows that appear unchanged and in the same relative order in both
+    // tables, and only the rows outside that run are reported as removed/added/changed.
+    function alignRows(a, b, colsA, colsB) {
+        const n = a.rows.length, m = b.rows.length;
+        const rowsEqual = (i, j) => {
+            const rowA = a.rows[i], rowB = b.rows[j];
+            for (let k = 0; k < colsA.length; k++) {
+                if (!valuesEqual(rowA[colsA[k]], rowB[colsB[k]])) return false;
+            }
+            return true;
+        };
+        // The DP table is O(n*m); cap it so a pair of huge tables can't hang the tab or
+        // blow the heap — fall back to plain positional pairing beyond that (same behavior
+        // this tool always had), rather than refusing to compare at all.
+        if (n * m > 4_000_000) {
+            const ops = [];
+            const max = Math.max(n, m);
+            for (let r = 0; r < max; r++) {
+                if (r >= n) ops.push({ type: 'ins', bj: r });
+                else if (r >= m) ops.push({ type: 'del', ai: r });
+                else if (rowsEqual(r, r)) ops.push({ type: 'match', ai: r, bj: r });
+                else { ops.push({ type: 'del', ai: r }); ops.push({ type: 'ins', bj: r }); }
+            }
+            return ops;
+        }
+        const W = m + 1;
+        const dp = new Uint32Array((n + 1) * W);
+        for (let i = n - 1; i >= 0; i--) {
+            const rowBase = i * W, nextBase = (i + 1) * W;
+            for (let j = m - 1; j >= 0; j--) {
+                dp[rowBase + j] = rowsEqual(i, j)
+                    ? dp[nextBase + j + 1] + 1
+                    : Math.max(dp[nextBase + j], dp[rowBase + j + 1]);
+            }
+        }
+        const ops = [];
+        let i = 0, j = 0;
+        while (i < n && j < m) {
+            if (rowsEqual(i, j)) { ops.push({ type: 'match', ai: i, bj: j }); i++; j++; }
+            else if (dp[(i + 1) * W + j] >= dp[i * W + j + 1]) { ops.push({ type: 'del', ai: i }); i++; }
+            else { ops.push({ type: 'ins', bj: j }); j++; }
+        }
+        while (i < n) { ops.push({ type: 'del', ai: i }); i++; }
+        while (j < m) { ops.push({ type: 'ins', bj: j }); j++; }
+        return ops;
+    }
+
+    function diffTables(a, b) {
+        const commonCols = a.headers.filter(h => b.headers.includes(h));
+        let colsA, colsB, labels;
+        if (a.hasHeader && b.hasHeader && commonCols.length > 0) {
+            colsA = commonCols.map(h => a.headers.indexOf(h));
+            colsB = commonCols.map(h => b.headers.indexOf(h));
+            labels = commonCols;
+        } else {
+            const n = Math.min(a.headers.length, b.headers.length);
+            colsA = Array.from({ length: n }, (_, i) => i);
+            colsB = Array.from({ length: n }, (_, i) => i);
+            labels = colsA.map(i => colLetter(i));
+        }
+
+        const ops = alignRows(a, b, colsA, colsB);
+        const diffs = [];
+        let k = 0;
+        while (k < ops.length) {
+            if (ops[k].type === 'match') { k++; continue; }
+            // A run of consecutive non-matching rows is a "replace" block: rows deleted from
+            // A here and rows inserted into B here. Pair them up 1:1 (in order) as "changed"
+            // rows — that's the common case of a row simply being edited — and only the
+            // leftover unpaired rows (a run with more deletes than inserts, or vice versa)
+            // are reported as pure removed/added.
+            let dels = [], inss = [];
+            while (k < ops.length && ops[k].type !== 'match') {
+                if (ops[k].type === 'del') dels.push(ops[k].ai); else inss.push(ops[k].bj);
+                k++;
+            }
+            const pairCount = Math.min(dels.length, inss.length);
+            for (let p = 0; p < pairCount; p++) {
+                const ai = dels[p], bj = inss[p];
+                const cells = [];
+                for (let c = 0; c < colsA.length; c++) {
+                    const va = a.rows[ai][colsA[c]], vb = b.rows[bj][colsB[c]];
+                    if (!valuesEqual(va, vb)) cells.push({ col: labels[c], colIdxA: colsA[c], colIdxB: colsB[c], oldVal: va, newVal: vb });
+                }
+                // Guard against the (rare) case where the alignment paired up two rows that
+                // turn out identical after all — report nothing rather than a no-op "changed".
+                if (cells.length) diffs.push({ type: 'changed', rowA: ai, rowB: bj, cells });
+            }
+            for (let p = pairCount; p < dels.length; p++) diffs.push({ type: 'removed', rowA: dels[p] });
+            for (let p = pairCount; p < inss.length; p++) diffs.push({ type: 'added', rowB: inss[p] });
+        }
+
+        // Extra columns carry their index in their own panel's header array, so the
+        // corresponding <th>/<td data-col> in that panel can be marked directly.
+        const extraColsA = a.headers.map((h, i) => ({ h, i })).filter(x => !commonCols.includes(x.h));
+        const extraColsB = b.headers.map((h, i) => ({ h, i })).filter(x => !commonCols.includes(x.h));
+        return { diffs, colsA, colsB, extraColsA, extraColsB };
+    }
+
+    let isCompareSideMode = false;
+
+    function toggleCompareDiffMode() {
+        isCompareSideMode = !isCompareSideMode;
+        document.getElementById('compareToggleDiffView').textContent = isCompareSideMode ? 'View: Side-by-Side' : 'View: List';
+        runCompare();
+    }
+
+    // Builds one diff-line's inner content (icon + text + tag); shared by both the plain
+    // list view and each half of the side-by-side view.
+    function buildDiffLineEl(type, html, onClick) {
+        const row = document.createElement('div');
+        row.className = 'diff-line diff-' + type;
+        const box = document.createElement('div');
+        box.className = 'diff-content-box';
+        const icon = document.createElement('span');
+        icon.className = 'diff-icon';
+        icon.textContent = type === 'added' ? '+' : type === 'removed' ? '−' : 'Δ';
+        const text = document.createElement('span');
+        text.className = 'diff-text';
+        text.innerHTML = html;
+        box.appendChild(icon); box.appendChild(text);
+        const tag = document.createElement('span');
+        tag.className = 'diff-tag';
+        tag.textContent = '[' + type.toUpperCase() + ']';
+        row.appendChild(box); row.appendChild(tag);
+        if (onClick) row.onclick = onClick;
+        return row;
+    }
+
+    function diffLineSpacer() {
+        const d = document.createElement('div');
+        d.className = 'diff-line-spacer';
+        return d;
+    }
+
+    function runCompare() {
+        const results = document.getElementById('compareResults');
+
+        const sheetDataA = panelDisplayData('compareLeft');
+        const sheetDataB = panelDisplayData('compareRight');
+
+        if (!sheetDataA.rows.length && !sheetDataA.headers.length) { results.innerHTML = '<div style="color:var(--diff-remove)">Add data to Panel A first — load a file, or start a blank table and type into it.</div>'; return; }
+        if (!sheetDataB.rows.length && !sheetDataB.headers.length) { results.innerHTML = '<div style="color:var(--diff-remove)">Add data to Panel B first — load a file, or start a blank table and type into it.</div>'; return; }
+
+        document.querySelectorAll('#compareLeftContent tr, #compareRightContent tr, #compareLeftContent th, #compareRightContent th').forEach(el => {
+            el.classList.remove('diff-row-added', 'diff-row-removed', 'diff-col-onlyA', 'diff-col-onlyB');
+            el.querySelectorAll && el.querySelectorAll('td').forEach(td => td.classList.remove('diff-cell-changed', 'diff-col-onlyA', 'diff-col-onlyB'));
+        });
+
+        const { diffs, extraColsA, extraColsB } = diffTables(sheetDataA, sheetDataB);
+
+        results.innerHTML = '';
+        if (diffs.length === 0 && extraColsA.length === 0 && extraColsB.length === 0) {
+            results.innerHTML = "<div style='color:#89d185'>✅ Panel A and Panel B match on their shared rows and columns.</div>";
+            return;
+        }
+
+        const summary = document.createElement('div');
+        summary.className = 'diff-summary';
+        let summaryText = `${diffs.length} row difference${diffs.length === 1 ? '' : 's'}`;
+        if (extraColsA.length) summaryText += ` · columns only in A: ${extraColsA.map(x => x.h).join(', ')}`;
+        if (extraColsB.length) summaryText += ` · columns only in B: ${extraColsB.map(x => x.h).join(', ')}`;
+        summary.textContent = summaryText;
+        results.appendChild(summary);
+
+        // Mark the panels themselves right away — independent of list vs. side-by-side,
+        // and independent of whether the user ever scrolls the text results at all.
+        extraColsA.forEach(x => {
+            const th = document.querySelector(`#compareLeftContent thead th[data-col="${x.i}"]`);
+            if (th) th.classList.add('diff-col-onlyA');
+            document.querySelectorAll(`#compareLeftContent tbody td[data-col="${x.i}"]`).forEach(td => td.classList.add('diff-col-onlyA'));
+        });
+        extraColsB.forEach(x => {
+            const th = document.querySelector(`#compareRightContent thead th[data-col="${x.i}"]`);
+            if (th) th.classList.add('diff-col-onlyB');
+            document.querySelectorAll(`#compareRightContent tbody td[data-col="${x.i}"]`).forEach(td => td.classList.add('diff-col-onlyB'));
+        });
+        diffs.forEach(d => {
+            const trA = d.rowA !== undefined ? document.querySelector(`#compareLeftContent tr[data-orig-row="${d.rowA}"]`) : null;
+            const trB = d.rowB !== undefined ? document.querySelector(`#compareRightContent tr[data-orig-row="${d.rowB}"]`) : null;
+            if (d.type === 'removed' && trA) trA.classList.add('diff-row-removed');
+            if (d.type === 'added' && trB) trB.classList.add('diff-row-added');
+            if (d.type === 'changed') {
+                d.cells.forEach(c => {
+                    if (trA) { const td = trA.querySelector(`td[data-col="${c.colIdxA}"]`); if (td) td.classList.add('diff-cell-changed'); }
+                    if (trB) { const td = trB.querySelector(`td[data-col="${c.colIdxB}"]`); if (td) td.classList.add('diff-cell-changed'); }
+                });
+            }
+        });
+
+        // A single ordered list of entries covers both column-level and row-level
+        // differences, so both the list view and the side-by-side view iterate it once.
+        const entries = [];
+        extraColsA.forEach(x => entries.push({ side: 'A', type: 'removed', colIdx: x.i, html: `<b>Column "${escapeHtml(x.h)}"</b> only in Panel A`, onClick: () => highlightDiffCol('compareLeft', x.i) }));
+        extraColsB.forEach(x => entries.push({ side: 'B', type: 'added', colIdx: x.i, html: `<b>Column "${escapeHtml(x.h)}"</b> only in Panel B`, onClick: () => highlightDiffCol('compareRight', x.i) }));
+        diffs.forEach(d => {
+            const rowLabelA = d.rowA !== undefined ? d.rowA + (sheetDataA.hasHeader ? 2 : 1) : null;
+            const rowLabelB = d.rowB !== undefined ? d.rowB + (sheetDataB.hasHeader ? 2 : 1) : null;
+            if (d.type === 'changed') {
+                // Rows can realign to different positions on each side (e.g. a row was
+                // deleted earlier in Panel A, shifting everything after it up by one) —
+                // when that happens, show both row numbers rather than a misleading single one.
+                const rowLabel = rowLabelA === rowLabelB ? `Row ${rowLabelA}` : `Row ${rowLabelA} → ${rowLabelB}`;
+                const oldHtml = `<b>${rowLabel}</b>: ` + d.cells.map(c => `${escapeHtml(c.col)} (${escapeHtml(displayValue(c.oldVal))})`).join(', ');
+                const newHtml = `<b>${rowLabel}</b>: ` + d.cells.map(c => `${escapeHtml(c.col)} (${escapeHtml(displayValue(c.newVal))})`).join(', ');
+                const bothHtml = `<b>${rowLabel}</b>: ` + d.cells.map(c => `${escapeHtml(c.col)} (${escapeHtml(displayValue(c.oldVal))} → ${escapeHtml(displayValue(c.newVal))})`).join(', ');
+                entries.push({ side: 'both', type: 'changed', oldHtml, newHtml, bothHtml, onClick: () => highlightDiffRow(d) });
+            } else if (d.type === 'removed') {
+                entries.push({ side: 'A', type: 'removed', html: `<b>Row ${rowLabelA}</b> only in Panel A`, onClick: () => highlightDiffRow(d) });
+            } else {
+                entries.push({ side: 'B', type: 'added', html: `<b>Row ${rowLabelB}</b> only in Panel B`, onClick: () => highlightDiffRow(d) });
+            }
+        });
+
+        if (isCompareSideMode) {
+            const container = document.createElement('div');
+            container.className = 'side-diff-container';
+            const leftCol = document.createElement('div');
+            const rightCol = document.createElement('div');
+            entries.forEach(e => {
+                if (e.side === 'A') { leftCol.appendChild(buildDiffLineEl(e.type, e.html, e.onClick)); rightCol.appendChild(diffLineSpacer()); }
+                else if (e.side === 'B') { leftCol.appendChild(diffLineSpacer()); rightCol.appendChild(buildDiffLineEl(e.type, e.html, e.onClick)); }
+                else { leftCol.appendChild(buildDiffLineEl('removed', e.oldHtml, e.onClick)); rightCol.appendChild(buildDiffLineEl('added', e.newHtml, e.onClick)); }
+            });
+            container.appendChild(leftCol); container.appendChild(rightCol);
+            results.appendChild(container);
+        } else {
+            entries.forEach(e => {
+                if (e.side === 'both') results.appendChild(buildDiffLineEl('changed', e.bothHtml, e.onClick));
+                else results.appendChild(buildDiffLineEl(e.type, e.html, e.onClick));
+            });
+        }
+    }
+
+    function highlightDiffRow(d) {
+        const trA = d.rowA !== undefined ? document.querySelector(`#compareLeftContent tr[data-orig-row="${d.rowA}"]`) : null;
+        const trB = d.rowB !== undefined ? document.querySelector(`#compareRightContent tr[data-orig-row="${d.rowB}"]`) : null;
+        [trA, trB].forEach(tr => {
+            if (!tr) return;
+            tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            tr.classList.add('flash-row');
+            setTimeout(() => tr.classList.remove('flash-row'), 1000);
+        });
+    }
+
+    // The two panel .content elements are stable across re-renders (renderComparePanel only
+    // replaces their children), so listeners attached once here keep working no matter how
+    // many times either panel's table gets rebuilt.
+    let isCompareScrollSyncing = false;
+    function wireCompareSyncScroll() {
+        const leftEl = document.getElementById('compareLeftContent');
+        const rightEl = document.getElementById('compareRightContent');
+        const sync = (from, to) => () => {
+            const toggle = document.getElementById('compareSyncScrollToggle');
+            if (!toggle || !toggle.checked || isCompareScrollSyncing) return;
+            isCompareScrollSyncing = true;
+            to.scrollTop = from.scrollTop;
+            to.scrollLeft = from.scrollLeft;
+            isCompareScrollSyncing = false;
+        };
+        leftEl.addEventListener('scroll', sync(leftEl, rightEl));
+        rightEl.addEventListener('scroll', sync(rightEl, leftEl));
+    }
+
+    function highlightDiffCol(panelId, colIdx) {
+        const th = document.querySelector(`#${panelId}Content thead th[data-col="${colIdx}"]`);
+        const cells = document.querySelectorAll(`#${panelId}Content tbody td[data-col="${colIdx}"]`);
+        if (th) { th.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); }
+        [th, ...cells].forEach(el => {
+            if (!el) return;
+            el.classList.add('flash-row');
+            setTimeout(() => el.classList.remove('flash-row'), 1000);
+        });
+    }
+
+
+    /* =========================================================================
+       Init
+       ========================================================================= */
+    loadLayout();
+    renderComparePanel('compareLeft');
+    renderComparePanel('compareRight');
+    wireCompareSyncScroll();
+    setupFormulaPointClick('compareLeft');
+    setupFormulaPointClick('compareRight');
+    loadEntriesFromStorage();
+    </script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dev Toolkit</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --bar-bg: #252526;
+    --bar-border: #3c3c3c;
+    --tab-fg: #969696;
+    --tab-fg-active: #ffffff;
+    --tab-active-bg: #1e1e1e;
+    --accent: #007acc;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: var(--font-ui);
+  }
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+  }
+  #tabbar {
+    display: flex;
+    align-items: stretch;
+    background: var(--bar-bg);
+    border-bottom: 1px solid var(--bar-border);
+    flex: 0 0 auto;
+    padding-left: 8px;
+  }
+  #tabbar .brand {
+    display: flex;
+    align-items: center;
+    color: #d4d4d4;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 0 14px 0 4px;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    font-size: 13px;
+    color: var(--tab-fg);
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--bar-border);
+    cursor: pointer;
+    position: relative;
+    top: 1px;
+    font-family: inherit;
+  }
+  .tab:hover {
+    color: #d4d4d4;
+    background: rgba(255,255,255,0.03);
+  }
+  .tab.active {
+    color: var(--tab-fg-active);
+    background: var(--tab-active-bg);
+    border-bottom: 1px solid var(--tab-active-bg);
+  }
+  .tab.active::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+  }
+  .tab .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex: 0 0 auto;
+  }
+  .tab[data-tool="code"] .dot { background: #3ba7ff; }
+  .tab[data-tool="json"] .dot { background: #e2b93d; }
+  .tab[data-tool="xlsx"] .dot { background: #3fae5a; }
+
+  #panes {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    background: var(--bg);
+  }
+  .pane {
+    position: absolute;
+    inset: 0;
+    display: none;
+  }
+  .pane.active {
+    display: block;
+  }
+  .pane iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+    background: #fff;
+  }
+  .placeholder {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6a6a6a;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="tabbar">
+    <div class="brand">Dev Toolkit</div>
+    <button class="tab active" data-tool="code"><span class="dot"></span>Code Viewer &amp; Compare</button>
+    <button class="tab" data-tool="json"><span class="dot"></span>JSON / XML Viewer &amp; Compare</button>
+    <button class="tab" data-tool="xlsx"><span class="dot"></span>CSV / XLSX Viewer</button>
+  </div>
+  <div id="panes">
+    <div class="pane active" data-tool="code">
+      <div class="placeholder">Loading Code Viewer…</div>
+    </div>
+    <div class="pane" data-tool="json">
+      <div class="placeholder">Loading JSON Viewer…</div>
+    </div>
+    <div class="pane" data-tool="xlsx">
+      <div class="placeholder">Loading XLSX Viewer…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var files = { code: 'code.html', json: 'json.html', xlsx: 'xlsx.html' };
+  var loaded = { code: false, json: false, xlsx: false };
+
+  function loadPane(tool) {
+    if (loaded[tool]) return;
+    var pane = document.querySelector('.pane[data-tool="' + tool + '"]');
+    var iframe = document.createElement('iframe');
+    iframe.src = files[tool];
+    iframe.setAttribute('title', tool + ' tool');
+    pane.innerHTML = '';
+    pane.appendChild(iframe);
+    loaded[tool] = true;
+  }
+
+  function activate(tool) {
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.classList.toggle('active', t.getAttribute('data-tool') === tool);
+    });
+    document.querySelectorAll('.pane').forEach(function (p) {
+      p.classList.toggle('active', p.getAttribute('data-tool') === tool);
+    });
+    loadPane(tool);
+  }
+
+  document.querySelectorAll('.tab').forEach(function (t) {
+    t.addEventListener('click', function () {
+      activate(t.getAttribute('data-tool'));
+    });
+  });
+
+  // Load the first tab immediately.
+  activate('code');
+})();
+</script>
+</body>
+</html>

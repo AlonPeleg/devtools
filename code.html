@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Viewer &amp; Compare</title>
+<style>
+    :root {
+        --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --font-mono: "Cascadia Code", "SF Mono", Consolas, "Courier New", monospace;
+
+        --bg: #1e1e1e;
+        --bg-panel: #252526;
+        --bg-elevated: #2d2d30;
+        --border: #3c3c3c;
+        --border-soft: rgba(140,140,140,0.28);
+        --text: #cccccc;
+        --text-dim: #8a8a8a;
+        --text-bright: #ffffff;
+
+        --accent: #0e8fd9;
+        --accent-fg: #ffffff;
+        --accent-hover: #1ba1ec;
+        --input-bg: #3c3c3c;
+        --hover-bg: #2a2d2e;
+        --sel-bg: #04395e;
+        --focus: #0e8fd9;
+
+        --tok-comment: #6a9955;
+        --tok-string: #ce9178;
+        --tok-keyword: #569cd6;
+        --tok-number: #b5cea8;
+        --tok-type: #4ec9b0;
+        --tok-func: #dcdcaa;
+        --tok-tag: #569cd6;
+        --tok-key: #9cdcfe;
+        --tok-macro: #c586c0;
+
+        --diff-add: #4ec9b0;
+        --diff-remove: #f48771;
+        --diff-change: #dcdcaa;
+
+        --shadow: rgba(0,0,0,0.55);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+        font-family: var(--font-ui);
+        color: var(--text);
+        background: var(--bg);
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+    }
+    ::selection { background: var(--sel-bg); }
+
+    /* ---------- Tabs ---------- */
+    .tabs-header { display: flex; background: var(--bg-panel); border-bottom: 1px solid var(--border-soft); flex-shrink: 0; }
+    .tab-link { padding: 9px 18px; cursor: pointer; color: var(--text-dim); border-right: 1px solid var(--border-soft); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; user-select: none; }
+    .tab-link:hover { background: var(--hover-bg); }
+    .tab-link.active { background: var(--bg); color: var(--text-bright); box-shadow: inset 0 -2px 0 var(--accent); }
+
+    .tab-viewport { flex-grow: 1; overflow: hidden; position: relative; }
+    .tab-pane { display: none; height: 100%; width: 100%; overflow-y: auto; padding: 14px; }
+    .tab-pane.active { display: block; }
+    #compare-pane.active { display: flex; flex-direction: column; overflow: hidden; }
+    #compare-pane.active > *:not(#compareResults) { flex-shrink: 0; }
+
+    h1, h2, h3 { text-wrap: balance; margin: 0; }
+
+    /* ---------- Toolbar / buttons ---------- */
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
+    .title-group { display: flex; align-items: baseline; gap: 8px; }
+    .title-group h3 { font-size: 14px; font-weight: 700; color: var(--text-bright); }
+    .title-sub { font-size: 11px; color: var(--text-dim); }
+    .btn-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .btn { border: none; padding: 5px 11px; cursor: pointer; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--accent); color: var(--accent-fg); font-family: var(--font-ui); }
+    .btn:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--input-bg); color: var(--text); }
+    .btn-secondary:hover { background: #48484b; }
+    .btn-secondary.active { background: var(--accent); color: #fff; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-global-icon { background: transparent; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px; opacity: 0.75; color: var(--text); }
+    .btn-global-icon:hover { background: var(--hover-bg); opacity: 1; }
+    .btn-global-icon svg { width: 15px; height: 15px; fill: currentColor; }
+    .storage-io-bar { margin-left: auto; display: flex; align-items: center; gap: 2px; padding-right: 8px; }
+
+    .drop-zone { background: var(--input-bg); border: 1px dashed var(--border-soft); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .drop-zone.file-drop-target { outline: 2px dashed var(--focus); outline-offset: 2px; }
+    .drop-zone textarea { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 8px; font-family: var(--font-mono); font-size: 11.5px; border-radius: 4px; outline: none; resize: vertical; min-height: 60px; }
+    .drop-zone textarea:focus { border-color: var(--focus); }
+    .drop-zone-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .drop-zone-hint { font-size: 10.5px; color: var(--text-dim); }
+
+    /* ---------- Entry layout ---------- */
+    #container { display: flex; flex-direction: column; gap: 12px; }
+    #container.grid-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 12px; align-items: start; }
+    @media (min-width: 1500px) {
+        #container.grid-view { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .entry { border: 1px solid var(--border-soft); border-radius: 6px; overflow: hidden; background: var(--bg-panel); display: flex; flex-direction: column; max-height: 62vh; box-shadow: 0 1px 3px var(--shadow); }
+    .entry.collapsed-entry { max-height: none; }
+    .entry.collapsed-entry .content, .entry.collapsed-entry .entry-toolbar-2 { display: none; }
+    .entry-header { background: var(--bg-elevated); padding: 4px 8px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border-soft); flex-shrink: 0; flex-wrap: wrap; }
+    .master-toggle { cursor: pointer; font-size: 9px; width: 12px; display: inline-flex; justify-content: center; opacity: 0.7; user-select: none; color: var(--text); }
+    .entry.collapsed-entry .master-toggle { transform: rotate(-90deg); }
+    .time-tag { font-size: 9px; opacity: 0.55; font-family: var(--font-mono); white-space: nowrap; }
+    .dims-tag { font-size: 9.5px; color: var(--text-dim); font-family: var(--font-mono); white-space: nowrap; }
+    .name-input { background: transparent; border: 1px solid transparent; color: var(--text-bright); font-size: 11.5px; font-weight: 700; padding: 2px 4px; width: 130px; border-radius: 3px; font-family: var(--font-ui); }
+    .name-input:hover { border-color: var(--border); }
+    .name-input:focus { background: var(--input-bg); border-color: var(--focus); outline: none; }
+    .actions { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+    .btn-icon { cursor: pointer; display: flex; align-items: center; padding: 4px; border-radius: 4px; opacity: 0.75; color: var(--text); }
+    .btn-icon:hover { background: var(--hover-bg); opacity: 1; }
+    .btn-icon svg { width: 14px; height: 14px; }
+    .btn-delete { color: var(--diff-remove); cursor: pointer; font-weight: bold; font-size: 15px; line-height: 1; padding: 0 4px; opacity: 0.65; user-select: none; }
+    .btn-delete:hover { opacity: 1; }
+
+    /* language badge + hidden-select picker */
+    .lang-picker { position: relative; display: inline-flex; align-items: center; }
+    .lang-badge { font-size: 9.5px; padding: 2px 7px; border-radius: 10px; color: #ffffff; text-transform: uppercase; font-weight: 800; letter-spacing: 0.3px; white-space: nowrap; cursor: pointer; }
+    .lang-badge.is-manual::after { content: ' \270E'; font-size: 8px; opacity: 0.7; }
+    .lang-select-hidden { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: none; }
+    .confidence-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+    .conf-high { background: #4ec9b0; } .conf-medium { background: #dcdcaa; } .conf-low { background: #f48771; } .conf-none { background: #666; }
+
+    .entry-toolbar-2 { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-bottom: 1px solid var(--border-soft); flex-shrink: 0; flex-wrap: wrap; background: var(--bg-panel); }
+    .switch-container { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text-dim); cursor: pointer; user-select: none; }
+    .switch { position: relative; display: inline-block; width: 26px; height: 15px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4a4a4a; transition: .15s; border-radius: 15px; }
+    .slider:before { position: absolute; content: ""; height: 11px; width: 11px; left: 2px; bottom: 2px; background-color: white; transition: .15s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--accent); }
+    input:checked + .slider:before { transform: translateX(11px); }
+
+    .search-container { display: flex; align-items: center; background: var(--input-bg); border: 1px solid var(--border); border-radius: 3px; width: 150px; }
+    .search-inline { width: 100%; background: transparent; color: var(--text); border: none; font-size: 10.5px; padding: 3px 6px; outline: none; font-family: var(--font-mono); }
+    .search-counter { font-size: 9px; padding: 0 5px; opacity: 0.6; font-family: var(--font-mono); white-space: nowrap; }
+
+    /* ---------- Code display ---------- */
+    .content { flex-grow: 1; overflow: auto; background: var(--bg); }
+    .code-block { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre; }
+    .code-block.wrap-on { white-space: pre-wrap; word-break: break-word; }
+    .code-line { display: flex; }
+    .code-line:hover { background: var(--hover-bg); }
+    .code-line .ln { flex: 0 0 auto; width: 3.4em; text-align: right; padding-right: 10px; color: var(--text-dim); opacity: 0.55; user-select: none; position: sticky; left: 0; background: var(--bg); }
+    .code-line:hover .ln { background: var(--hover-bg); }
+    .code-text { flex: 1 1 auto; padding-right: 12px; }
+    .tok-comment { color: var(--tok-comment); font-style: italic; }
+    .tok-string { color: var(--tok-string); }
+    .tok-keyword { color: var(--tok-keyword); font-weight: 600; }
+    .tok-number { color: var(--tok-number); }
+    .tok-type { color: var(--tok-type); }
+    .tok-func { color: var(--tok-func); }
+    .tok-tag { color: var(--tok-tag); }
+    .tok-key { color: var(--tok-key); }
+    .tok-macro { color: var(--tok-macro); }
+    .match { background-color: rgba(220, 190, 0, 0.4); border-radius: 1px; }
+    .match.current { background-color: #f7d75c; color: #000; border: 1px solid #ffaa00; font-weight: bold; }
+
+    .status-bar { flex-shrink: 0; padding: 3px 8px; font-size: 9.5px; font-family: var(--font-mono); color: var(--accent); background: var(--bg); border-top: 1px solid var(--border-soft); display: flex; justify-content: space-between; }
+    .empty-state { padding: 30px 12px; text-align: center; color: var(--text-dim); font-size: 12px; }
+
+    /* ---------- Focus mode ---------- */
+    #focus-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 30px; }
+    #focus-overlay.active { display: flex; }
+    .entry.focused-entry { width: min(1200px, 94vw); max-height: 90vh; box-shadow: 0 10px 50px rgba(0,0,0,0.7); }
+    .focus-close-btn { position: absolute; top: 18px; right: 22px; z-index: 9001; background: var(--input-bg); color: var(--text); border: none; width: 28px; height: 28px; border-radius: 50%; font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .focus-close-btn:hover { background: #48484b; }
+
+    @keyframes flash-pulse { 0% { background-color: rgba(14,143,217,0.35); } 100% { background-color: transparent; } }
+    @keyframes flash-ring-pulse { 0% { box-shadow: inset 0 0 0 3px rgba(14,143,217,0.95), 0 0 10px 2px rgba(14,143,217,0.6); } 100% { box-shadow: inset 0 0 0 3px rgba(14,143,217,0); } }
+    .flash-active { animation: flash-pulse 1s ease-out, flash-ring-pulse 1s ease-out; }
+
+    /* ---------- Compare tab ---------- */
+    .chips-box { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; max-height: 84px; overflow-y: auto; padding: 8px; background: var(--bg-panel); border: 1px solid var(--border-soft); border-radius: 5px; }
+    .chips-empty { opacity: 0.5; font-size: 11px; padding: 4px; }
+    .chip { display: flex; align-items: center; gap: 5px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 12px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+    .chip:hover { border-color: var(--focus); background: var(--hover-bg); }
+    .chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .chip-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chip[draggable="true"] { cursor: grab; }
+    .chip[draggable="true"]:active { cursor: grabbing; }
+    .chip-hint { font-size: 10px; color: var(--text-dim); margin: -4px 0 10px 2px; }
+
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 42vh; flex-shrink: 0; }
+    .compare-col { display: flex; flex-direction: column; height: 100%; border: 1px solid var(--border-soft); border-radius: 6px; overflow: hidden; background: var(--bg-panel); min-height: 0; }
+    .compare-col.drop-target { outline: 2px dashed var(--focus); outline-offset: 3px; }
+    .compare-col-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border-soft); flex-wrap: wrap; flex-shrink: 0; }
+    .compare-label { font-size: 10px; text-transform: uppercase; opacity: 0.7; font-weight: 800; letter-spacing: 0.4px; }
+    .compare-col .content { flex-grow: 1; }
+    .compare-col textarea.editor-textarea { width: 100%; height: 100%; resize: none; border: none; background: var(--bg); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 8px; outline: none; line-height: 1.5; }
+    .editor-mode-btn { font-size: 10px; padding: 3px 9px; white-space: nowrap; }
+
+    .diff-output { margin-top: 10px; border: 1px solid var(--border-soft); padding: 8px; background: var(--bg-panel); font-family: var(--font-mono); font-size: 11.5px; border-radius: 6px; overflow-y: auto; flex: 1 1 auto; min-height: 100px; }
+    .diff-stats { display: flex; gap: 14px; flex-wrap: wrap; font-family: var(--font-ui); font-size: 11px; margin-bottom: 10px; color: var(--text-dim); }
+    .diff-stats b { color: var(--text-bright); }
+    .diff-summary { font-weight: 700; margin-bottom: 8px; color: var(--text-bright); font-family: var(--font-ui); font-size: 12px; }
+    .diff-line { padding: 3px 8px; border-radius: 3px; margin-bottom: 1px; cursor: pointer; display: flex; align-items: flex-start; gap: 10px; box-sizing: border-box; }
+    .diff-line:hover { background: var(--hover-bg); }
+    .diff-linenum { flex: 0 0 auto; opacity: 0.55; font-size: 10px; width: 6.5em; white-space: nowrap; }
+    .diff-content-box { display: flex; align-items: flex-start; gap: 8px; overflow: hidden; min-width: 0; flex: 1 1 auto; }
+    .diff-icon { font-weight: bold; width: 12px; text-align: center; flex-shrink: 0; }
+    .diff-text { overflow: hidden; min-width: 0; flex: 1 1 auto; white-space: pre; text-overflow: ellipsis; }
+    .diff-added { background: rgba(78,201,176,0.08); color: var(--diff-add); border-left: 3px solid var(--diff-add); }
+    .diff-removed { background: rgba(244,135,113,0.08); color: var(--diff-remove); border-left: 3px solid var(--diff-remove); }
+    .diff-changed { background: rgba(220,220,170,0.08); color: var(--diff-change); border-left: 3px solid var(--diff-change); }
+    .diff-char-add { background: rgba(78,201,176,0.35); border-radius: 2px; }
+    .diff-char-remove { background: rgba(244,135,113,0.35); border-radius: 2px; text-decoration: line-through; text-decoration-color: rgba(244,135,113,0.7); }
+
+    .side-diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+    .side-row { display: contents; }
+    .side-cell { padding: 2px 6px; border-radius: 2px; white-space: pre; overflow-x: auto; font-size: 11.5px; display: flex; gap: 6px; }
+    .side-cell .ln { flex: 0 0 auto; opacity: 0.45; width: 2.8em; text-align: right; user-select: none; }
+    .side-cell .txt { white-space: pre; }
+    .side-cell.equal { color: var(--text); }
+    .side-cell.blank { background: rgba(255,255,255,0.02); }
+    .side-cell.removed { background: rgba(244,135,113,0.1); color: var(--diff-remove); }
+    .side-cell.added { background: rgba(78,201,176,0.1); color: var(--diff-add); }
+    .side-cell.changed-remove { background: rgba(220,220,170,0.12); }
+    .side-cell.changed-add { background: rgba(220,220,170,0.12); }
+    .collapse-bar { grid-column: 1 / -1; padding: 4px 8px; font-size: 10.5px; color: var(--text-dim); cursor: pointer; text-align: center; background: var(--bg-elevated); border-radius: 3px; margin: 2px 0; }
+    .collapse-bar:hover { color: var(--text-bright); }
+
+    ::-webkit-scrollbar { width: 11px; height: 11px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 6px; border: 3px solid var(--bg); }
+    ::-webkit-scrollbar-thumb:hover { background: #5c5c5c; }
+    ::-webkit-scrollbar-corner { background: var(--bg); }
+</style>
+</head>
+<body>
+    <div class="tabs-header">
+        <div class="tab-link active" data-tab="viewer-pane" onclick="switchTab('viewer-pane', this)">Viewer</div>
+        <div class="tab-link" data-tab="compare-pane" onclick="switchTab('compare-pane', this)">Compare</div>
+        <div class="storage-io-bar">
+            <button class="btn-global-icon" id="storageExportBtn" title="Export local storage to a file" onclick="exportLocalStorageBackup()">
+                <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+            </button>
+            <button class="btn-global-icon" id="storageImportBtn" title="Import local storage from a file" onclick="document.getElementById('storageImportInput').click()">                
+                <svg viewBox="0 0 16 16"><path d="M8.75 1v6.63l1.94-1.94 1.06 1.06L8 10.5 4.25 6.75l1.06-1.06L7.25 7.63V1h1.5zM2 12h12v2.5H2V12z"/></svg>
+            </button>
+            <input type="file" id="storageImportInput" accept=".json,application/json" style="display:none" onchange="importLocalStorageBackup(this)">
+        </div>
+    </div>
+
+    <div class="tab-viewport">
+        <div id="viewer-pane" class="tab-pane active">
+            <div class="toolbar">
+                <div class="title-group">
+                    <h3>Code Viewer</h3>
+                    <span class="title-sub">paste code &amp; auto-detect the language</span>
+                </div>
+                <div class="btn-group">
+                    <button id="viewModeBtn" class="btn btn-secondary" onclick="toggleLayout()">View: Stack</button>
+                    <button class="btn-global-icon" title="Collapse all snippets" onclick="setAllCollapse(true)">
+                        <svg viewBox="0 0 16 16"><path d="M9 9H5V5h4v4zm5-7H2v12h12V2zM3 13V3h10v10H3z"/></svg>
+                    </button>
+                    <button class="btn-global-icon" title="Expand all snippets" onclick="setAllCollapse(false)">
+                        <svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg>
+                    </button>
+                    <button class="btn-global-icon" title="Upload code file(s)" onclick="document.getElementById('fileInput').click()">
+                        <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+                    </button>
+                    <input type="file" id="fileInput" multiple style="display:none" onchange="handleFileUpload(this.files)">
+                    <button class="btn btn-secondary" onclick="clearAllEntries()">Clear All</button>
+                </div>
+            </div>
+
+            <div class="drop-zone" id="pasteZone">
+                <textarea id="pasteInput" rows="3" placeholder="Paste any code here (TypeScript, JavaScript, Java, Python, ObjectScript, C#, C/C++, Go, Rust, PHP, Ruby, Kotlin, Swift, SQL, Shell, JSON, XML/HTML, CSS, YAML...) or drop a file. Unrecognized code falls back to Plain Text. Ctrl+Enter to add."></textarea>
+                <div class="drop-zone-footer">
+                    <span class="drop-zone-hint">Drop file(s) anywhere in this box, or paste code and click Add — the language is detected automatically and can be overridden.</span>
+                    <button class="btn" onclick="addFromPasteBox()">Add Snippet</button>
+                </div>
+            </div>
+
+            <div id="container"><div class="empty-state">No snippets yet — paste or upload some code above.</div></div>
+        </div>
+
+        <div id="compare-pane" class="tab-pane">
+            <div class="toolbar">
+                <div class="title-group">
+                    <h3>Compare Code</h3>
+                    <span class="title-sub">Panel A vs Panel B</span>
+                </div>
+                <div class="btn-group">
+                    <label class="switch-container">
+                        <div class="switch"><input type="checkbox" id="compareSyncScrollToggle" checked><span class="slider"></span></div>
+                        Sync Scroll
+                    </label>
+                    <button class="btn btn-secondary" onclick="swapComparePanels()">Swap A ⇄ B</button>
+                    <button class="btn btn-secondary" onclick="resetCompareSection()">Reset Both Panels</button>
+                </div>
+            </div>
+
+            <div id="compareChips" class="chips-box"></div>
+            <div class="chip-hint">Click a snippet above to choose a panel, or drag it straight onto Panel A or Panel B.</div>
+
+            <div class="compare-grid">
+                <div class="compare-col" id="compareLeftCol" ondragover="allowCompareDrop(event)" ondrop="handleCompareDrop(event,'compareLeft')" ondragenter="this.classList.add('drop-target')" ondragleave="this.classList.remove('drop-target')">
+                    <div class="compare-col-toolbar">
+                        <span class="compare-label">Panel A</span>
+                        <input type="text" class="name-input" id="compareLeftName" placeholder="Name...">
+                        <div class="lang-picker">
+                            <span class="lang-badge" id="compareLeftBadge">Plain Text</span>
+                            <select class="lang-select-hidden" id="compareLeftSelect" onchange="onCompareLangChange('compareLeft', this.value)"></select>
+                        </div>
+                        <div class="actions">
+                            <div class="btn-icon" title="Copy raw text" onclick="copyPanelRaw('compareLeft', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
+                            <div class="btn-icon" title="Copy as Markdown code fence" onclick="copyPanelFence('compareLeft', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 2 8 5 12"/><polyline points="11 4 14 8 11 12"/></svg></div>
+                            <div class="btn-icon" title="Download as file" onclick="downloadPanel('compareLeft')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.25 1.5h1.5v6h2l-2.75 3-2.75-3h2v-6z"/><path d="M2 12h12v2.5H2V12z"/></svg></div>
+                            <div class="btn-icon" title="Save this panel as a new snippet in Viewer" style="color:#4ec9b0" onclick="savePanelToViewer('compareLeft', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l4.5 4.5-1.06 1.06L8.75 2.87V10h-1.5V2.87L4.56 5.56 3.5 4.5 8 0zM1 12h14v1.5H1V12z"/></svg></div>
+                        </div>
+                        <div class="btn-delete" title="Clear Panel A" onclick="clearComparePanel('compareLeft')">×</div>
+                    </div>
+                    <div class="content"><textarea class="editor-textarea" id="compareLeft" placeholder="Paste or load code into Panel A..."></textarea></div>
+                </div>
+                <div class="compare-col" id="compareRightCol" ondragover="allowCompareDrop(event)" ondrop="handleCompareDrop(event,'compareRight')" ondragenter="this.classList.add('drop-target')" ondragleave="this.classList.remove('drop-target')">
+                    <div class="compare-col-toolbar">
+                        <span class="compare-label">Panel B</span>
+                        <input type="text" class="name-input" id="compareRightName" placeholder="Name...">
+                        <div class="lang-picker">
+                            <span class="lang-badge" id="compareRightBadge">Plain Text</span>
+                            <select class="lang-select-hidden" id="compareRightSelect" onchange="onCompareLangChange('compareRight', this.value)"></select>
+                        </div>
+                        <div class="actions">
+                            <div class="btn-icon" title="Copy raw text" onclick="copyPanelRaw('compareRight', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
+                            <div class="btn-icon" title="Copy as Markdown code fence" onclick="copyPanelFence('compareRight', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 2 8 5 12"/><polyline points="11 4 14 8 11 12"/></svg></div>
+                            <div class="btn-icon" title="Download as file" onclick="downloadPanel('compareRight')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.25 1.5h1.5v6h2l-2.75 3-2.75-3h2v-6z"/><path d="M2 12h12v2.5H2V12z"/></svg></div>
+                            <div class="btn-icon" title="Save this panel as a new snippet in Viewer" style="color:#4ec9b0" onclick="savePanelToViewer('compareRight', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l4.5 4.5-1.06 1.06L8.75 2.87V10h-1.5V2.87L4.56 5.56 3.5 4.5 8 0zM1 12h14v1.5H1V12z"/></svg></div>
+                        </div>
+                        <div class="btn-delete" title="Clear Panel B" onclick="clearComparePanel('compareRight')">×</div>
+                    </div>
+                    <div class="content"><textarea class="editor-textarea" id="compareRight" placeholder="Paste or load code into Panel B..."></textarea></div>
+                </div>
+            </div>
+
+            <div class="toolbar" style="margin-top:10px;">
+                <div class="title-group">
+                    <h3 style="font-size:12px;">Panel A vs Panel B</h3>
+                </div>
+                <div class="btn-group">
+                    <label class="switch-container"><div class="switch"><input type="checkbox" id="ignoreWhitespaceToggle" onchange="runCompare()"><span class="slider"></span></div>Ignore whitespace</label>
+                    <label class="switch-container"><div class="switch"><input type="checkbox" id="ignoreCaseToggle" onchange="runCompare()"><span class="slider"></span></div>Ignore case</label>
+                    <label class="switch-container"><div class="switch"><input type="checkbox" id="ignoreBlankToggle" onchange="runCompare()"><span class="slider"></span></div>Ignore blank lines</label>
+                    <button class="btn btn-secondary" id="compareToggleDiffView" onclick="toggleCompareDiffMode()">View: List</button>
+                    <button class="btn" onclick="runCompare()">Compare</button>
+                    <button class="btn btn-secondary" onclick="clearCompareResults()">Clear Results</button>
+                </div>
+            </div>
+            <div id="compareResults" class="diff-output">Load code into each panel, then click "Compare".</div>
+        </div>
+    </div>
+
+    <div id="focus-overlay" onclick="if(event.target === this) closeFocusEntry();">
+        <div class="focus-close-btn" title="Close (Esc)" onclick="closeFocusEntry()">×</div>
+    </div>
+
+<script>
+'use strict';
+/* =========================================================================
+   Local storage backup (export / import)
+   ========================================================================= */
+function flashStorageIoButton(btnId) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<span style="font-size:11px; font-weight:bold; color:#89d185;">&#10003;</span>';
+    setTimeout(() => { btn.innerHTML = original; }, 900);
+}
+
+function exportLocalStorageBackup() {
+    try {
+        const data = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            data[key] = localStorage.getItem(key);
+        }
+        const payload = {
+            __source: document.title || 'code-viewer',
+            __exportedAt: new Date().toISOString(),
+            localStorage: data
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `code-viewer-backup-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        flashStorageIoButton('storageExportBtn');
+    } catch (err) {
+        alert('Failed to export local storage: ' + err.message);
+    }
+}
+
+function importLocalStorageBackup(fileInput) {
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            const parsed = JSON.parse(reader.result);
+            const data = (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.localStorage && typeof parsed.localStorage === 'object')
+                ? parsed.localStorage
+                : parsed;
+            if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                throw new Error('That file does not look like a local storage backup.');
+            }
+            const keys = Object.keys(data);
+            if (keys.length === 0) {
+                alert('That backup file has no saved data.');
+                return;
+            }
+            const ok = confirm(`Import ${keys.length} saved item(s) from this backup?\n\nThis will overwrite any matching data already stored here, and the page will reload.`);
+            if (!ok) return;
+            keys.forEach(key => {
+                const value = data[key];
+                localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+            });
+            location.reload();
+        } catch (err) {
+            alert('Failed to import backup: ' + err.message);
+        }
+    };
+    reader.onerror = () => alert('Failed to read the selected file.');
+    reader.readAsText(file);
+}
+
+/* =========================================================================
+   CORE: language metadata, detection, tokenizer, diff engine
+   ========================================================================= */
+const RX = {
+    blockComment: '/\\*[\\s\\S]*?\\*/',
+    lineSlash: '//[^\\n]*',
+    lineHash: '#[^\\n]*',
+    lineDoubleDash: '--[^\\n]*',
+    dqstr: '"(?:\\\\.|[^"\\\\\\n])*"',
+    sqstr: "'(?:\\\\.|[^'\\\\\\n])*'",
+    btstr: '`(?:\\\\.|[^`\\\\])*`',
+    dqstrML: '"(?:\\\\.|[^"\\\\])*"',
+    tripleD: '"""[\\s\\S]*?"""',
+    tripleS: "'''[\\s\\S]*?'''",
+    num: '\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?[a-zA-Z]{0,2}\\b',
+    osStr: '"(?:""|[^"\\n])*"'
+};
+function kw(list) { return '\\b(?:' + list.join('|') + ')\\b'; }
+
+const JS_KEYWORDS = ['break','case','catch','class','const','continue','debugger','default','delete','do','else','export','extends','finally','for','function','if','import','in','instanceof','let','new','of','return','static','super','switch','this','throw','try','typeof','var','void','while','with','yield','async','await','true','false','null','undefined','get','set'];
+const TS_KEYWORDS = JS_KEYWORDS.concat(['interface','type','enum','implements','private','public','protected','readonly','namespace','declare','abstract','as','is','keyof','infer','never','unknown','any','string','number','boolean','object','symbol','bigint','satisfies']);
+const JAVA_KEYWORDS = ['abstract','assert','boolean','break','byte','case','catch','char','class','const','continue','default','do','double','else','enum','extends','final','finally','float','for','goto','if','implements','import','instanceof','int','interface','long','native','new','package','private','protected','public','return','short','static','strictfp','super','switch','synchronized','this','throw','throws','transient','try','void','volatile','while','var','true','false','null'];
+const CSHARP_KEYWORDS = ['abstract','as','base','bool','break','byte','case','catch','char','checked','class','const','continue','decimal','default','delegate','do','double','else','enum','event','explicit','extern','false','finally','fixed','float','for','foreach','goto','if','implicit','in','int','interface','internal','is','lock','long','namespace','new','null','object','operator','out','override','params','private','protected','public','readonly','ref','return','sbyte','sealed','short','sizeof','stackalloc','static','string','struct','switch','this','throw','true','try','typeof','uint','ulong','unchecked','unsafe','ushort','using','virtual','void','volatile','while','var','async','await','get','set'];
+const CPP_KEYWORDS = ['alignas','alignof','and','asm','auto','bool','break','case','catch','char','class','const','constexpr','continue','decltype','default','delete','do','double','dynamic_cast','else','enum','explicit','export','extern','false','float','for','friend','goto','if','inline','int','long','mutable','namespace','new','noexcept','nullptr','operator','private','protected','public','register','reinterpret_cast','return','short','signed','sizeof','static','static_cast','struct','switch','template','this','throw','true','try','typedef','typename','union','unsigned','using','virtual','void','volatile','while'];
+const C_KEYWORDS = ['auto','break','case','char','const','continue','default','do','double','else','enum','extern','float','for','goto','if','int','long','register','return','short','signed','sizeof','static','struct','switch','typedef','union','unsigned','void','volatile','while'];
+const GO_KEYWORDS = ['break','case','chan','const','continue','default','defer','else','fallthrough','for','func','go','goto','if','import','interface','map','package','range','return','select','struct','switch','type','var','true','false','nil','iota'];
+const RUST_KEYWORDS = ['as','break','const','continue','crate','else','enum','extern','false','fn','for','if','impl','in','let','loop','match','mod','move','mut','pub','ref','return','self','Self','static','struct','super','trait','true','type','unsafe','use','where','while','async','await','dyn'];
+const KOTLIN_KEYWORDS = ['as','break','class','continue','do','else','false','for','fun','if','in','interface','is','null','object','package','return','super','this','throw','true','try','typealias','val','var','when','while','by','companion','constructor','data','enum','import','init','inner','internal','lateinit','open','operator','override','private','protected','public','sealed','suspend'];
+const SWIFT_KEYWORDS = ['associatedtype','class','deinit','enum','extension','fileprivate','func','import','init','inout','internal','let','open','operator','private','protocol','public','rethrows','static','struct','subscript','typealias','var','break','case','continue','default','defer','do','else','fallthrough','for','guard','if','in','repeat','return','switch','where','while','as','Any','catch','false','is','nil','self','Self','super','throw','throws','true','try'];
+const PHP_KEYWORDS = ['abstract','and','array','as','break','callable','case','catch','class','clone','const','continue','declare','default','do','echo','else','elseif','empty','enddeclare','endfor','endforeach','endif','endswitch','endwhile','extends','final','finally','fn','for','foreach','function','global','goto','if','implements','include','include_once','instanceof','insteadof','interface','isset','list','match','namespace','new','or','print','private','protected','public','require','require_once','return','static','switch','throw','trait','try','unset','use','var','while','xor','yield','true','false','null'];
+const PY_KEYWORDS = ['False','None','True','and','as','assert','async','await','break','class','continue','def','del','elif','else','except','finally','for','from','global','if','import','in','is','lambda','nonlocal','not','or','pass','raise','return','try','while','with','yield','self'];
+const RUBY_KEYWORDS = ['BEGIN','END','alias','and','begin','break','case','class','def','defined?','do','else','elsif','end','ensure','false','for','if','in','module','next','nil','not','or','redo','rescue','retry','return','self','super','then','true','undef','unless','until','when','while','yield'];
+const OS_KEYWORDS = ['Class','ClassMethod','Method','Property','Parameter','Index','Storage','Extends','As','Public','Private','Set','Do','If','Else','ElseIf','For','While','Quit','Return','Write','Kill','New','Job','Halt','Try','Catch','Throw','Continue','Goto','Lock','Merge','Read','Tcommit','Trollback','Tstart','Xecute','Zwrite','Zkill','Type','Not','Or','And'];
+const SQL_KEYWORDS = ['SELECT','FROM','WHERE','JOIN','INNER','LEFT','RIGHT','OUTER','ON','GROUP','BY','ORDER','HAVING','INSERT','INTO','VALUES','UPDATE','SET','DELETE','CREATE','TABLE','ALTER','DROP','INDEX','VIEW','AS','AND','OR','NOT','NULL','IS','IN','LIKE','BETWEEN','DISTINCT','LIMIT','OFFSET','UNION','ALL','EXISTS','CASE','WHEN','THEN','ELSE','END','PRIMARY','KEY','FOREIGN','REFERENCES','DEFAULT','CONSTRAINT'];
+const SHELL_KEYWORDS = ['if','then','else','elif','fi','for','while','until','do','done','case','esac','function','return','break','continue','export','local','readonly','shift','exit','echo','printf','set','unset','source','eval','exec','trap','test'];
+
+const LANGS = {
+    json: { label: 'JSON', color: '#e8b94a', ext: 'json', dark: true },
+    xml: { label: 'XML', color: '#e37933', ext: 'xml' },
+    html: { label: 'HTML', color: '#e34c26', ext: 'html' },
+    css: { label: 'CSS', color: '#2965f1', ext: 'css' },
+    typescript: { label: 'TypeScript', color: '#3178c6', ext: 'ts' },
+    javascript: { label: 'JavaScript', color: '#f0db4f', ext: 'js', dark: true },
+    java: { label: 'Java', color: '#e76f00', ext: 'java' },
+    csharp: { label: 'C#', color: '#9b4f96', ext: 'cs' },
+    python: { label: 'Python', color: '#3776ab', ext: 'py' },
+    objectscript: { label: 'ObjectScript', color: '#b23fd6', ext: 'cls' },
+    cpp: { label: 'C++', color: '#f34b7d', ext: 'cpp' },
+    c: { label: 'C', color: '#8393c7', ext: 'c' },
+    go: { label: 'Go', color: '#00add8', ext: 'go' },
+    rust: { label: 'Rust', color: '#dea584', dark: true, ext: 'rs' },
+    php: { label: 'PHP', color: '#8892bf', ext: 'php' },
+    ruby: { label: 'Ruby', color: '#e0524b', ext: 'rb' },
+    kotlin: { label: 'Kotlin', color: '#a97bff', ext: 'kt' },
+    swift: { label: 'Swift', color: '#f05138', ext: 'swift' },
+    sql: { label: 'SQL', color: '#4fc3d9', ext: 'sql' },
+    shell: { label: 'Shell', color: '#89e051', dark: true, ext: 'sh' },
+    yaml: { label: 'YAML', color: '#e0777d', ext: 'yaml' },
+    plaintext: { label: 'Plain Text', color: '#8a8a8a', ext: 'txt' }
+};
+const LANG_ORDER = ['typescript','javascript','java','csharp','python','objectscript','cpp','c','go','rust','php','ruby','kotlin','swift','sql','shell','json','xml','html','css','yaml','plaintext'];
+
+function count(re, s) { const m = s.match(re); return m ? m.length : 0; }
+function scoreSignals(code, signals) {
+    let score = 0;
+    for (const [re, weight, cap] of signals) {
+        const c = count(re, code);
+        if (c > 0) score += Math.min(c, cap || 3) * weight;
+    }
+    return score;
+}
+const SIGNALS = {
+    html: [[/<!doctype html/i, 8, 1], [/<html[\s>]/i, 6, 1], [/<\/?(div|span|body|head|script|style|table|tr|td|input|button|form|meta|link)\b/gi, 1, 10]],
+    xml: [[/^\s*<\?xml/i, 8, 1], [/<\/[a-zA-Z_][\w:.-]*>/g, 1, 8], [/xmlns[:=]/g, 3, 3]],
+    css: [[/\{[^{}]*:[^{}]*;[^{}]*\}/g, 2, 8], [/@media\b/g, 3, 2], [/^[.#][\w-]+[^{]*\{/mg, 2, 6], [/!important/g, 3, 2]],
+    typescript: [[/\binterface\s+\w+/g, 4, 3], [/:\s*(string|number|boolean|any|void|unknown|never)\b/g, 3, 6], [/\bimplements\s+\w+/g, 3, 2], [/\benum\s+\w+/g, 4, 2], [/\b(public|private|protected)\s+(readonly\s+)?\w+/g, 3, 4], [/:\s*\w+\[\]/g, 2, 3], [/\bas\s+\w+/g, 2, 3], [/import\s+type\b/g, 4, 2], [/<\w+>/g, 1, 4], [/@\w+\(/g, 2, 3]],
+    javascript: [[/\bfunction\s*\w*\s*\(/g, 2, 5], [/=>/g, 2, 6], [/\b(const|let|var)\s+\w+\s*=/g, 1, 8], [/console\.log\(/g, 3, 3], [/require\(['"]/g, 3, 2], [/module\.exports/g, 3, 1], [/document\.\w+/g, 2, 3], [/===|!==/g, 1, 4]],
+    java: [[/\bpublic\s+(static\s+)?(final\s+)?class\s+\w+/g, 5, 2], [/public\s+static\s+void\s+main\s*\(/g, 6, 1], [/System\.out\.println\(/g, 5, 3], [/import\s+java\./g, 4, 4], [/@Override/g, 3, 2], [/\bprivate\s+\w+\s+\w+;/g, 2, 4]],
+    csharp: [[/using\s+System(\.\w+)*;/g, 5, 3], [/namespace\s+\w+/g, 4, 2], [/Console\.WriteLine\(/g, 5, 3], [/public\s+static\s+void\s+Main\s*\(/g, 5, 1], [/\{\s*get;\s*set;\s*\}/g, 4, 3], [/\basync\s+Task\b/g, 3, 2]],
+    python: [[/^\s*def\s+\w+\(.*\):\s*$/mg, 4, 6], [/^\s*import\s+\w+/mg, 2, 4], [/^\s*from\s+\w+\s+import\b/mg, 3, 3], [/^\s*elif\b/mg, 3, 3], [/\bself\b/g, 2, 6], [/if\s+__name__\s*==\s*['"]__main__['"]/g, 8, 1], [/print\(/g, 2, 4], [/^\s*@\w+/mg, 2, 3]],
+    objectscript: [[/\bClassMethod\s+\w+/g, 5, 3], [/^\s*Class\s+[\w.%]+\s+Extends/mg, 6, 1], [/\bProperty\s+\w+\s+As\s+%?\w+/g, 4, 3], [/##class\(/g, 4, 4], [/##super\(/g, 3, 2], [/\$\$\$\w+/g, 3, 3], [/^\s*Method\s+\w+\(.*\)\s+as\b/mgi, 4, 3], [/Storage\s+Default/g, 4, 1], [/&sql\(/g, 3, 2], [/^\s*\.\s+\S/mg, 1, 4], [/\bQuit\b/g, 1, 3], [/%[A-Za-z]\w*/g, 1, 4]],
+    cpp: [[/#include\s*<\w+>/g, 2, 3], [/std::/g, 3, 6], [/using\s+namespace\s+std/g, 5, 1], [/template\s*</g, 4, 2], [/cout\s*<</g, 4, 2], [/cin\s*>>/g, 4, 2], [/nullptr/g, 3, 2]],
+    c: [[/#include\s*<\w+\.h>/g, 3, 3], [/\bint\s+main\s*\(/g, 4, 1], [/printf\(/g, 3, 4], [/scanf\(/g, 3, 2], [/->\w+/g, 1, 4], [/\bmalloc\(/g, 3, 2]],
+    go: [[/^package\s+main/mg, 6, 1], [/func\s+main\s*\(/g, 5, 1], [/fmt\.\w+\(/g, 4, 4], [/:=/g, 2, 6], [/^import\s*\(/mg, 2, 1]],
+    rust: [[/fn\s+main\s*\(/g, 5, 1], [/let\s+mut\s+\w+/g, 4, 3], [/println!\(/g, 5, 3], [/\buse\s+std::/g, 3, 3], [/->\s*\w+/g, 1, 4], [/impl\s+\w+/g, 3, 2]],
+    php: [[/<\?php/g, 8, 1], [/\$\w+/g, 1, 10], [/->\w+\(/g, 1, 4], [/\becho\b/g, 2, 3]],
+    ruby: [[/^\s*def\s+\w+/mg, 3, 5], [/\bputs\b/g, 3, 3], [/require(_relative)?\s+['"]/g, 3, 2], [/attr_(accessor|reader|writer)/g, 4, 2], [/\bend\b/g, 1, 8], [/:\w+\s*=>/g, 2, 3], [/\bdo\s*\|/g, 2, 2]],
+    kotlin: [[/fun\s+main\s*\(/g, 5, 1], [/\bval\s+\w+/g, 2, 5], [/\bvar\s+\w+\s*[:=]/g, 1, 5], [/println\(/g, 2, 3], [/companion\s+object/g, 4, 1], [/\bwhen\s*\(/g, 2, 2]],
+    swift: [[/import\s+(Foundation|UIKit|SwiftUI)/g, 5, 1], [/\bfunc\s+\w+\(/g, 2, 5], [/\bvar\s+\w+\s*:/g, 1, 4], [/\blet\s+\w+\s*=/g, 1, 4], [/guard\s+let\b/g, 3, 2], [/@objc\b/g, 2, 2]],
+    sql: [[/\bSELECT\b/gi, 4, 2], [/\bFROM\b/gi, 3, 2], [/\bWHERE\b/gi, 2, 2], [/\bCREATE\s+TABLE\b/gi, 5, 1], [/\bINSERT\s+INTO\b/gi, 4, 1], [/\bJOIN\b/gi, 2, 3], [/\bGROUP\s+BY\b/gi, 3, 1]],
+    shell: [[/^#!\/bin\/(ba|z)?sh/mg, 8, 1], [/\becho\b/g, 2, 4], [/\bfi\b/g, 2, 3], [/\bdone\b/g, 2, 3], [/\$\{?\w+\}?/g, 1, 6], [/^\s*if\s*\[/mg, 3, 2]],
+    yaml: [[/^---/mg, 3, 1], [/^[\w.-]+:\s*.*$/mg, 1, 8], [/^\s*-\s+\w+/mg, 1, 5]]
+};
+
+const EXT_MAP = { ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', java: 'java', cs: 'csharp', py: 'python', cls: 'objectscript', mac: 'objectscript', int: 'objectscript', cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', c: 'c', h: 'c', go: 'go', rs: 'rust', php: 'php', rb: 'ruby', kt: 'kotlin', kts: 'kotlin', swift: 'swift', sql: 'sql', sh: 'shell', bash: 'shell', yml: 'yaml', yaml: 'yaml', css: 'css', html: 'html', htm: 'html', xml: 'xml', json: 'json' };
+
+function detectLanguage(code, filename) {
+    const trimmed = code.trim();
+    if (!trimmed) return { id: 'plaintext', label: 'Plain Text', score: 0, confidence: 'none', runnerUp: null };
+
+    let extHint = null;
+    if (filename) {
+        const m = /\.([a-zA-Z0-9]+)$/.exec(filename);
+        if (m && EXT_MAP[m[1].toLowerCase()]) extHint = EXT_MAP[m[1].toLowerCase()];
+    }
+
+    try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed !== null && typeof parsed === 'object') {
+            return { id: 'json', label: LANGS.json.label, score: 999, confidence: 'high', runnerUp: null };
+        }
+    } catch (e) { /* not JSON */ }
+
+    const raw = {};
+    for (const id of Object.keys(SIGNALS)) raw[id] = scoreSignals(code, SIGNALS[id]);
+
+    if (raw.typescript >= 4) { raw.typescript = raw.typescript + raw.javascript; raw.javascript = 0; }
+    else { raw.typescript = 0; }
+    if (raw.cpp >= 4) { raw.c = 0; }
+    if (raw.html >= 5) { raw.xml = 0; }
+
+    let bestId = 'plaintext', bestScore = 0, second = 0;
+    const entries = Object.keys(raw).map(id => [id, raw[id]]).sort((a, b) => b[1] - a[1]);
+    if (entries.length) { bestId = entries[0][0]; bestScore = entries[0][1]; second = entries[1] ? entries[1][1] : 0; }
+
+    if (extHint && (bestScore < 3 || extHint === bestId)) { bestId = extHint; bestScore = Math.max(bestScore, 5); }
+
+    if (bestScore <= 2) return { id: 'plaintext', label: LANGS.plaintext.label, score: bestScore, confidence: 'none', runnerUp: null };
+    let confidence = 'low';
+    if (bestScore >= 10 && (bestScore - second) >= 4) confidence = 'high';
+    else if (bestScore >= 5) confidence = 'medium';
+    const runnerUp = (second >= 3 && entries[1]) ? entries[1][0] : null;
+    return { id: bestId, label: LANGS[bestId].label, score: bestScore, confidence, runnerUp };
+}
+
+/* ---------- tokenizer ---------- */
+function buildRegex(rules, flags) {
+    const src = rules.map(r => `(?<${r.name}>${r.pattern})`).join('|');
+    return new RegExp(src, flags || 'gm');
+}
+function tokenize(code, rules, flags) {
+    if (!rules.length) return [{ text: code, cls: null }];
+    const re = buildRegex(rules, flags);
+    const clsOf = {};
+    rules.forEach(r => clsOf[r.name] = r.cls);
+    const tokens = [];
+    let last = 0, m;
+    re.lastIndex = 0;
+    while ((m = re.exec(code))) {
+        if (m.index > last) tokens.push({ text: code.slice(last, m.index), cls: null });
+        const name = Object.keys(m.groups).find(k => m.groups[k] !== undefined);
+        tokens.push({ text: m[0], cls: clsOf[name] });
+        last = m.index + m[0].length;
+        if (m[0].length === 0) re.lastIndex++;
+    }
+    if (last < code.length) tokens.push({ text: code.slice(last), cls: null });
+    return tokens;
+}
+function splitTokensIntoLines(tokens) {
+    const lines = [[]];
+    tokens.forEach(tok => {
+        const parts = tok.text.split('\n');
+        parts.forEach((part, i) => {
+            if (i > 0) lines.push([]);
+            if (part.length) lines[lines.length - 1].push({ text: part, cls: tok.cls });
+        });
+    });
+    return lines;
+}
+function cFamily(keywords, opts) {
+    opts = opts || {};
+    const rules = [];
+    rules.push({ name: 'comment', pattern: RX.blockComment, cls: 'tok-comment' });
+    rules.push({ name: 'linecomment', pattern: RX.lineSlash, cls: 'tok-comment' });
+    if (opts.preprocessor) rules.push({ name: 'preproc', pattern: '^[ \\t]*#[a-zA-Z]+[^\\n]*', cls: 'tok-macro' });
+    if (opts.decorator) rules.push({ name: 'decorator', pattern: '@[A-Za-z_][\\w.]*', cls: 'tok-type' });
+    if (opts.backtick) rules.push({ name: 'bt', pattern: RX.btstr, cls: 'tok-string' });
+    rules.push({ name: 'dq', pattern: RX.dqstr, cls: 'tok-string' });
+    rules.push({ name: 'sq', pattern: RX.sqstr, cls: 'tok-string' });
+    rules.push({ name: 'kw', pattern: kw(keywords), cls: 'tok-keyword' });
+    rules.push({ name: 'type', pattern: '\\b[A-Z][A-Za-z0-9_]*\\b', cls: 'tok-type' });
+    rules.push({ name: 'func', pattern: '\\b[a-zA-Z_$][\\w$]*(?=\\s*\\()', cls: 'tok-func' });
+    rules.push({ name: 'num', pattern: RX.num, cls: 'tok-number' });
+    return rules;
+}
+function pythonRules() {
+    return [
+        { name: 'triD', pattern: RX.tripleD, cls: 'tok-string' },
+        { name: 'triS', pattern: RX.tripleS, cls: 'tok-string' },
+        { name: 'comment', pattern: RX.lineHash, cls: 'tok-comment' },
+        { name: 'dq', pattern: RX.dqstr, cls: 'tok-string' },
+        { name: 'sq', pattern: RX.sqstr, cls: 'tok-string' },
+        { name: 'decorator', pattern: '@[A-Za-z_][\\w.]*', cls: 'tok-type' },
+        { name: 'kw', pattern: kw(PY_KEYWORDS), cls: 'tok-keyword' },
+        { name: 'func', pattern: '\\b[a-zA-Z_][\\w]*(?=\\s*\\()', cls: 'tok-func' },
+        { name: 'num', pattern: RX.num, cls: 'tok-number' }
+    ];
+}
+function rubyRules() {
+    return [
+        { name: 'blockcomment', pattern: '^=begin[\\s\\S]*?^=end[^\\n]*', cls: 'tok-comment' },
+        { name: 'comment', pattern: RX.lineHash, cls: 'tok-comment' },
+        { name: 'dq', pattern: RX.dqstr, cls: 'tok-string' },
+        { name: 'sq', pattern: RX.sqstr, cls: 'tok-string' },
+        { name: 'sym', pattern: ':[A-Za-z_]\\w*[?!]?', cls: 'tok-type' },
+        { name: 'kw', pattern: kw(RUBY_KEYWORDS), cls: 'tok-keyword' },
+        { name: 'func', pattern: '\\b[a-zA-Z_][\\w]*[?!]?(?=\\s*\\()', cls: 'tok-func' },
+        { name: 'num', pattern: RX.num, cls: 'tok-number' }
+    ];
+}
+function objectScriptRules() {
+    return [
+        { name: 'comment', pattern: RX.blockComment, cls: 'tok-comment' },
+        { name: 'linecomment', pattern: RX.lineSlash, cls: 'tok-comment' },
+        { name: 'macro', pattern: '\\$\\$\\$[A-Za-z_][\\w]*', cls: 'tok-macro' },
+        { name: 'sysvar', pattern: '\\$[A-Za-z][\\w]*', cls: 'tok-type' },
+        { name: 'sigil', pattern: '%[A-Za-z][\\w]*', cls: 'tok-type' },
+        { name: 'dq', pattern: RX.osStr, cls: 'tok-string' },
+        { name: 'kw', pattern: kw(OS_KEYWORDS), cls: 'tok-keyword' },
+        { name: 'func', pattern: '\\b[a-zA-Z%][\\w]*(?=\\s*\\()', cls: 'tok-func' },
+        { name: 'num', pattern: RX.num, cls: 'tok-number' }
+    ];
+}
+function sqlRules() {
+    return [
+        { name: 'comment', pattern: RX.blockComment, cls: 'tok-comment' },
+        { name: 'linecomment', pattern: RX.lineDoubleDash, cls: 'tok-comment' },
+        { name: 'sq', pattern: RX.sqstr, cls: 'tok-string' },
+        { name: 'kw', pattern: kw(SQL_KEYWORDS), cls: 'tok-keyword' },
+        { name: 'num', pattern: RX.num, cls: 'tok-number' }
+    ];
+}
+function shellRules() {
+    return [
+        { name: 'comment', pattern: RX.lineHash, cls: 'tok-comment' },
+        { name: 'dq', pattern: RX.dqstr, cls: 'tok-string' },
+        { name: 'sq', pattern: RX.sqstr, cls: 'tok-string' },
+        { name: 'varb', pattern: '\\$\\{[^}]*\\}', cls: 'tok-type' },
+        { name: 'var', pattern: '\\$[A-Za-z_][\\w]*', cls: 'tok-type' },
+        { name: 'kw', pattern: kw(SHELL_KEYWORDS), cls: 'tok-keyword' },
+        { name: 'num', pattern: RX.num, cls: 'tok-number' }
+    ];
+}
+function cssRules() {
+    return [
+        { name: 'comment', pattern: RX.blockComment, cls: 'tok-comment' },
+        { name: 'atrule', pattern: '@[a-zA-Z-]+', cls: 'tok-macro' },
+        { name: 'dq', pattern: RX.dqstr, cls: 'tok-string' },
+        { name: 'sq', pattern: RX.sqstr, cls: 'tok-string' },
+        { name: 'hex', pattern: '#[0-9a-fA-F]{3,8}\\b', cls: 'tok-number' },
+        { name: 'prop', pattern: '[a-zA-Z-]+(?=\\s*:)', cls: 'tok-key' },
+        { name: 'selector', pattern: '[.#][a-zA-Z_][\\w-]*', cls: 'tok-type' },
+        { name: 'num', pattern: RX.num, cls: 'tok-number' }
+    ];
+}
+function xmlRules() {
+    return [
+        { name: 'comment', pattern: '<!--[\\s\\S]*?-->', cls: 'tok-comment' },
+        { name: 'doctype', pattern: '<!DOCTYPE[^>]*>', cls: 'tok-macro' },
+        { name: 'tagopen', pattern: '</?[a-zA-Z_][\\w:.-]*', cls: 'tok-tag' },
+        { name: 'attr', pattern: '[a-zA-Z_:][\\w:.-]*(?==)', cls: 'tok-key' },
+        { name: 'dq', pattern: RX.dqstrML, cls: 'tok-string' },
+        { name: 'sq', pattern: RX.sqstr, cls: 'tok-string' },
+        { name: 'tagclose', pattern: '/?>', cls: 'tok-tag' }
+    ];
+}
+function jsonRules() {
+    return [
+        { name: 'key', pattern: '"(?:\\\\.|[^"\\\\])*"(?=\\s*:)', cls: 'tok-key' },
+        { name: 'str', pattern: RX.dqstrML, cls: 'tok-string' },
+        { name: 'kw', pattern: '\\b(?:true|false|null)\\b', cls: 'tok-keyword' },
+        { name: 'num', pattern: RX.num, cls: 'tok-number' }
+    ];
+}
+function yamlRules() {
+    return [
+        { name: 'comment', pattern: RX.lineHash, cls: 'tok-comment' },
+        { name: 'key', pattern: '^[ \\t]*[\\w.-]+(?=\\s*:)', cls: 'tok-key' },
+        { name: 'dq', pattern: RX.dqstr, cls: 'tok-string' },
+        { name: 'sq', pattern: RX.sqstr, cls: 'tok-string' },
+        { name: 'kw', pattern: '\\b(?:true|false|null|yes|no)\\b', cls: 'tok-keyword' },
+        { name: 'num', pattern: RX.num, cls: 'tok-number' }
+    ];
+}
+const GRAMMARS = {
+    typescript: () => cFamily(TS_KEYWORDS, { decorator: true, backtick: true }),
+    javascript: () => cFamily(JS_KEYWORDS, { decorator: true, backtick: true }),
+    java: () => cFamily(JAVA_KEYWORDS, { decorator: true }),
+    csharp: () => cFamily(CSHARP_KEYWORDS, { decorator: true }),
+    cpp: () => cFamily(CPP_KEYWORDS, { preprocessor: true }),
+    c: () => cFamily(C_KEYWORDS, { preprocessor: true }),
+    go: () => cFamily(GO_KEYWORDS, { backtick: true }),
+    rust: () => cFamily(RUST_KEYWORDS, { decorator: true }),
+    kotlin: () => cFamily(KOTLIN_KEYWORDS, { decorator: true }),
+    swift: () => cFamily(SWIFT_KEYWORDS, { decorator: true }),
+    php: () => cFamily(PHP_KEYWORDS, {}),
+    python: pythonRules,
+    ruby: rubyRules,
+    objectscript: objectScriptRules,
+    sql: sqlRules,
+    shell: shellRules,
+    css: cssRules,
+    xml: xmlRules,
+    html: xmlRules,
+    json: jsonRules,
+    yaml: yamlRules,
+    plaintext: () => []
+};
+const GRAMMAR_FLAGS = { sql: 'gim' };
+function highlightToLines(code, langId) {
+    const builder = GRAMMARS[langId] || GRAMMARS.plaintext;
+    const rules = builder();
+    const flags = GRAMMAR_FLAGS[langId] || 'gm';
+    const tokens = tokenize(code, rules, flags);
+    return splitTokensIntoLines(tokens);
+}
+function escapeHtml(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+
+/* ---------- Myers diff ---------- */
+function myersDiff(a, b) {
+    const n = a.length, m = b.length;
+    if (n === 0 && m === 0) return [];
+    const max = n + m;
+    const trace = [];
+    let v = { 1: 0 };
+    outer:
+    for (let d = 0; d <= max; d++) {
+        trace.push(Object.assign({}, v));
+        for (let k = -d; k <= d; k += 2) {
+            let x;
+            if (k === -d || (k !== d && v[k - 1] < v[k + 1])) x = v[k + 1];
+            else x = v[k - 1] + 1;
+            let y = x - k;
+            while (x < n && y < m && a[x] === b[y]) { x++; y++; }
+            v[k] = x;
+            if (x >= n && y >= m) break outer;
+        }
+    }
+    let x = n, y = m;
+    const ops = [];
+    for (let d = trace.length - 1; d >= 0; d--) {
+        const v2 = trace[d];
+        const k = x - y;
+        let prevK;
+        if (k === -d || (k !== d && v2[k - 1] < v2[k + 1])) prevK = k + 1;
+        else prevK = k - 1;
+        const prevX = v2[prevK];
+        const prevY = prevX - prevK;
+        while (x > prevX && y > prevY) { ops.push({ type: 'equal', aIdx: x - 1, bIdx: y - 1 }); x--; y--; }
+        if (d > 0) {
+            if (x === prevX) { ops.push({ type: 'add', bIdx: y - 1 }); y--; }
+            else { ops.push({ type: 'remove', aIdx: x - 1 }); x--; }
+        }
+    }
+    return ops.reverse();
+}
+function groupDiff(ops) {
+    const groups = [];
+    let i = 0;
+    while (i < ops.length) {
+        if (ops[i].type === 'equal') { groups.push(ops[i]); i++; continue; }
+        const removes = [], adds = [];
+        while (i < ops.length && ops[i].type === 'remove') { removes.push(ops[i]); i++; }
+        while (i < ops.length && ops[i].type === 'add') { adds.push(ops[i]); i++; }
+        const pairCount = Math.min(removes.length, adds.length);
+        for (let k = 0; k < pairCount; k++) groups.push({ type: 'changed', removeOp: removes[k], addOp: adds[k] });
+        for (let k = pairCount; k < removes.length; k++) groups.push(removes[k]);
+        for (let k = pairCount; k < adds.length; k++) groups.push(adds[k]);
+    }
+    return groups;
+}
+function charDiff(sA, sB) {
+    if (sA.length + sB.length > 500) return null; // too long, skip inline char diff
+    const a = Array.from(sA), b = Array.from(sB);
+    if (a.length * b.length > 20000) return null;
+    const ops = myersDiff(a, b);
+    return groupDiff(ops).map(g => {
+        if (g.type === 'equal') return { type: 'equal', text: a[g.aIdx] };
+        if (g.type === 'changed') return [{ type: 'remove', text: a[g.removeOp.aIdx] }, { type: 'add', text: b[g.addOp.bIdx] }];
+        if (g.type === 'remove') return { type: 'remove', text: a[g.aIdx] };
+        return { type: 'add', text: b[g.bIdx] };
+    }).flat();
+}
+function escapeAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function debounce(fn, wait) { let t; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); }; }
+
+function renderCodeBlockHTML(code, langId, wrap) {
+    const lines = highlightToLines(code, langId);
+    let html = '<div class="code-block' + (wrap ? ' wrap-on' : '') + '">';
+    lines.forEach((lineTokens, i) => {
+        html += '<div class="code-line"><span class="ln">' + (i + 1) + '</span><span class="code-text">';
+        if (lineTokens.length === 0) html += '&nbsp;';
+        else lineTokens.forEach(t => {
+            const esc = escapeHtml(t.text);
+            html += t.cls ? '<span class="' + t.cls + '">' + esc + '</span>' : esc;
+        });
+        html += '</span></div>';
+    });
+    html += '</div>';
+    return html;
+}
+function langSelectOptionsHtml(selectedValue) {
+    let html = '<option value="auto"' + (selectedValue === 'auto' ? ' selected' : '') + '>Auto-detect</option>';
+    LANG_ORDER.forEach(id => {
+        html += `<option value="${id}"${selectedValue === id ? ' selected' : ''}>${LANGS[id].label}</option>`;
+    });
+    return html;
+}
+
+/* =========================================================================
+   VIEWER TAB: state & rendering
+   ========================================================================= */
+const STORAGE_KEY = 'code_viewer_entries_v1';
+const LAYOUT_KEY = 'code_viewer_layout_mode';
+let postedEntries = [];
+let entryIdCounter = 0;
+let isGridView = false;
+let focusedEntryPlaceholder = null;
+let entrySearchState = {};
+
+function findEntry(id) { return postedEntries.find(e => e.id === id); }
+function effectiveLangId(item) { return item.override || item.detected.id; }
+
+function createEntry(code, opts) {
+    opts = opts || {};
+    if (!code || !code.trim()) return null;
+    const detected = detectLanguage(code, opts.filename || null);
+    const item = {
+        id: opts.id || ('entry_' + (entryIdCounter++) + '_' + Date.now()),
+        name: opts.name || '',
+        rawCode: code,
+        override: opts.override || null,
+        detected: detected,
+        timeStr: opts.timeStr || new Date().toLocaleTimeString(),
+        collapsed: false,
+        wrap: false
+    };
+    postedEntries.push(item);
+    return item;
+}
+function addEntryAndRender(code, opts) {
+    const item = createEntry(code, opts);
+    if (!item) return null;
+    renderEntryCard(item, true);
+    if (!(opts && opts.noPersist)) saveEntriesToStorage();
+    renderCompareChips();
+    return item;
+}
+
+function saveEntriesToStorage() {
+    try {
+        const serializable = postedEntries.map(e => ({ id: e.id, name: e.name, override: e.override, rawCode: e.rawCode, timeStr: e.timeStr }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+    } catch (err) { console.error('Failed to save entries:', err); }
+}
+function loadEntriesFromStorage() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) return;
+        const items = JSON.parse(saved);
+        if (Array.isArray(items)) {
+            items.forEach(it => {
+                addEntryAndRender(it.rawCode, { name: it.name, id: it.id, timeStr: it.timeStr, override: it.override, noPersist: true });
+            });
+        }
+    } catch (err) { console.error('Failed to load entries:', err); }
+}
+
+function langBadgeTooltip(item) {
+    if (item.override) return 'Manually set to ' + LANGS[item.override].label + ' — click to change';
+    let t = 'Auto-detected as ' + item.detected.label + ' (' + item.detected.confidence + ' confidence). Click to override.';
+    if (item.detected.runnerUp) t += ' Could also be ' + LANGS[item.detected.runnerUp].label + '.';
+    return t;
+}
+
+function buildEntryHtml(item) {
+    const effId = effectiveLangId(item);
+    const lang = LANGS[effId];
+    const lines = item.rawCode.split('\n').length;
+    const chars = item.rawCode.length;
+    const badgeTextColor = lang.dark ? '#0b0b0b' : '#ffffff';
+    const confClass = item.override ? 'conf-high' : ('conf-' + item.detected.confidence);
+    const manualCls = item.override ? ' is-manual' : '';
+    return `
+    <div class="entry" data-entry-id="${item.id}">
+      <div class="entry-header" draggable="true" ondragstart="onEntryDragStart(event,'${item.id}')">
+        <span class="master-toggle" onclick="toggleEntryCollapse(this)">▼</span>
+        <input type="text" class="name-input" value="${escapeAttr(item.name)}" placeholder="Name..." oninput="updateEntryName(this)">
+        <div class="lang-picker" title="${escapeAttr(langBadgeTooltip(item))}">
+          <span class="lang-badge${manualCls}" style="background:${lang.color};color:${badgeTextColor}"><span class="confidence-dot ${confClass}"></span>${lang.label}</span>
+          <select class="lang-select-hidden" onchange="onEntryLangChange('${item.id}', this.value)">${langSelectOptionsHtml(item.override || 'auto')}</select>
+        </div>
+        <span class="dims-tag">${lines} line${lines === 1 ? '' : 's'} · ${chars} chars</span>
+        <span class="time-tag">${item.timeStr}</span>
+        <div class="actions">
+          <div class="btn-icon" title="Send to Compare panel..." onclick="showLoadTargetMenu(event,'${item.id}')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3l6 5-6 5V3zm7 0l6 5-6 5V3z"/></svg></div>
+          <div class="btn-icon" title="Copy raw code" onclick="copyEntryRaw('${item.id}', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
+          <div class="btn-icon" title="Copy as Markdown code fence" onclick="copyEntryFence('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 2 8 5 12"/><polyline points="11 4 14 8 11 12"/></svg></div>
+          <div class="btn-icon" title="Download as file" onclick="downloadEntry('${item.id}')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.25 1.5h1.5v6h2l-2.75 3-2.75-3h2v-6z"/><path d="M2 12h12v2.5H2V12z"/></svg></div>
+          <label class="switch-container" style="margin:0 2px;" title="Wrap long lines">
+            <div class="switch"><input type="checkbox" ${item.wrap ? 'checked' : ''} onchange="toggleEntryWrap('${item.id}', this.checked)"><span class="slider"></span></div>
+          </label>
+          <div class="btn-icon" title="Focus (maximize)" onclick="focusEntry(this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg></div>
+        </div>
+        <div class="btn-delete" title="Delete snippet" onclick="removeEntry(this)">×</div>
+      </div>
+      <div class="entry-toolbar-2">
+        <div class="search-container">
+          <input type="text" class="search-inline" placeholder="Find in code..." oninput="entrySearch('${item.id}', this)" onkeydown="entrySearchNav(event,'${item.id}')">
+          <span class="search-counter" id="search-counter-${item.id}">0/0</span>
+        </div>
+      </div>
+      <div class="content" id="content-${item.id}"></div>
+    </div>`;
+}
+
+function renderEntryContent(item) {
+    const el = document.getElementById('content-' + item.id);
+    if (!el) return;
+    const effId = effectiveLangId(item);
+    const langForHighlight = item.rawCode.length > 200000 ? 'plaintext' : effId;
+    el.innerHTML = renderCodeBlockHTML(item.rawCode, langForHighlight, item.wrap);
+}
+function renderEntryCard(item, prepend) {
+    const container = document.getElementById('container');
+    const empty = container.querySelector('.empty-state');
+    if (empty) empty.remove();
+    const html = buildEntryHtml(item);
+    if (prepend) container.insertAdjacentHTML('afterbegin', html);
+    else container.insertAdjacentHTML('beforeend', html);
+    renderEntryContent(item);
+}
+function rerenderEntryInPlace(item) {
+    const el = document.querySelector(`.entry[data-entry-id="${item.id}"]`);
+    if (!el) return;
+    const collapsedNow = el.classList.contains('collapsed-entry');
+    el.outerHTML = buildEntryHtml(item);
+    const newEl = document.querySelector(`.entry[data-entry-id="${item.id}"]`);
+    if (collapsedNow && newEl) newEl.classList.add('collapsed-entry');
+    renderEntryContent(item);
+}
+
+function switchTab(paneId, element) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
+    document.getElementById(paneId).classList.add('active');
+    element.classList.add('active');
+    if (paneId === 'compare-pane') renderCompareChips();
+}
+function toggleLayout() {
+    isGridView = !isGridView;
+    applyLayout();
+    try { localStorage.setItem(LAYOUT_KEY, isGridView ? 'grid' : 'stack'); } catch (e) {}
+}
+function applyLayout() {
+    const container = document.getElementById('container');
+    const btn = document.getElementById('viewModeBtn');
+    if (isGridView) { container.classList.add('grid-view'); btn.textContent = 'View: Grid'; }
+    else { container.classList.remove('grid-view'); btn.textContent = 'View: Stack'; }
+}
+function loadLayout() {
+    try { if (localStorage.getItem(LAYOUT_KEY) === 'grid') isGridView = true; } catch (e) {}
+    applyLayout();
+}
+function setAllCollapse(collapsed) {
+    document.querySelectorAll('.entry').forEach(entry => collapsed ? entry.classList.add('collapsed-entry') : entry.classList.remove('collapsed-entry'));
+}
+function toggleEntryCollapse(el) {
+    const entry = el.closest('.entry');
+    entry.classList.toggle('collapsed-entry');
+}
+function removeEntry(el) {
+    const entry = el.closest('.entry');
+    const id = entry.dataset.entryId;
+    postedEntries = postedEntries.filter(e => e.id !== id);
+    entry.remove();
+    if (postedEntries.length === 0) {
+        document.getElementById('container').innerHTML = '<div class="empty-state">No snippets yet — paste or upload some code above.</div>';
+    }
+    saveEntriesToStorage();
+    renderCompareChips();
+}
+function clearAllEntries() {
+    postedEntries = [];
+    document.getElementById('container').innerHTML = '<div class="empty-state">No snippets yet — paste or upload some code above.</div>';
+    saveEntriesToStorage();
+    renderCompareChips();
+}
+function updateEntryName(input) {
+    const entry = input.closest('.entry');
+    const id = entry.dataset.entryId;
+    const item = findEntry(id);
+    if (item) { item.name = input.value; saveEntriesToStorage(); renderCompareChips(); }
+}
+function toggleEntryWrap(id, checked) {
+    const item = findEntry(id);
+    if (!item) return;
+    item.wrap = checked;
+    renderEntryContent(item);
+}
+function onEntryLangChange(id, value) {
+    const item = findEntry(id);
+    if (!item) return;
+    item.override = (value === 'auto') ? null : value;
+    rerenderEntryInPlace(item);
+    saveEntriesToStorage();
+    renderCompareChips();
+}
+
+function flashIcon(el) {
+    if (!el) return;
+    const orig = el.innerHTML;
+    el.innerHTML = '<span style="color:#89d185;font-size:11px;font-weight:bold;">&#10003;</span>';
+    setTimeout(() => { el.innerHTML = orig; }, 700);
+}
+function copyEntryRaw(id, btn) {
+    const item = findEntry(id); if (!item) return;
+    navigator.clipboard.writeText(item.rawCode).then(() => flashIcon(btn)).catch(() => {});
+}
+function copyEntryFence(id, btn) {
+    const item = findEntry(id); if (!item) return;
+    const lang = effectiveLangId(item);
+    const fenceLang = lang === 'plaintext' ? '' : lang;
+    navigator.clipboard.writeText('```' + fenceLang + '\n' + item.rawCode + '\n```').then(() => flashIcon(btn)).catch(() => {});
+}
+function triggerDownload(content, filename) {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    a.style.position = 'fixed';
+    a.style.left = '-9999px';
+    document.body.appendChild(a);
+    a.click();
+    // Appending to the DOM and delaying the revoke avoids a common bug where some
+    // browsers silently drop the download if the <a> is detached or the object URL
+    // is revoked before the click has actually been processed.
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 1000);
+}
+function downloadEntry(id) {
+    const item = findEntry(id); if (!item) return;
+    const lang = effectiveLangId(item);
+    const ext = LANGS[lang].ext;
+    const name = (item.name && item.name.trim()) ? item.name.trim().replace(/[\\/:*?"<>|]/g, '_') : ('snippet_' + item.id);
+    triggerDownload(item.rawCode, name + '.' + ext);
+}
+
+function handleFileUpload(files) {
+    Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            addEntryAndRender(e.target.result, { name: file.name.replace(/\.[^.]+$/, ''), filename: file.name });
+        };
+        reader.readAsText(file);
+    });
+    const input = document.getElementById('fileInput');
+    if (input) input.value = '';
+}
+function addFromPasteBox() {
+    const ta = document.getElementById('pasteInput');
+    const code = ta.value;
+    if (!code.trim()) return;
+    addEntryAndRender(code, {});
+    ta.value = '';
+    ta.focus();
+}
+
+/* ---------- send-to-compare context menu & drag ---------- */
+function showLoadTargetMenu(e, entryId) {
+    e.stopPropagation();
+    let menu = document.getElementById('load-target-menu');
+    if (!menu) {
+        menu = document.createElement('div');
+        menu.id = 'load-target-menu';
+        Object.assign(menu.style, { position: 'fixed', zIndex: 10000, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', boxShadow: '0 4px 16px var(--shadow)', padding: '4px', minWidth: '170px', fontSize: '12px', fontFamily: 'var(--font-ui)', display: 'none' });
+        document.body.appendChild(menu);
+    }
+    menu.innerHTML = `
+        <div class="ctx-item" data-target="compareLeft" style="padding:6px 10px;border-radius:4px;cursor:pointer;color:var(--text);">Load into Panel A</div>
+        <div class="ctx-item" data-target="compareRight" style="padding:6px 10px;border-radius:4px;cursor:pointer;color:var(--text);">Load into Panel B</div>
+    `;
+    menu.querySelectorAll('.ctx-item').forEach(item => {
+        item.onmouseenter = () => item.style.background = 'var(--hover-bg)';
+        item.onmouseleave = () => item.style.background = 'transparent';
+        item.onclick = () => { loadEntryIntoPanel(entryId, item.dataset.target); menu.style.display = 'none'; };
+    });
+    menu.style.display = 'block';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+    setTimeout(() => {
+        const hide = () => { menu.style.display = 'none'; document.removeEventListener('click', hide); };
+        document.addEventListener('click', hide);
+    }, 0);
+}
+function onEntryDragStart(e, entryId) {
+    e.dataTransfer.setData('text/plain', entryId);
+    e.dataTransfer.effectAllowed = 'copy';
+}
+
+/* ---------- find-in-code ---------- */
+function entrySearch(id, input) {
+    const query = input.value;
+    const container = document.getElementById('content-' + id);
+    if (!container) return;
+    container.querySelectorAll('span.match').forEach(m => {
+        const parent = m.parentNode;
+        if (!parent) return;
+        parent.replaceChild(document.createTextNode(m.textContent), m);
+        parent.normalize();
+    });
+    entrySearchState[id] = { matches: [], index: -1 };
+    const counter = document.getElementById('search-counter-' + id);
+    if (!query) { if (counter) counter.textContent = '0/0'; return; }
+    const lowerQuery = query.toLowerCase();
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+    let n, nodes = [];
+    while (n = walker.nextNode()) nodes.push(n);
+    nodes.forEach(node => {
+        let val = node.nodeValue;
+        let lowerVal = val.toLowerCase();
+        let index, startPos = 0;
+        while ((index = lowerVal.indexOf(lowerQuery, startPos)) !== -1) {
+            const span = document.createElement('span');
+            span.className = 'match';
+            span.textContent = val.substring(index, index + query.length);
+            const remaining = node.splitText(index);
+            remaining.nodeValue = remaining.nodeValue.substring(query.length);
+            node.parentNode.insertBefore(span, remaining);
+            entrySearchState[id].matches.push(span);
+            node = remaining;
+            val = node.nodeValue;
+            lowerVal = val.toLowerCase();
+            startPos = 0;
+        }
+    });
+    if (entrySearchState[id].matches.length > 0) { entrySearchState[id].index = 0; updateEntryMatchHighlight(id); }
+    else if (counter) counter.textContent = '0/0';
+}
+function entrySearchNav(e, id) {
+    if (e.key !== 'Enter') return;
+    const state = entrySearchState[id];
+    if (state && state.matches.length > 0) { state.index = (state.index + 1) % state.matches.length; updateEntryMatchHighlight(id); }
+}
+function updateEntryMatchHighlight(id) {
+    const state = entrySearchState[id];
+    const counter = document.getElementById('search-counter-' + id);
+    state.matches.forEach(m => m.classList.remove('current'));
+    const current = state.matches[state.index];
+    if (!current) return;
+    current.classList.add('current');
+    current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (counter) counter.textContent = (state.index + 1) + '/' + state.matches.length;
+}
+
+/* ---------- focus / maximize ---------- */
+function focusEntry(btn) {
+    const entry = btn.closest('.entry');
+    const overlay = document.getElementById('focus-overlay');
+    focusedEntryPlaceholder = document.createComment('focus-placeholder');
+    entry.parentNode.insertBefore(focusedEntryPlaceholder, entry);
+    entry.classList.add('focused-entry');
+    overlay.appendChild(entry);
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+function closeFocusEntry() {
+    const overlay = document.getElementById('focus-overlay');
+    const entry = overlay.querySelector('.entry.focused-entry');
+    if (entry && focusedEntryPlaceholder) {
+        entry.classList.remove('focused-entry');
+        focusedEntryPlaceholder.parentNode.insertBefore(entry, focusedEntryPlaceholder);
+        focusedEntryPlaceholder.remove();
+        focusedEntryPlaceholder = null;
+    }
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('focus-overlay').classList.contains('active')) closeFocusEntry();
+});
+
+/* =========================================================================
+   COMPARE TAB
+   ========================================================================= */
+function emptyPanelState() { return { override: null, detected: detectLanguage(''), sourceEntryId: null }; }
+const comparePanels = { compareLeft: emptyPanelState(), compareRight: emptyPanelState() };
+
+function renderCompareChips() {
+    const box = document.getElementById('compareChips');
+    if (!box) return;
+    if (postedEntries.length === 0) {
+        box.innerHTML = '<span class="chips-empty">No snippets posted yet — add some in the Viewer tab, then come back here to load them into Panel A / B.</span>';
+        return;
+    }
+    box.innerHTML = '';
+    postedEntries.slice().reverse().forEach(item => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.draggable = true;
+        chip.title = 'Click to choose a panel, or drag onto Panel A / Panel B';
+        const dot = document.createElement('span');
+        dot.className = 'chip-dot';
+        const effId = effectiveLangId(item);
+        dot.style.background = LANGS[effId].color;
+        const label = document.createElement('span');
+        label.className = 'chip-name';
+        label.textContent = (item.name && item.name.trim()) ? item.name.trim() : (LANGS[effId].label + ' @ ' + item.timeStr);
+        chip.appendChild(dot); chip.appendChild(label);
+        chip.onclick = (e) => showLoadTargetMenu(e, item.id);
+        chip.ondragstart = (e) => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.effectAllowed = 'copy'; };
+        box.appendChild(chip);
+    });
+}
+function populateCompareSelect(panelId) {
+    const sel = document.getElementById(panelId + 'Select');
+    sel.innerHTML = langSelectOptionsHtml('auto');
+}
+function refreshCompareBadge(panelId) {
+    const p = comparePanels[panelId];
+    const code = document.getElementById(panelId).value;
+    if (!p.override) p.detected = detectLanguage(code);
+    const effId = p.override || p.detected.id;
+    const lang = LANGS[effId];
+    const badge = document.getElementById(panelId + 'Badge');
+    badge.textContent = lang.label;
+    badge.style.background = lang.color;
+    badge.style.color = lang.dark ? '#0b0b0b' : '#ffffff';
+    badge.classList.toggle('is-manual', !!p.override);
+    badge.title = p.override
+        ? ('Manually set to ' + lang.label + ' — click to change')
+        : ('Auto-detected as ' + lang.label + ' (' + p.detected.confidence + ' confidence). Click to override.' + (p.detected.runnerUp ? ' Could also be ' + LANGS[p.detected.runnerUp].label + '.' : ''));
+    const sel = document.getElementById(panelId + 'Select');
+    sel.value = p.override || 'auto';
+}
+function onCompareLangChange(panelId, value) {
+    const p = comparePanels[panelId];
+    p.override = (value === 'auto') ? null : value;
+    refreshCompareBadge(panelId);
+}
+function loadEntryIntoPanel(entryId, panelId) {
+    const item = findEntry(entryId);
+    if (!item) return;
+    const p = comparePanels[panelId];
+    p.override = item.override;
+    p.sourceEntryId = item.id;
+    document.getElementById(panelId).value = item.rawCode;
+    document.getElementById(panelId + 'Name').value = item.name || '';
+    refreshCompareBadge(panelId);
+    const ta = document.getElementById(panelId);
+    ta.classList.add('flash-active');
+    setTimeout(() => ta.classList.remove('flash-active'), 900);
+}
+function allowCompareDrop(e) { e.preventDefault(); }
+function handleCompareDrop(e, panelId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drop-target');
+    const entryId = e.dataTransfer.getData('text/plain');
+    if (entryId) loadEntryIntoPanel(entryId, panelId);
+}
+function copyPanelRaw(panelId, btn) {
+    const code = document.getElementById(panelId).value;
+    navigator.clipboard.writeText(code).then(() => flashIcon(btn)).catch(() => {});
+}
+function copyPanelFence(panelId, btn) {
+    const p = comparePanels[panelId];
+    const effId = p.override || p.detected.id;
+    const fenceLang = effId === 'plaintext' ? '' : effId;
+    const code = document.getElementById(panelId).value;
+    navigator.clipboard.writeText('```' + fenceLang + '\n' + code + '\n```').then(() => flashIcon(btn)).catch(() => {});
+}
+function downloadPanel(panelId) {
+    const p = comparePanels[panelId];
+    const effId = p.override || p.detected.id;
+    const ext = LANGS[effId].ext;
+    const nameInput = document.getElementById(panelId + 'Name');
+    const name = (nameInput.value && nameInput.value.trim()) ? nameInput.value.trim().replace(/[\\/:*?"<>|]/g, '_') : panelId;
+    const code = document.getElementById(panelId).value;
+    triggerDownload(code, name + '.' + ext);
+}
+function savePanelToViewer(panelId, btn) {
+    const code = document.getElementById(panelId).value;
+    if (!code.trim()) { alert('Panel is empty — nothing to save.'); return; }
+    const nameInput = document.getElementById(panelId + 'Name');
+    const p = comparePanels[panelId];
+    addEntryAndRender(code, { name: nameInput.value, override: p.override });
+    flashIcon(btn);
+}
+function clearComparePanel(panelId) {
+    document.getElementById(panelId).value = '';
+    document.getElementById(panelId + 'Name').value = '';
+    comparePanels[panelId] = emptyPanelState();
+    refreshCompareBadge(panelId);
+}
+function swapComparePanels() {
+    const lVal = document.getElementById('compareLeft').value;
+    const rVal = document.getElementById('compareRight').value;
+    const lName = document.getElementById('compareLeftName').value;
+    const rName = document.getElementById('compareRightName').value;
+    const lP = comparePanels.compareLeft, rP = comparePanels.compareRight;
+    document.getElementById('compareLeft').value = rVal;
+    document.getElementById('compareRight').value = lVal;
+    document.getElementById('compareLeftName').value = rName;
+    document.getElementById('compareRightName').value = lName;
+    comparePanels.compareLeft = rP; comparePanels.compareRight = lP;
+    refreshCompareBadge('compareLeft'); refreshCompareBadge('compareRight');
+}
+function resetCompareSection() {
+    clearComparePanel('compareLeft');
+    clearComparePanel('compareRight');
+    clearCompareResults();
+}
+function wireSyncScroll() {
+    const l = document.getElementById('compareLeft'), r = document.getElementById('compareRight');
+    let syncing = false;
+    function sync(source, target) {
+        if (!document.getElementById('compareSyncScrollToggle').checked || syncing) return;
+        syncing = true;
+        const ratio = source.scrollTop / Math.max(1, (source.scrollHeight - source.clientHeight));
+        target.scrollTop = ratio * (target.scrollHeight - target.clientHeight);
+        setTimeout(() => { syncing = false; }, 20);
+    }
+    l.addEventListener('scroll', () => sync(l, r));
+    r.addEventListener('scroll', () => sync(r, l));
+}
+
+/* ---------- diff computation ---------- */
+function transformLine(line, opts) {
+    let s = line;
+    if (opts.ignoreWhitespace) s = s.trim().replace(/\s+/g, ' ');
+    if (opts.ignoreCase) s = s.toLowerCase();
+    return s;
+}
+function computeCompareDiff(codeA, codeB, opts) {
+    const linesA = codeA.split('\n');
+    const linesB = codeB.split('\n');
+    const filteredA = linesA.map((t, i) => ({ orig: i, text: t })).filter(o => !(opts.ignoreBlank && transformLine(o.text, opts) === ''));
+    const filteredB = linesB.map((t, i) => ({ orig: i, text: t })).filter(o => !(opts.ignoreBlank && transformLine(o.text, opts) === ''));
+    const ta = filteredA.map(o => transformLine(o.text, opts));
+    const tb = filteredB.map(o => transformLine(o.text, opts));
+    if (ta.length * tb.length > 4000000) return { tooLarge: true };
+    const ops = myersDiff(ta, tb);
+    const groups = groupDiff(ops);
+    return { tooLarge: false, groups, filteredA, filteredB };
+}
+
+let isCompareSideMode = false;
+let lastDiffResult = null;
+function toggleCompareDiffMode() {
+    isCompareSideMode = !isCompareSideMode;
+    document.getElementById('compareToggleDiffView').textContent = isCompareSideMode ? 'View: Side-by-Side' : 'View: List';
+    if (lastDiffResult) renderCompareResults(lastDiffResult);
+}
+function runCompare() {
+    const results = document.getElementById('compareResults');
+    const codeA = document.getElementById('compareLeft').value;
+    const codeB = document.getElementById('compareRight').value;
+    if (!codeA.trim() && !codeB.trim()) { results.innerHTML = 'Load code into each panel, then click "Compare".'; lastDiffResult = null; return; }
+    const opts = {
+        ignoreWhitespace: document.getElementById('ignoreWhitespaceToggle').checked,
+        ignoreCase: document.getElementById('ignoreCaseToggle').checked,
+        ignoreBlank: document.getElementById('ignoreBlankToggle').checked
+    };
+    const diff = computeCompareDiff(codeA, codeB, opts);
+    lastDiffResult = diff;
+    renderCompareResults(diff);
+}
+function clearCompareResults() {
+    lastDiffResult = null;
+    isCompareSideMode = false;
+    document.getElementById('compareToggleDiffView').textContent = 'View: List';
+    document.getElementById('compareResults').innerHTML = 'Load code into each panel, then click "Compare".';
+}
+function renderCompareResults(diff) {
+    const results = document.getElementById('compareResults');
+    results.innerHTML = '';
+    if (diff.tooLarge) {
+        results.innerHTML = '<div style="color:var(--diff-remove)">These snippets are too large for a detailed diff — try smaller code.</div>';
+        return;
+    }
+    const { groups, filteredA, filteredB } = diff;
+    let added = 0, removed = 0, changed = 0, unchanged = 0;
+    groups.forEach(g => { if (g.type === 'equal') unchanged++; else if (g.type === 'add') added++; else if (g.type === 'remove') removed++; else if (g.type === 'changed') changed++; });
+    const totalA = filteredA.length, totalB = filteredB.length;
+    const hasDiff = (added + removed + changed) > 0;
+    let similarity = (totalA + totalB) > 0 ? Math.round((unchanged * 2 / (totalA + totalB)) * 100) : 100;
+    if (hasDiff && similarity >= 100) similarity = 99; // never claim "100% similar" when a real difference exists
+    const statsDiv = document.createElement('div');
+    statsDiv.className = 'diff-stats';
+    statsDiv.innerHTML = `<span><b>${similarity}%</b> similar</span><span style="color:var(--diff-add)"><b>+${added}</b> added</span><span style="color:var(--diff-remove)"><b>-${removed}</b> removed</span><span style="color:var(--diff-change)"><b>${changed}</b> changed</span><span><b>${unchanged}</b> unchanged</span>`;
+    results.appendChild(statsDiv);
+
+    if (added === 0 && removed === 0 && changed === 0) {
+        const ok = document.createElement('div');
+        ok.style.color = '#89d185';
+        ok.textContent = 'Panel A and Panel B are identical' + (totalA === 0 ? ' (both empty).' : '.');
+        results.appendChild(ok);
+        return;
+    }
+    if (isCompareSideMode) renderSideBySide(results, groups, filteredA, filteredB);
+    else renderListView(results, groups, filteredA, filteredB);
+}
+function renderCharDiffSpan(aText, bText, side) {
+    const span = document.createElement('span');
+    const cd = charDiff(aText, bText);
+    if (!cd) { span.textContent = side === 'remove' ? aText : bText; return span; }
+    cd.forEach(part => {
+        if (part.type === 'equal') span.appendChild(document.createTextNode(part.text));
+        else if (part.type === 'remove' && side === 'remove') { const s = document.createElement('span'); s.className = 'diff-char-remove'; s.textContent = part.text; span.appendChild(s); }
+        else if (part.type === 'add' && side === 'add') { const s = document.createElement('span'); s.className = 'diff-char-add'; s.textContent = part.text; span.appendChild(s); }
+    });
+    return span;
+}
+function renderListView(container, groups, filteredA, filteredB) {
+    const nonEqual = groups.filter(g => g.type !== 'equal');
+    nonEqual.forEach(g => {
+        const row = document.createElement('div');
+        row.className = 'diff-line diff-' + g.type;
+        const box = document.createElement('div');
+        box.className = 'diff-content-box';
+        const icon = document.createElement('span'); icon.className = 'diff-icon';
+        const lnum = document.createElement('span'); lnum.className = 'diff-linenum';
+        const text = document.createElement('span'); text.className = 'diff-text';
+        if (g.type === 'remove') {
+            icon.textContent = '-'; lnum.textContent = 'A:' + (filteredA[g.aIdx].orig + 1);
+            text.textContent = filteredA[g.aIdx].text;
+            row.onclick = () => scrollTextareaToLine('compareLeft', filteredA[g.aIdx].orig);
+        } else if (g.type === 'add') {
+            icon.textContent = '+'; lnum.textContent = 'B:' + (filteredB[g.bIdx].orig + 1);
+            text.textContent = filteredB[g.bIdx].text;
+            row.onclick = () => scrollTextareaToLine('compareRight', filteredB[g.bIdx].orig);
+        } else if (g.type === 'changed') {
+            icon.textContent = 'Δ';
+            const aLine = filteredA[g.removeOp.aIdx], bLine = filteredB[g.addOp.bIdx];
+            lnum.textContent = 'A:' + (aLine.orig + 1) + ' / B:' + (bLine.orig + 1);
+            text.appendChild(renderCharDiffSpan(aLine.text, bLine.text, 'remove'));
+            text.appendChild(document.createElement('br'));
+            text.appendChild(renderCharDiffSpan(aLine.text, bLine.text, 'add'));
+            row.onclick = () => { scrollTextareaToLine('compareLeft', aLine.orig); scrollTextareaToLine('compareRight', bLine.orig); };
+        }
+        box.appendChild(icon); box.appendChild(lnum); box.appendChild(text);
+        row.appendChild(box);
+        container.appendChild(row);
+    });
+}
+function makeSideCell(cls, lineNum, contentNode) {
+    const cell = document.createElement('div');
+    cell.className = 'side-cell ' + cls;
+    const ln = document.createElement('span'); ln.className = 'ln'; ln.textContent = lineNum != null ? (lineNum + 1) : '';
+    const txt = document.createElement('span'); txt.className = 'txt';
+    if (contentNode) txt.appendChild(contentNode);
+    cell.appendChild(ln); cell.appendChild(txt);
+    return cell;
+}
+function appendEqualRow(grid, g, filteredA, filteredB) {
+    const aLine = filteredA[g.aIdx], bLine = filteredB[g.bIdx];
+    const leftCell = makeSideCell('equal', aLine.orig, document.createTextNode(aLine.text));
+    const rightCell = makeSideCell('equal', bLine.orig, document.createTextNode(bLine.text));
+    leftCell.onclick = () => scrollTextareaToLine('compareLeft', aLine.orig);
+    rightCell.onclick = () => scrollTextareaToLine('compareRight', bLine.orig);
+    grid.appendChild(leftCell); grid.appendChild(rightCell);
+}
+function appendPairRow(grid, left, right) {
+    const leftCell = left ? makeSideCell(left.cls, left.orig, document.createTextNode(left.text)) : makeSideCell('blank', null, null);
+    const rightCell = right ? makeSideCell(right.cls, right.orig, document.createTextNode(right.text)) : makeSideCell('blank', null, null);
+    if (left) leftCell.onclick = () => scrollTextareaToLine('compareLeft', left.orig);
+    if (right) rightCell.onclick = () => scrollTextareaToLine('compareRight', right.orig);
+    grid.appendChild(leftCell); grid.appendChild(rightCell);
+}
+function appendChangedRow(grid, aLine, bLine) {
+    const leftCell = makeSideCell('changed-remove', aLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'remove'));
+    const rightCell = makeSideCell('changed-add', bLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'add'));
+    leftCell.onclick = () => scrollTextareaToLine('compareLeft', aLine.orig);
+    rightCell.onclick = () => scrollTextareaToLine('compareRight', bLine.orig);
+    grid.appendChild(leftCell); grid.appendChild(rightCell);
+}
+function renderSideBySide(container, groups, filteredA, filteredB) {
+    const grid = document.createElement('div');
+    grid.className = 'side-diff-grid';
+    let i = 0;
+    while (i < groups.length) {
+        if (groups[i].type === 'equal') {
+            const run = [];
+            while (i < groups.length && groups[i].type === 'equal') { run.push(groups[i]); i++; }
+            if (run.length > 8) {
+                appendEqualRow(grid, run[0], filteredA, filteredB);
+                appendEqualRow(grid, run[1], filteredA, filteredB);
+                const bar = document.createElement('div');
+                bar.className = 'collapse-bar';
+                const hiddenWrap = document.createElement('div');
+                hiddenWrap.style.display = 'none';
+                hiddenWrap.style.gridColumn = '1 / -1';
+                const innerGrid = document.createElement('div');
+                innerGrid.className = 'side-diff-grid';
+                for (let k = 2; k < run.length - 2; k++) appendEqualRow(innerGrid, run[k], filteredA, filteredB);
+                hiddenWrap.appendChild(innerGrid);
+                const hiddenCount = run.length - 4;
+                bar.textContent = `⋯ ${hiddenCount} unchanged line${hiddenCount === 1 ? '' : 's'} — click to expand ⋯`;
+                bar.onclick = () => {
+                    const showing = hiddenWrap.style.display !== 'none';
+                    hiddenWrap.style.display = showing ? 'none' : 'block';
+                    bar.textContent = showing ? `⋯ ${hiddenCount} unchanged line${hiddenCount === 1 ? '' : 's'} — click to expand ⋯` : '⋯ click to collapse ⋯';
+                };
+                grid.appendChild(bar);
+                grid.appendChild(hiddenWrap);
+                appendEqualRow(grid, run[run.length - 2], filteredA, filteredB);
+                appendEqualRow(grid, run[run.length - 1], filteredA, filteredB);
+            } else {
+                run.forEach(g => appendEqualRow(grid, g, filteredA, filteredB));
+            }
+            continue;
+        }
+        const g = groups[i];
+        if (g.type === 'remove') appendPairRow(grid, { orig: filteredA[g.aIdx].orig, text: filteredA[g.aIdx].text, cls: 'removed' }, null);
+        else if (g.type === 'add') appendPairRow(grid, null, { orig: filteredB[g.bIdx].orig, text: filteredB[g.bIdx].text, cls: 'added' });
+        else if (g.type === 'changed') appendChangedRow(grid, filteredA[g.removeOp.aIdx], filteredB[g.addOp.bIdx]);
+        i++;
+    }
+    container.appendChild(grid);
+}
+function scrollTextareaToLine(panelId, lineIdx) {
+    const ta = document.getElementById(panelId);
+    const lines = ta.value.split('\n');
+    let offset = 0;
+    for (let i = 0; i < lineIdx && i < lines.length; i++) offset += lines[i].length + 1;
+    const lineText = lines[lineIdx] || '';
+    ta.focus();
+    ta.setSelectionRange(offset, offset + lineText.length);
+    const totalLines = Math.max(1, lines.length);
+    const ratio = lineIdx / totalLines;
+    ta.scrollTop = Math.max(0, ratio * (ta.scrollHeight - ta.clientHeight) - ta.clientHeight / 3);
+    ta.classList.add('flash-active');
+    setTimeout(() => ta.classList.remove('flash-active'), 900);
+}
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+const debouncedRefreshLeft = debounce(() => refreshCompareBadge('compareLeft'), 200);
+const debouncedRefreshRight = debounce(() => refreshCompareBadge('compareRight'), 200);
+
+function init() {
+    loadLayout();
+    loadEntriesFromStorage();
+    renderCompareChips();
+    populateCompareSelect('compareLeft');
+    populateCompareSelect('compareRight');
+    refreshCompareBadge('compareLeft');
+    refreshCompareBadge('compareRight');
+    wireSyncScroll();
+
+    const pasteZone = document.getElementById('pasteZone');
+    pasteZone.addEventListener('dragover', e => { e.preventDefault(); pasteZone.classList.add('file-drop-target'); });
+    pasteZone.addEventListener('dragleave', () => pasteZone.classList.remove('file-drop-target'));
+    pasteZone.addEventListener('drop', e => {
+        e.preventDefault();
+        pasteZone.classList.remove('file-drop-target');
+        if (e.dataTransfer.files && e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files);
+    });
+    document.getElementById('pasteInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addFromPasteBox(); }
+    });
+    document.getElementById('compareLeft').addEventListener('input', debouncedRefreshLeft);
+    document.getElementById('compareRight').addEventListener('input', debouncedRefreshRight);
+}
+init();
+</script>
+</body>
+</html>
