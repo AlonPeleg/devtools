@@ -117,6 +117,10 @@
     .btn-icon { cursor: pointer; display: flex; align-items: center; padding: 4px; border-radius: 4px; opacity: 0.75; color: var(--text); }
     .btn-icon:hover { background: var(--hover-bg); opacity: 1; }
     .btn-icon svg { width: 14px; height: 14px; }
+    /* Icon toggles (Wrap / Map): a slight lighter halo plus a green icon color when on, otherwise
+       they look like any other toolbar icon button. */
+    .btn-icon.toggle-active { background: rgba(137, 209, 133, 0.16); color: #89d185; opacity: 1; }
+    .btn-icon.toggle-active:hover { background: rgba(137, 209, 133, 0.26); }
     .btn-delete { color: var(--diff-remove); cursor: pointer; font-weight: bold; font-size: 15px; line-height: 1; padding: 0 4px; opacity: 0.65; user-select: none; }
     .btn-delete:hover { opacity: 1; }
 
@@ -205,9 +209,15 @@
        see updateMinimapSelectionOverlay(). Hidden by default; shown only while that entry actually
        has a selection. */
     .minimap-selection { position: absolute; left: 0; right: 0; top: 0; height: 0; background: rgba(255,255,255,0.22); pointer-events: none; display: none; }
-    /* The minimap (and its per-snippet toggle) only ever appears once a snippet is focused/maximized */
+    /* The minimap (and its per-snippet toggle) only ever appears once a snippet is focused/maximized.
+       Wrap's toggle is card-chrome the same way — it only shows once focused too. */
     .entry:not(.focused-entry) .minimap { display: none; }
     .entry:not(.focused-entry) .minimap-toggle { display: none; }
+    .entry:not(.focused-entry) .wrap-toggle { display: none; }
+    /* The Focus (maximize) button only makes sense from the card view — once already focused, the
+       close button (or clicking outside) is how you leave, so this hides rather than sitting there
+       as a redundant / confusing second way to do something else. */
+    .entry.focused-entry .btn-focus { display: none; }
     .tok-comment { color: var(--tok-comment); font-style: italic; }
     .tok-string { color: var(--tok-string); }
     .tok-keyword { color: var(--tok-keyword); font-weight: 600; }
@@ -1098,13 +1108,7 @@ function buildEntryHtml(item) {
           <div class="btn-icon" title="Copy raw code" onclick="copyEntryRaw('${item.id}', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
           <div class="btn-icon" title="Copy as Markdown code fence" onclick="copyEntryFence('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 2 8 5 12"/><polyline points="11 4 14 8 11 12"/></svg></div>
           <div class="btn-icon" title="Download as file" onclick="downloadEntry('${item.id}')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.25 1.5h1.5v6h2l-2.75 3-2.75-3h2v-6z"/><path d="M2 12h12v2.5H2V12z"/></svg></div>
-          <label class="switch-container" style="margin:0 2px;" title="Wrap long lines">
-            <div class="switch"><input type="checkbox" ${item.wrap ? 'checked' : ''} onchange="toggleEntryWrap('${item.id}', this.checked)"><span class="slider"></span></div>Wrap
-          </label>
-          <label class="switch-container minimap-toggle" style="margin:0 2px;" title="Show a VS Code-style minimap for this snippet">
-            <div class="switch"><input type="checkbox" ${item.minimap ? 'checked' : ''} onchange="toggleEntryMinimap('${item.id}', this.checked)"><span class="slider"></span></div>Map
-          </label>
-          <div class="btn-icon" title="Focus (maximize)" onclick="focusEntry(this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg></div>
+          <div class="btn-icon btn-focus" title="Focus (maximize)" onclick="focusEntry(this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg></div>
         </div>
         <div class="btn-delete" title="Delete snippet" onclick="removeEntry(this)">×</div>
       </div>
@@ -1114,6 +1118,8 @@ function buildEntryHtml(item) {
           <span class="search-counter" id="search-counter-${item.id}">0/0</span>
         </div>
         <div class="fold-controls">
+          <div class="btn-icon wrap-toggle${item.wrap ? ' toggle-active' : ''}" title="Wrap long lines" onclick="toggleEntryWrapBtn('${item.id}', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
+          <div class="btn-icon minimap-toggle${item.minimap ? ' toggle-active' : ''}" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
           <div class="btn-icon" title="Collapse all functions / blocks / labels" onclick="collapseAllFolds('${item.id}')">▸▸</div>
           <div class="btn-icon" title="Expand all functions / blocks / labels" onclick="expandAllFolds('${item.id}')">▾▾</div>
         </div>
@@ -1242,6 +1248,13 @@ function toggleEntryMinimap(id, checked) {
     if (!item) return;
     item.minimap = checked;
     applyMinimapForEntry(item);
+}
+function toggleEntryMinimapBtn(id, btnEl) {
+    const item = findEntry(id);
+    if (!item) return;
+    const next = !item.minimap;
+    toggleEntryMinimap(id, next);
+    if (btnEl) btnEl.classList.toggle('toggle-active', next);
 }
 function minimapColorForCls(cls) {
     switch (cls) {
@@ -1420,17 +1433,41 @@ function minimapPointerDown(e, entryId) {
     const clickedInsideBox = e.clientY >= vpRect.top && e.clientY <= vpRect.bottom;
     // Grabbing inside the highlighted box preserves the offset you grabbed it at, so it tracks
     // the mouse 1:1 instead of re-centering under the cursor on every pixel of movement (which is
-    // what made dragging feel like it was "jumping around"). Clicking outside the box still jumps
-    // straight to that spot, centered — the usual "click elsewhere on the minimap" behavior.
-    const grabOffset = clickedInsideBox ? (e.clientY - vpRect.top) : (boxHeight / 2);
+    // what made dragging feel like it was "jumping around"). Clicking outside the box lands the
+    // clicked point at the TOP of the box (grabOffset 0) rather than centering the box on it —
+    // centering silently added up to half a screenful of extra scroll beyond the point you
+    // actually clicked, which read as an over-jump; landing it at the top makes the destination
+    // match the click 1:1, the same way clicking a scrollbar's track does.
+    const grabOffset = clickedInsideBox ? (e.clientY - vpRect.top) : 0;
 
-    const move = (ev) => {
+    // Landing a click and tracking an already-started drag turn out to need two different
+    // formulas once the map can be panned (long file). A plain click has to be interpreted against
+    // whatever content is CURRENTLY shown at that pixel — i.e. pan-aware — otherwise clicking a
+    // recognizable bit of code you can see jumps somewhere else entirely (screen position alone
+    // doesn't identify a fixed spot in the file once the map pans under it). But re-deriving that
+    // pan-aware position on every step of a CONTINUING drag doesn't track the mouse smoothly: pan
+    // itself moves several pixels for every one pixel of mouse movement on a long file (the map is
+    // much taller than the visible box), so by the time each step's stale pan value gets used the
+    // box has already fallen behind — the more the map is panning, the more it undershoots. The
+    // box's on-screen position, though, is always a plain function of scroll fraction alone
+    // (see updateMinimapViewport) — independent of pan — so once a drag is actually under way,
+    // tracking the mouse directly in screen space is both simpler and exact.
+    const jumpToClick = (ev) => {
+        const scrollHeight = contentEl.scrollHeight;
+        const clientHeight = contentEl.clientHeight;
+        const mapHeight = item._minimapContentHeight || (mmRect.height || 1);
+        const pan = item._minimapPanOffset || 0;
+        const fullMapY = (ev.clientY - mmRect.top) + pan;
+        const boxTopFullMap = Math.min(Math.max(0, fullMapY - grabOffset), Math.max(0, mapHeight - boxHeight));
+        const targetScrollTop = boxTopFullMap / MINIMAP_SCALE;
+        contentEl.scrollTop = Math.min(Math.max(0, targetScrollTop), Math.max(0, scrollHeight - clientHeight));
+        updateMinimapViewport(item);
+        updateStickyScroll(item);
+    };
+    const trackDrag = (ev) => {
         const scrollHeight = contentEl.scrollHeight;
         const clientHeight = contentEl.clientHeight;
         const mmHeight = mmRect.height || 1;
-        // The box only ever travels across min(visible box, map's own extent) — for a short file
-        // whose fixed-scale map doesn't fill the whole visible box, the box (and the draggable
-        // range) is confined to that shorter span too, exactly matching updateMinimapViewport.
         const mapHeight = item._minimapContentHeight || mmHeight;
         const travelHeight = Math.min(mmHeight, mapHeight);
         const maxBoxTop = Math.max(0, travelHeight - boxHeight);
@@ -1440,12 +1477,12 @@ function minimapPointerDown(e, entryId) {
         updateMinimapViewport(item);
         updateStickyScroll(item);
     };
-    move(e);
+    jumpToClick(e);
     const up = () => {
-        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mousemove', trackDrag);
         document.removeEventListener('mouseup', up);
     };
-    document.addEventListener('mousemove', move);
+    document.addEventListener('mousemove', trackDrag);
     document.addEventListener('mouseup', up);
 }
 
@@ -1643,6 +1680,13 @@ function toggleEntryWrap(id, checked) {
     if (!item) return;
     item.wrap = checked;
     renderEntryContent(item);
+}
+function toggleEntryWrapBtn(id, btnEl) {
+    const item = findEntry(id);
+    if (!item) return;
+    const next = !item.wrap;
+    toggleEntryWrap(id, next);
+    if (btnEl) btnEl.classList.toggle('toggle-active', next);
 }
 function onEntryLangChange(id, value) {
     const item = findEntry(id);
