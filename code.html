@@ -1433,12 +1433,16 @@ function minimapPointerDown(e, entryId) {
     const clickedInsideBox = e.clientY >= vpRect.top && e.clientY <= vpRect.bottom;
     // Grabbing inside the highlighted box preserves the offset you grabbed it at, so it tracks
     // the mouse 1:1 instead of re-centering under the cursor on every pixel of movement (which is
-    // what made dragging feel like it was "jumping around"). Clicking outside the box lands the
-    // clicked point at the TOP of the box (grabOffset 0) rather than centering the box on it —
-    // centering silently added up to half a screenful of extra scroll beyond the point you
-    // actually clicked, which read as an over-jump; landing it at the top makes the destination
-    // match the click 1:1, the same way clicking a scrollbar's track does.
-    const grabOffset = clickedInsideBox ? (e.clientY - vpRect.top) : 0;
+    // what made dragging feel like it was "jumping around"). Clicking outside the box centers the
+    // clicked point in the resulting view (grabOffset = half the box height) so you land with
+    // context on both sides of what you pointed at, not with it pinned to the very top edge —
+    // same as VS Code's own minimap. The clamp in jumpToClick still holds near the start/end of
+    // the file, where there isn't a full screenful on one side to center against.
+    // `let`, not `const`: a real mouse/trackpad almost always fires at least one 1px-ish
+    // mousemove between its down and up even on a "plain click" (unlike a scripted click), which
+    // reaches trackDrag below. grabOffset gets re-anchored to the box's post-jump position right
+    // after jumpToClick runs (see there) so that stray movement can't use this pre-jump value.
+    let grabOffset = clickedInsideBox ? (e.clientY - vpRect.top) : (boxHeight / 2);
 
     // Landing a click and tracking an already-started drag turn out to need two different
     // formulas once the map can be panned (long file). A plain click has to be interpreted against
@@ -1478,6 +1482,24 @@ function minimapPointerDown(e, entryId) {
         updateStickyScroll(item);
     };
     jumpToClick(e);
+    // jumpToClick just moved the box out from under wherever it was when grabOffset was computed
+    // (that's the whole point of a "jump" click) — so grabOffset, measured against the box's OLD
+    // position, is now meaningless. Re-anchor it against the box's NEW (post-jump) position before
+    // any drag tracking can use it: without this, the smallest accidental mousemove during the
+    // click (real hardware essentially always produces one, even for a stationary "click") hits
+    // trackDrag with a stale grabOffset that can be on the order of a whole screenful off, and
+    // trackDrag — which is intentionally pan-agnostic screen-space math, see above — has no way to
+    // detect that its offset no longer means anything, so it throws the view somewhere far from
+    // both the click and the mouse. This was the real cause of the reported "over jump".
+    //
+    // This offset is NOT clamped to [0, boxHeight]: a jump that pans the map moves the box to
+    // reflect the new scroll fraction, which generally lands it far from the mouse's screen
+    // position (that's what "the mouse jumped a section of the map ahead of/behind where the box
+    // now sits" looks like numerically) — a real, possibly large gap, not a measurement error to
+    // clip away. trackDrag's own boxTop is what gets clamped to a valid on-screen range; leaving
+    // this offset unclamped is what makes that landed position the correct zero-movement baseline.
+    const vpRectAfterJump = viewportEl.getBoundingClientRect();
+    grabOffset = e.clientY - vpRectAfterJump.top;
     const up = () => {
         document.removeEventListener('mousemove', trackDrag);
         document.removeEventListener('mouseup', up);
