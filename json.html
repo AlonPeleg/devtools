@@ -138,19 +138,6 @@
         @keyframes diff-flash { 0% { background: var(--vscode-editor-findMatchHighlightBackground); } 100% { background: transparent; } }
         .highlight-flash { animation: diff-flash 1.2s ease-out; }
 
-        /* Direct in-place cell editing (Viewer tab only, JSON entries only): the small text
-           input swapped in for a key/value span on double-click. Sized via the `size` attribute
-           per-instance rather than here, so it stays as narrow as its content. */
-        .inline-edit-input {
-            font-family: inherit; font-size: inherit; line-height: inherit;
-            background: var(--vscode-input-background); color: var(--vscode-input-foreground);
-            border: 1px solid var(--vscode-focusBorder); border-radius: 2px;
-            padding: 0 2px; margin: -1px 0; outline: none; box-sizing: content-box;
-        }
-        .inline-edit-input.inline-edit-error { border-color: var(--vscode-errorForeground); }
-        .editable-key, .editable-value { cursor: text; }
-        .editable-key:hover, .editable-value:hover { outline: 1px dashed rgba(255,255,255,0.25); outline-offset: 1px; }
-
         .json-node { margin: 0; position: relative; }
         .json-tree { padding-left: 12px; border-left: 1px solid #404040; margin-left: 4px; }
         .toggle { cursor: pointer; width: 12px; height: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; color: #808080; }
@@ -1483,7 +1470,7 @@
             };
 
             const contentArea = entry.querySelector('.content');
-            contentArea.appendChild(type === 'json' ? renderTree(data, null, 'root', null, true) : renderXmlTree(data.documentElement, 'root'));
+            contentArea.appendChild(type === 'json' ? renderTree(data, null, 'root') : renderXmlTree(data.documentElement, 'root'));
             document.getElementById('container').prepend(entry);
             applyMinimapForEntry(findEntry(entryId));
 
@@ -1816,31 +1803,20 @@
             if (item && item.minimap) renderMinimap(item);
         }
 
-        // `parent`/`editable` are only needed for Direct In-Place Cell Editing (Viewer tab, JSON
-        // entries only): `parent` is the containing object/array (or null at the root) so an edit
-        // can write straight back onto the live data via a direct reference, no path-string
-        // parsing needed; `editable` scopes editing on/off per call site (the Edit & Compare tab's
-        // read-only tree preview always renders with editable=false via the defaults below, since
-        // it's rebuilt from scratch on every textarea change and would silently discard edits).
-        function renderTree(data, key = null, path = '', parent = null, editable = false) {
+        function renderTree(data, key = null, path = '') {
             const node = document.createElement('div');
             node.className = 'json-node';
             const isObj = data !== null && typeof data === 'object';
             const isArray = Array.isArray(data);
             const line = document.createElement('div');
             line.className = 'header-line';
-            // Renaming an object key changes this row's own path (used by the right-click "Copy
-            // Path" menu and the breadcrumb-on-hover), so those two closures read a mutable
-            // `livePath` instead of the `path` argument directly; a rename updates it in place.
-            let liveKey = key;
-            let livePath = path;
-            line.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); showMenu(e, livePath); };
+            line.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); showMenu(e, path); };
             line.onmouseenter = (e) => {
                 e.stopPropagation();
                 const entryEl = line.closest('.entry');
                 if (entryEl) {
                     const b = entryEl.querySelector('.breadcrumb-text');
-                    if (b) b.textContent = livePath;
+                    if (b) b.textContent = path;
                 }
             };
             const toggleSpan = document.createElement('span');
@@ -1856,204 +1832,46 @@
                 toggleSpan.style.display = 'inline-block'; toggleSpan.style.width = '12px';
             }
             line.appendChild(toggleSpan);
-            // Only object properties get a "key: " label (array items never did, even though an
-            // array item now also receives its index as `key` below -- purely so a leaf array item
-            // can be edited and written back to the right slot).
-            if (parent !== null && !Array.isArray(parent)) {
-                const onRenamed = (oldKey, newKey) => {
-                    livePath = livePath.slice(0, livePath.length - String(liveKey).length - 1) + '.' + newKey;
-                    liveKey = newKey;
-                    // The renamed property keeps the SAME nested value reference (object, array, or
-                    // primitive) under its new key, so nested children never need to know their key
-                    // changed. Only a LEAF value's own span closes over `key` directly (to write
-                    // edits back to the right property), so only that needs rebuilding here.
-                    if (!isObj) {
-                        const oldValueSpan = line.querySelector(':scope > .string, :scope > .number, :scope > .boolean, :scope > .null');
-                        if (oldValueSpan) oldValueSpan.replaceWith(buildValueSpan(parent[newKey], parent, newKey, node, editable));
-                    }
-                };
-                line.appendChild(buildKeySpan(key, parent, node, editable, onRenamed));
+            if (key !== null) {
+                const k = document.createElement('span');
+                k.className = 'key';
+                // Wrap just the key text in <bdi> so a right-to-left key (e.g. Hebrew/Arabic)
+                // can't drag the surrounding quotes/colon out of their normal left-to-right order.
+                k.append('"');
+                const kBdi = document.createElement('bdi');
+                kBdi.textContent = key;
+                k.appendChild(kBdi);
+                k.append('": ');
+                line.appendChild(k);
             }
             if (isObj) {
                 line.append(isArray ? '[' : '{');
                 node.appendChild(line);
                 const tree = document.createElement('div');
                 tree.className = 'json-tree';
-                if (isArray) data.forEach((item, i) => tree.appendChild(renderTree(item, i, path + '[' + i + ']', data, editable)));
-                else Object.keys(data).forEach(k => tree.appendChild(renderTree(data[k], k, path + '.' + k, data, editable)));
+                if (isArray) data.forEach((item, i) => tree.appendChild(renderTree(item, null, path + '[' + i + ']')));
+                else Object.keys(data).forEach(k => tree.appendChild(renderTree(data[k], k, path + '.' + k)));
                 node.appendChild(tree);
                 const f = document.createElement('div');
                 f.className = 'footer'; f.style.paddingLeft = '12px';
                 f.textContent = isArray ? ']' : '}';
                 node.appendChild(f);
             } else {
-                line.appendChild(buildValueSpan(data, parent, key, node, editable));
+                const v = document.createElement('span');
+                v.className = data === null ? 'null' : typeof data;
+                if (typeof data === 'string') {
+                    v.append('"');
+                    const vBdi = document.createElement('bdi');
+                    vBdi.textContent = data;
+                    v.appendChild(vBdi);
+                    v.append('"');
+                } else {
+                    v.textContent = String(data);
+                }
+                line.appendChild(v);
                 node.appendChild(line);
             }
             return node;
-        }
-
-        // Builds (or rebuilds, after a commit/cancel) the "key": label span for an object
-        // property. `onRenamed(oldKey, newKey)` lets the owning renderTree() call keep its own
-        // path/breadcrumb state and (for a leaf row) its value span's write-target in sync.
-        function buildKeySpan(key, parent, node, editable, onRenamed) {
-            const k = document.createElement('span');
-            k.className = 'key';
-            // Wrap just the key text in <bdi> so a right-to-left key (e.g. Hebrew/Arabic)
-            // can't drag the surrounding quotes/colon out of their normal left-to-right order.
-            k.append('"');
-            const kBdi = document.createElement('bdi');
-            kBdi.textContent = key;
-            k.appendChild(kBdi);
-            k.append('": ');
-            if (editable) {
-                k.classList.add('editable-key');
-                k.ondblclick = (e) => { e.stopPropagation(); startKeyEdit(k, parent, key, node, editable, onRenamed); };
-            }
-            return k;
-        }
-
-        // Builds (or rebuilds) a leaf value's span. Booleans toggle straight on double-click
-        // (no input box -- there are only two possible values); everything else opens an inline
-        // text input via startValueEdit.
-        function buildValueSpan(data, parent, key, node, editable) {
-            const v = document.createElement('span');
-            v.className = data === null ? 'null' : typeof data;
-            if (typeof data === 'string') {
-                v.append('"');
-                const vBdi = document.createElement('bdi');
-                vBdi.textContent = data;
-                v.appendChild(vBdi);
-                v.append('"');
-            } else {
-                v.textContent = String(data);
-            }
-            if (editable) {
-                v.classList.add('editable-value');
-                v.ondblclick = (e) => {
-                    e.stopPropagation();
-                    if (typeof data === 'boolean') {
-                        parent[key] = !data;
-                        v.replaceWith(buildValueSpan(parent[key], parent, key, node, editable));
-                        markEntryEdited(node);
-                    } else {
-                        startValueEdit(v, parent, key, node, data, editable);
-                    }
-                };
-            }
-            return v;
-        }
-
-        // Swaps a key span for a text input, prefilled with the raw (unquoted) key text. Enter or
-        // blur commits, Escape restores the original. A rename onto an already-existing key, or an
-        // empty key, is refused (shown with .inline-edit-error) rather than silently dropping data.
-        function startKeyEdit(keySpan, parent, oldKey, node, editable, onRenamed) {
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'inline-edit-input';
-            input.value = oldKey;
-            input.size = Math.max(2, String(oldKey).length);
-            let done = false;
-            const restore = (k) => { input.replaceWith(buildKeySpan(k, parent, node, editable, onRenamed)); };
-            const commit = () => {
-                if (done) return;
-                const newKey = input.value;
-                if (newKey === '') { input.classList.add('inline-edit-error'); return; }
-                if (newKey === oldKey) { done = true; restore(oldKey); return; }
-                if (Object.prototype.hasOwnProperty.call(parent, newKey)) { input.classList.add('inline-edit-error'); return; }
-                done = true;
-                renameObjectKeyPreservingOrder(parent, oldKey, newKey);
-                restore(newKey);
-                if (onRenamed) onRenamed(oldKey, newKey);
-                markEntryEdited(node);
-            };
-            const cancel = () => { if (done) return; done = true; restore(oldKey); };
-            input.addEventListener('keydown', (e) => {
-                e.stopPropagation();
-                if (e.key === 'Enter') { e.preventDefault(); commit(); }
-                else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
-                else input.classList.remove('inline-edit-error');
-            });
-            input.addEventListener('blur', () => commit());
-            keySpan.replaceWith(input);
-            input.focus();
-            input.select();
-        }
-
-        // Swaps a leaf value span for a text input, prefilled with JSON.stringify(oldValue) --
-        // so a string shows with its quotes, and typing over them switches its type (see
-        // parseEditedLeafValue). Enter or blur commits, Escape restores the original value exactly.
-        function startValueEdit(valueSpan, parent, key, node, oldValue, editable) {
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'inline-edit-input';
-            const initialText = JSON.stringify(oldValue);
-            input.value = initialText;
-            input.size = Math.max(2, initialText.length);
-            let done = false;
-            const commit = () => {
-                if (done) return;
-                done = true;
-                const parsed = parseEditedLeafValue(input.value);
-                parent[key] = parsed;
-                input.replaceWith(buildValueSpan(parsed, parent, key, node, editable));
-                markEntryEdited(node);
-            };
-            const cancel = () => {
-                if (done) return;
-                done = true;
-                input.replaceWith(buildValueSpan(oldValue, parent, key, node, editable));
-            };
-            input.addEventListener('keydown', (e) => {
-                e.stopPropagation();
-                if (e.key === 'Enter') { e.preventDefault(); commit(); }
-                else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
-            });
-            input.addEventListener('blur', () => commit());
-            valueSpan.replaceWith(input);
-            input.focus();
-            input.select();
-        }
-
-        // The casting grammar for an edited leaf value: JSON.parse is used as-is, so bare `null`,
-        // `true`/`false`, and numbers parse as their real JSON type, a quoted "..." stays a string,
-        // and anything else that isn't valid JSON (an unquoted word, say) falls back to being taken
-        // literally as a string rather than rejected -- editing text and hitting Enter should never
-        // just fail. Empty input becomes an empty string.
-        function parseEditedLeafValue(text) {
-            const trimmed = text.trim();
-            if (trimmed === '') return '';
-            try { return JSON.parse(trimmed); } catch (e) { return trimmed; }
-        }
-
-        // Renames a key while preserving property order, by rebuilding the object's own entries
-        // (oldKey swapped for newKey in place) and reassigning them onto the SAME object reference
-        // -- so every other closure holding onto that reference (nested children, other edits still
-        // in flight) keeps working without needing to know the rename happened.
-        function renameObjectKeyPreservingOrder(obj, oldKey, newKey) {
-            const entries = Object.keys(obj).map(k => [k === oldKey ? newKey : k, obj[k]]);
-            Object.keys(obj).forEach(k => delete obj[k]);
-            entries.forEach(([k, v]) => { obj[k] = v; });
-        }
-
-        // Called after any successful in-place edit (value change, boolean toggle, or key rename):
-        // re-serializes rawString (the only form actually persisted to localStorage -- item.data
-        // itself is never saved directly), persists it, refreshes this entry's minimap if it has
-        // one open, and gives the edited row the same blue flash already used elsewhere in the app.
-        function markEntryEdited(node) {
-            const entryEl = node.closest('.entry');
-            if (!entryEl) return;
-            const entryId = entryEl.dataset.entryId;
-            const item = findEntry(entryId);
-            if (!item) return;
-            item.rawString = JSON.stringify(item.data, null, 4);
-            saveEntriesToStorage();
-            refreshMinimapForEntryId(entryId);
-            const line = node.querySelector(':scope > .header-line') || node;
-            line.classList.remove('flash-active');
-            void line.offsetWidth;
-            line.classList.add('flash-active');
-            setTimeout(() => line.classList.remove('flash-active'), 600);
         }
 
         function renderXmlTree(node, path) {
