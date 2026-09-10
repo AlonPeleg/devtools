@@ -277,20 +277,36 @@
     .diff-added { background: rgba(78,201,176,0.08); color: var(--diff-add); border-left: 3px solid var(--diff-add); }
     .diff-removed { background: rgba(244,135,113,0.08); color: var(--diff-remove); border-left: 3px solid var(--diff-remove); }
     .diff-changed { background: rgba(220,220,170,0.08); color: var(--diff-change); border-left: 3px solid var(--diff-change); }
+    .diff-added .diff-icon, .diff-added .diff-linenum { color: var(--diff-add); }
+    .diff-removed .diff-icon, .diff-removed .diff-linenum { color: var(--diff-remove); }
+    .diff-changed .diff-icon, .diff-changed .diff-linenum { color: var(--diff-change); }
     .diff-char-add { background: rgba(78,201,176,0.35); border-radius: 2px; }
     .diff-char-remove { background: rgba(244,135,113,0.35); border-radius: 2px; text-decoration: line-through; text-decoration-color: rgba(244,135,113,0.7); }
 
     .side-diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
     .side-row { display: contents; }
-    .side-cell { padding: 2px 6px; border-radius: 2px; white-space: pre; overflow-x: auto; font-size: 11.5px; display: flex; gap: 6px; }
-    .side-cell .ln { flex: 0 0 auto; opacity: 0.45; width: 2.8em; text-align: right; user-select: none; }
-    .side-cell .txt { white-space: pre; }
+    /* Long lines wrap instead of scrolling horizontally inside their own tiny cell — with
+       overflow-x:auto per cell, every long line needed its own independent scrollbar, so the
+       two columns easily fell out of sync and differences could hide off-screen. Wrapping
+       keeps both sides fully visible and naturally lines the row heights back up. */
+    .side-cell { padding: 3px 7px 3px 5px; border-radius: 2px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11.5px; display: flex; gap: 6px; border-left: 3px solid transparent; border-bottom: 1px solid rgba(255,255,255,0.035); box-shadow: inset 0 0 0 999px rgba(0,0,0,0); transition: box-shadow 0.08s; }
+    .side-cell:not(.blank) { cursor: pointer; }
+    .side-cell .ln { flex: 0 0 auto; opacity: 0.45; width: 2.8em; text-align: right; user-select: none; white-space: nowrap; }
+    .side-cell .txt { white-space: pre-wrap; overflow-wrap: anywhere; }
     .side-cell.equal { color: var(--text); }
     .side-cell.blank { background: rgba(255,255,255,0.02); }
-    .side-cell.removed { background: rgba(244,135,113,0.1); color: var(--diff-remove); }
-    .side-cell.added { background: rgba(78,201,176,0.1); color: var(--diff-add); }
-    .side-cell.changed-remove { background: rgba(220,220,170,0.12); }
-    .side-cell.changed-add { background: rgba(220,220,170,0.12); }
+    /* Removed only ever appears on Panel A's column (Panel B shows a blank cell) */
+    .side-cell.removed { background: rgba(244,135,113,0.16); color: var(--diff-remove); border-left-color: var(--diff-remove); }
+    /* Added only ever appears on Panel B's column (Panel A shows a blank cell) */
+    .side-cell.added { background: rgba(78,201,176,0.16); color: var(--diff-add); border-left-color: var(--diff-add); }
+    /* Changed lines exist on both sides, so both cells share the same "changed" indicator; */
+    /* the character-level spans inside still show exactly what was removed (red) vs added (green). */
+    .side-cell.changed-remove { background: rgba(220,220,170,0.14); border-left-color: var(--diff-change); }
+    .side-cell.changed-add { background: rgba(220,220,170,0.14); border-left-color: var(--diff-change); }
+    /* Hovering either side of a row highlights both cells together, so it's obvious which
+       line on the left corresponds to which line on the right. */
+    .side-cell.row-hover { box-shadow: inset 0 0 0 999px rgba(255,255,255,0.055); }
+    .side-cell.row-active { box-shadow: inset 0 0 0 999px rgba(14,143,217,0.20); outline: 1px solid var(--focus); outline-offset: -1px; }
     .collapse-bar { grid-column: 1 / -1; padding: 4px 8px; font-size: 10.5px; color: var(--text-dim); cursor: pointer; text-align: center; background: var(--bg-elevated); border-radius: 3px; margin: 2px 0; }
     .collapse-bar:hover { color: var(--text-bright); }
 
@@ -2156,7 +2172,8 @@ function renderListView(container, groups, filteredA, filteredB) {
     const nonEqual = groups.filter(g => g.type !== 'equal');
     nonEqual.forEach(g => {
         const row = document.createElement('div');
-        row.className = 'diff-line diff-' + g.type;
+        const rowTypeClass = g.type === 'add' ? 'diff-added' : g.type === 'remove' ? 'diff-removed' : 'diff-changed';
+        row.className = 'diff-line ' + rowTypeClass;
         const box = document.createElement('div');
         box.className = 'diff-content-box';
         const icon = document.createElement('span'); icon.className = 'diff-icon';
@@ -2193,26 +2210,47 @@ function makeSideCell(cls, lineNum, contentNode) {
     cell.appendChild(ln); cell.appendChild(txt);
     return cell;
 }
+// Hovering either cell of a logical row highlights both together, so it's obvious which
+// line on the left lines up with which line on the right even when one side is wrapped
+// onto extra lines. Clicking a row also keeps a persistent highlight on it (until another
+// row is clicked) so you can find your place again after scrolling the source panels.
+function pairSideCells(leftCell, rightCell) {
+    const onEnter = () => { leftCell.classList.add('row-hover'); rightCell.classList.add('row-hover'); };
+    const onLeave = () => { leftCell.classList.remove('row-hover'); rightCell.classList.remove('row-hover'); };
+    leftCell.addEventListener('mouseenter', onEnter);
+    rightCell.addEventListener('mouseenter', onEnter);
+    leftCell.addEventListener('mouseleave', onLeave);
+    rightCell.addEventListener('mouseleave', onLeave);
+}
+let _activeSideRowCells = null;
+function setActiveSideRow(leftCell, rightCell) {
+    if (_activeSideRowCells) _activeSideRowCells.forEach(c => c.classList.remove('row-active'));
+    _activeSideRowCells = [leftCell, rightCell];
+    _activeSideRowCells.forEach(c => c.classList.add('row-active'));
+}
 function appendEqualRow(grid, g, filteredA, filteredB) {
     const aLine = filteredA[g.aIdx], bLine = filteredB[g.bIdx];
     const leftCell = makeSideCell('equal', aLine.orig, document.createTextNode(aLine.text));
     const rightCell = makeSideCell('equal', bLine.orig, document.createTextNode(bLine.text));
-    leftCell.onclick = () => scrollTextareaToLine('compareLeft', aLine.orig);
-    rightCell.onclick = () => scrollTextareaToLine('compareRight', bLine.orig);
+    leftCell.onclick = () => { setActiveSideRow(leftCell, rightCell); scrollTextareaToLine('compareLeft', aLine.orig); };
+    rightCell.onclick = () => { setActiveSideRow(leftCell, rightCell); scrollTextareaToLine('compareRight', bLine.orig); };
+    pairSideCells(leftCell, rightCell);
     grid.appendChild(leftCell); grid.appendChild(rightCell);
 }
 function appendPairRow(grid, left, right) {
     const leftCell = left ? makeSideCell(left.cls, left.orig, document.createTextNode(left.text)) : makeSideCell('blank', null, null);
     const rightCell = right ? makeSideCell(right.cls, right.orig, document.createTextNode(right.text)) : makeSideCell('blank', null, null);
-    if (left) leftCell.onclick = () => scrollTextareaToLine('compareLeft', left.orig);
-    if (right) rightCell.onclick = () => scrollTextareaToLine('compareRight', right.orig);
+    if (left) leftCell.onclick = () => { setActiveSideRow(leftCell, rightCell); scrollTextareaToLine('compareLeft', left.orig); };
+    if (right) rightCell.onclick = () => { setActiveSideRow(leftCell, rightCell); scrollTextareaToLine('compareRight', right.orig); };
+    pairSideCells(leftCell, rightCell);
     grid.appendChild(leftCell); grid.appendChild(rightCell);
 }
 function appendChangedRow(grid, aLine, bLine) {
     const leftCell = makeSideCell('changed-remove', aLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'remove'));
     const rightCell = makeSideCell('changed-add', bLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'add'));
-    leftCell.onclick = () => scrollTextareaToLine('compareLeft', aLine.orig);
-    rightCell.onclick = () => scrollTextareaToLine('compareRight', bLine.orig);
+    pairSideCells(leftCell, rightCell);
+    leftCell.onclick = () => { setActiveSideRow(leftCell, rightCell); scrollTextareaToLine('compareLeft', aLine.orig); };
+    rightCell.onclick = () => { setActiveSideRow(leftCell, rightCell); scrollTextareaToLine('compareRight', bLine.orig); };
     grid.appendChild(leftCell); grid.appendChild(rightCell);
 }
 function renderSideBySide(container, groups, filteredA, filteredB) {
@@ -2259,6 +2297,42 @@ function renderSideBySide(container, groups, filteredA, filteredB) {
     }
     container.appendChild(grid);
 }
+// Hidden div that mirrors a textarea's text layout (font, padding, wrapping) so we can
+// measure exactly where a given character offset lands vertically — a plain line-count
+// ratio breaks as soon as any line is long enough to soft-wrap onto multiple visual rows,
+// which is common in dense/minified code and was causing the jump-to-random-place bug.
+let _scrollMirrorDiv = null;
+function getScrollMirrorDiv(ta) {
+    if (!_scrollMirrorDiv) {
+        _scrollMirrorDiv = document.createElement('div');
+        _scrollMirrorDiv.style.position = 'absolute';
+        _scrollMirrorDiv.style.visibility = 'hidden';
+        _scrollMirrorDiv.style.top = '0';
+        _scrollMirrorDiv.style.left = '-9999px';
+        _scrollMirrorDiv.style.height = 'auto';
+        _scrollMirrorDiv.style.overflow = 'hidden';
+        document.body.appendChild(_scrollMirrorDiv);
+    }
+    const cs = getComputedStyle(ta);
+    const paddingLeft = parseFloat(cs.paddingLeft) || 0;
+    const paddingRight = parseFloat(cs.paddingRight) || 0;
+    const mirror = _scrollMirrorDiv;
+    mirror.style.boxSizing = 'content-box';
+    mirror.style.width = Math.max(0, ta.clientWidth - paddingLeft - paddingRight) + 'px';
+    mirror.style.padding = cs.paddingTop + ' ' + cs.paddingRight + ' ' + cs.paddingBottom + ' ' + cs.paddingLeft;
+    mirror.style.border = '0';
+    mirror.style.fontFamily = cs.fontFamily;
+    mirror.style.fontSize = cs.fontSize;
+    mirror.style.fontWeight = cs.fontWeight;
+    mirror.style.fontStyle = cs.fontStyle;
+    mirror.style.lineHeight = cs.lineHeight;
+    mirror.style.letterSpacing = cs.letterSpacing;
+    mirror.style.tabSize = cs.tabSize;
+    mirror.style.whiteSpace = 'pre-wrap';
+    mirror.style.wordWrap = 'break-word';
+    mirror.style.overflowWrap = 'break-word';
+    return mirror;
+}
 function scrollTextareaToLine(panelId, lineIdx) {
     const ta = document.getElementById(panelId);
     const lines = ta.value.split('\n');
@@ -2267,9 +2341,19 @@ function scrollTextareaToLine(panelId, lineIdx) {
     const lineText = lines[lineIdx] || '';
     ta.focus();
     ta.setSelectionRange(offset, offset + lineText.length);
-    const totalLines = Math.max(1, lines.length);
-    const ratio = lineIdx / totalLines;
-    ta.scrollTop = Math.max(0, ratio * (ta.scrollHeight - ta.clientHeight) - ta.clientHeight / 3);
+
+    // Measure the real pixel position of this line by rendering everything before it
+    // (plus a zero-width marker) through a mirror element with identical text layout.
+    const mirror = getScrollMirrorDiv(ta);
+    mirror.textContent = '';
+    mirror.appendChild(document.createTextNode(ta.value.slice(0, offset)));
+    const marker = document.createElement('span');
+    marker.textContent = '​';
+    mirror.appendChild(marker);
+    const targetTop = marker.offsetTop;
+    const maxScroll = Math.max(0, ta.scrollHeight - ta.clientHeight);
+    ta.scrollTop = Math.min(maxScroll, Math.max(0, targetTop - ta.clientHeight / 3));
+
     ta.classList.add('flash-active');
     setTimeout(() => ta.classList.remove('flash-active'), 900);
 }
