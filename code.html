@@ -77,12 +77,23 @@
     .title-group h3 { font-size: 14px; font-weight: 700; color: var(--text-bright); }
     .title-sub { font-size: 11px; color: var(--text-dim); }
     .btn-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-    .btn { border: none; padding: 5px 11px; cursor: pointer; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--accent); color: var(--accent-fg); font-family: var(--font-ui); }
+    .btn { border: none; padding: 5px 11px; cursor: pointer; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--accent); color: var(--accent-fg); font-family: var(--font-ui); display: inline-flex; align-items: center; gap: 6px; }
     .btn:hover { background: var(--accent-hover); }
     .btn-secondary { background: var(--input-bg); color: var(--text); }
     .btn-secondary:hover { background: #48484b; }
     .btn-secondary.active { background: var(--accent); color: #fff; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    svg.ic { width: 14px; height: 14px; flex-shrink: 0; display: block; }
+    /* Icon-only buttons in the compare toolbar (swap, reset, options, clear results) — same
+       height as the text buttons around them, just centered on a single icon instead of a label. */
+    .btn-iconbtn { padding: 6px 8px; justify-content: center; }
+    /* Two-icon toggle presented as ONE button: both icons always visible side by side inside it,
+       the blue highlight sits on whichever is active, and a click ANYWHERE on the button (either
+       half) just flips which one is lit — it's a single toggle, not a picker for each half. */
+    .split-toggle { display: flex; padding: 0; border: none; border-radius: 4px; overflow: hidden; background: var(--input-bg); cursor: pointer; font-family: var(--font-ui); }
+    .split-toggle-half { padding: 6px 9px; display: flex; align-items: center; color: var(--text); opacity: 0.6; }
+    .split-toggle:hover .split-toggle-half:not(.active) { opacity: 0.85; background: #48484b; }
+    .split-toggle-half.active { background: var(--accent); color: #fff; opacity: 1; }
     .btn-global-icon { background: transparent; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px; opacity: 0.75; color: var(--text); }
     .btn-global-icon:hover { background: var(--hover-bg); opacity: 1; }
     .btn-global-icon svg { width: 15px; height: 15px; fill: currentColor; }
@@ -371,7 +382,10 @@
                     <span class="title-sub">paste code &amp; auto-detect the language</span>
                 </div>
                 <div class="btn-group">
-                    <button id="viewModeBtn" class="btn btn-secondary" onclick="toggleLayout()">View: Stack</button>
+                    <button id="viewModeBtn" class="split-toggle" title="Stack view — click for Grid view" onclick="toggleLayout()">
+                        <span class="split-toggle-half active" id="viewHalfStack"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2.5" width="12" height="2.8" rx="0.6"/><rect x="2" y="6.6" width="12" height="2.8" rx="0.6"/><rect x="2" y="10.7" width="12" height="2.8" rx="0.6"/></svg></span>
+                        <span class="split-toggle-half" id="viewHalfGrid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="5" height="5" rx="0.8"/><rect x="9" y="2" width="5" height="5" rx="0.8"/><rect x="2" y="9" width="5" height="5" rx="0.8"/><rect x="9" y="9" width="5" height="5" rx="0.8"/></svg></span>
+                    </button>
                     <button class="btn-global-icon" title="Collapse all snippets" onclick="setAllCollapse(true)">
                         <svg viewBox="0 0 16 16"><path d="M9 9H5V5h4v4zm5-7H2v12h12V2zM3 13V3h10v10H3z"/></svg>
                     </button>
@@ -382,7 +396,7 @@
                         <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
                     </button>
                     <input type="file" id="fileInput" multiple style="display:none" onchange="handleFileUpload(this.files)">
-                    <button class="btn btn-secondary" onclick="clearAllEntries()">Clear All</button>
+                    <button class="btn btn-secondary btn-iconbtn" title="Clear All" onclick="clearAllEntries()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
 
@@ -390,7 +404,7 @@
                 <textarea id="pasteInput" rows="3" placeholder="Paste any code here (TypeScript, JavaScript, Java, Python, ObjectScript, C#, C/C++, Go, Rust, PHP, Ruby, Kotlin, Swift, SQL, Shell, JSON, XML/HTML, CSS, YAML...) or drop a file. Unrecognized code falls back to Plain Text. Ctrl+Enter to add."></textarea>
                 <div class="drop-zone-footer">
                     <span class="drop-zone-hint">Drop file(s) anywhere in this box, or paste code and click Add — the language is detected automatically and can be overridden.</span>
-                    <button class="btn" onclick="addFromPasteBox()">Add Snippet</button>
+                    <button class="btn" onclick="addFromPasteBox()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>Add Snippet</button>
                 </div>
             </div>
 
@@ -408,8 +422,8 @@
                         <div class="switch"><input type="checkbox" id="compareSyncScrollToggle" checked><span class="slider"></span></div>
                         Sync Scroll
                     </label>
-                    <button class="btn btn-secondary" onclick="swapComparePanels()">Swap A ⇄ B</button>
-                    <button class="btn btn-secondary" onclick="resetCompareSection()">Reset Both Panels</button>
+                    <button class="btn btn-secondary btn-iconbtn" title="Swap Panel A and B" onclick="swapComparePanels()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.5h10"/><path d="M9 2.5l3 3-3 3"/><path d="M14 10.5H4"/><path d="M7 13.5l-3-3 3-3"/></svg></button>
+                    <button class="btn btn-secondary btn-iconbtn" title="Reset Both Panels" onclick="resetCompareSection()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
 
@@ -467,16 +481,19 @@
                 </div>
                 <div class="btn-group">
                     <div class="compare-options" id="compareOptionsWrap">
-                        <button type="button" class="btn btn-secondary" id="compareOptionsBtn" onclick="toggleCompareOptions()">Options<span class="options-badge" id="compareOptionsBadge" hidden></span><span class="caret">&#9662;</span></button>
+                        <button type="button" class="btn btn-secondary btn-iconbtn" id="compareOptionsBtn" title="Compare options" onclick="toggleCompareOptions()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h7M11.5 4h2.5M2 8h2.5M7 8h7M2 12h9M13.5 12H14"/><circle cx="9" cy="4" r="1.4" fill="var(--bg-panel)"/><circle cx="4.5" cy="8" r="1.4" fill="var(--bg-panel)"/><circle cx="11" cy="12" r="1.4" fill="var(--bg-panel)"/></svg><span class="options-badge" id="compareOptionsBadge" hidden></span><span class="caret">&#9662;</span></button>
                         <div class="compare-options-menu" id="compareOptionsMenu" hidden>
                             <label class="switch-container"><div class="switch"><input type="checkbox" id="ignoreWhitespaceToggle" onchange="runCompare(); updateCompareOptionsBadge();"><span class="slider"></span></div>Ignore whitespace</label>
                             <label class="switch-container"><div class="switch"><input type="checkbox" id="ignoreCaseToggle" onchange="runCompare(); updateCompareOptionsBadge();"><span class="slider"></span></div>Ignore case</label>
                             <label class="switch-container"><div class="switch"><input type="checkbox" id="ignoreBlankToggle" onchange="runCompare(); updateCompareOptionsBadge();"><span class="slider"></span></div>Ignore blank lines</label>
                         </div>
                     </div>
-                    <button class="btn btn-secondary" id="compareToggleDiffView" onclick="toggleCompareDiffMode()">View: List</button>
-                    <button class="btn" onclick="runCompare()">Compare</button>
-                    <button class="btn btn-secondary" onclick="clearCompareResults()">Clear Results</button>
+                    <button type="button" class="split-toggle" id="compareViewToggleBtn" title="List view — click for Side-by-side view" onclick="toggleCompareDiffMode()">
+                        <span class="split-toggle-half" id="compareViewHalfSide"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="2.5" width="5.5" height="11" rx="1"/><rect x="9" y="2.5" width="5.5" height="11" rx="1"/></svg></span>
+                        <span class="split-toggle-half active" id="compareViewHalfList"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg></span>
+                    </button>
+                    <button class="btn" onclick="runCompare()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="8" height="10" rx="1.2"/><rect x="6.5" y="3" width="8" height="10" rx="1.2" fill="#ffffff" fill-opacity="0.35"/></svg>Compare</button>
+                    <button class="btn btn-secondary btn-iconbtn" title="Clear Results" onclick="clearCompareResults()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
             <div id="compareResults" class="diff-output">Load code into each panel, then click "Compare".</div>
@@ -1718,8 +1735,12 @@ function toggleLayout() {
 function applyLayout() {
     const container = document.getElementById('container');
     const btn = document.getElementById('viewModeBtn');
-    if (isGridView) { container.classList.add('grid-view'); btn.textContent = 'View: Grid'; }
-    else { container.classList.remove('grid-view'); btn.textContent = 'View: Stack'; }
+    const stackHalf = document.getElementById('viewHalfStack');
+    const gridHalf = document.getElementById('viewHalfGrid');
+    container.classList.toggle('grid-view', isGridView);
+    if (stackHalf) stackHalf.classList.toggle('active', !isGridView);
+    if (gridHalf) gridHalf.classList.toggle('active', isGridView);
+    if (btn) btn.title = isGridView ? 'Grid view — click for Stack view' : 'Stack view — click for Grid view';
 }
 function loadLayout() {
     try { if (localStorage.getItem(LAYOUT_KEY) === 'grid') isGridView = true; } catch (e) {}
@@ -2180,10 +2201,23 @@ document.addEventListener('click', (e) => {
 });
 let isCompareSideMode = false;
 let lastDiffResult = null;
-function toggleCompareDiffMode() {
-    isCompareSideMode = !isCompareSideMode;
-    document.getElementById('compareToggleDiffView').textContent = isCompareSideMode ? 'View: Side-by-Side' : 'View: List';
+// Both layout icons live inside the one button; a click anywhere on it just flips which half is
+// lit up (it's a toggle, not a picker per half) and moves the blue highlight there.
+function updateCompareViewToggleUI() {
+    const sideHalf = document.getElementById('compareViewHalfSide');
+    const listHalf = document.getElementById('compareViewHalfList');
+    if (sideHalf) sideHalf.classList.toggle('active', isCompareSideMode);
+    if (listHalf) listHalf.classList.toggle('active', !isCompareSideMode);
+    const btn = document.getElementById('compareViewToggleBtn');
+    if (btn) btn.title = isCompareSideMode ? 'Side-by-side view — click for List view' : 'List view — click for Side-by-side view';
+}
+function setCompareDiffMode(sideMode) {
+    isCompareSideMode = sideMode;
+    updateCompareViewToggleUI();
     if (lastDiffResult) renderCompareResults(lastDiffResult);
+}
+function toggleCompareDiffMode() {
+    setCompareDiffMode(!isCompareSideMode);
 }
 function runCompare() {
     const results = document.getElementById('compareResults');
@@ -2202,7 +2236,7 @@ function runCompare() {
 function clearCompareResults() {
     lastDiffResult = null;
     isCompareSideMode = false;
-    document.getElementById('compareToggleDiffView').textContent = 'View: List';
+    updateCompareViewToggleUI();
     document.getElementById('compareResults').innerHTML = 'Load code into each panel, then click "Compare".';
 }
 function renderCompareResults(diff) {
