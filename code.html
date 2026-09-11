@@ -1304,7 +1304,12 @@ function observeMinimapResize(item) {
     const mm = document.getElementById('minimap-' + item.id);
     if (!mm || minimapResizeObservers[item.id]) return;
     let pending = null;
+    // ResizeObserver invokes its callback once immediately after observe(), even though nothing
+    // has actually resized yet — applyMinimapForEntry already renders synchronously right after
+    // calling this, so that first callback would just redo the (expensive) render for no reason.
+    let skipNext = true;
     const ro = new ResizeObserver(() => {
+        if (skipNext) { skipNext = false; return; }
         if (pending) return;
         pending = requestAnimationFrame(() => { pending = null; if (item.minimap) renderMinimap(item); });
     });
@@ -1345,55 +1350,85 @@ function minimapColorForCls(cls) {
         default: return '#d4d4d4';
     }
 }
-// Shared drawing routine used for both the blurred background canvas and the sharp foreground
-// canvas — they must show pixel-identical content, since the only difference between them is
-// which one the CSS filter/clip-path applies to. Keeping one draw routine avoids re-running this
-// (and the whitespace-skip logic) twice with any chance of drifting out of sync.
+// Hand-drawn per-run rectangles read as a grid of little colored bars no matter how the gap/alpha
+// is tuned — real letterforms have curves, ascenders/descenders and varied widths that a
+// rectangle can never have. Real VS Code's minimap is, at its core, actual text rendered tiny and
+// antialiased. We get the same effect the same way: render the real glyphs at a readable-ish size
+// onto an offscreen canvas, then scale that down onto the small minimap canvas with smoothing on
+// — the browser's own downsampling filter is what turns crisp little letters into the soft,
+// textured "tiny code" look instead of blocky rectangles.
+const MINIMAP_SUPERSAMPLE = 2.4;
+const MINIMAP_HAS_NON_WS = /\S/;
+let _minimapFontInfo = null;
+function getMinimapFontInfo() {
+    if (_minimapFontInfo) return _minimapFontInfo;
+    const probe = document.createElement('canvas').getContext('2d');
+    const family = "Consolas, 'SF Mono', Menlo, 'Courier New', monospace";
+    const baseSize = 24;
+    probe.font = baseSize + 'px ' + family;
+    const baseCharW = probe.measureText('MMMMMMMMMM').width / 10 || baseSize * 0.6;
+    _minimapFontInfo = { family, baseCharW, baseSize };
+    return _minimapFontInfo;
+}
+// Builds the actual glyph rendering once per renderMinimap() call, at supersampled resolution.
 // `rows` is a list of { top, height, tokens } already expressed in canvas CSS-pixel coordinates;
 // a row with tokens === null is a fold placeholder / non-code gap and is left unpainted.
-function drawMinimapContent(ctx, rows, cssWidth, cssHeight) {
-    ctx.clearRect(0, 0, cssWidth, cssHeight);
-    const NON_WHITESPACE = /\S+/g;
+function buildMinimapHQCanvas(rows, cssWidth, cssHeight) {
+    const ss = MINIMAP_SUPERSAMPLE;
+    const w = Math.max(1, Math.round(cssWidth * ss));
+    const h = Math.max(1, Math.round(cssHeight * ss));
+    const off = document.createElement('canvas');
+    off.width = w;
+    off.height = h;
+    const octx = off.getContext('2d');
+    const info = getMinimapFontInfo();
+    const targetCharW = MINIMAP_CHAR_W * ss;
+    const fontSize = info.baseSize * (targetCharW / info.baseCharW);
+    octx.font = fontSize + 'px ' + info.family;
+    octx.textBaseline = 'alphabetic';
+    // Baseline sits a little above the row's vertical center — most of a monospace glyph's ink
+    // (x-height, caps) is above the baseline, only descenders (g, y, p) dip below, so centering
+    // the ascent rather than the full em-box keeps the "average" character optically centered
+    // in its row band instead of looking like it's floating near the top.
+    const ascentFrac = 0.66;
     rows.forEach(row => {
         if (!row.tokens) return;
-        const y = row.top;
-        // Cap at 2px for tall (wrapped) rows, but DON'T floor small rows up to a full 1px: once a
-        // file has more lines than the minimap has pixels for (any file over a few hundred lines,
-        // easily), each row's true proportional height is a fraction of a pixel — forcing every one
-        // of those up to a full 1px makes each row's rect overlap deep into its neighbors' territory
-        // (a 0.35px-tall row drawn at 1px reaches nearly 3 rows down), and all that stacked alpha
-        // overdraw is what was melting the whole thing into a smeared, hard-to-read blur. A tiny
-        // floor well below a pixel keeps genuinely-zero-height rows from vanishing outright while
-        // letting canvas's normal sub-pixel anti-aliasing represent everything else proportionally,
-        // same as a real minimap does once a file is too long to show one crisp row per line.
-        const h = Math.min(Math.max(row.height, 0.15), 2);
+        const y = row.top * ss;
+        if (y > h) return;
+        const rowH = Math.max(1, row.height * ss);
+        const baselineY = y + rowH * ascentFrac;
+        octx.save();
+        octx.beginPath();
+        octx.rect(0, y, w, Math.max(1, rowH * 0.96));
+        octx.clip();
         let x = 0;
         for (const t of row.tokens) {
-            const tokenW = t.text.length * MINIMAP_CHAR_W;
-            // Only paint the actual characters, not the whitespace around/between them — code
-            // that pads with long runs of spaces for column alignment (common in this codebase's
-            // ObjectScript) would otherwise fill the whole row with a solid block of the default
-            // text color, drowning out everything real and making stretches of genuine code look
-            // like a blank gray gap. Whitespace still consumes its real width in x so later tokens
-            // land at their true column, it just isn't drawn.
-            if (x < cssWidth) {
-                NON_WHITESPACE.lastIndex = 0;
-                let m;
-                while ((m = NON_WHITESPACE.exec(t.text))) {
-                    const runX = x + m.index * MINIMAP_CHAR_W;
-                    if (runX >= cssWidth) break;
-                    const runW = Math.min(m[0].length * MINIMAP_CHAR_W, cssWidth - runX);
-                    if (runW > 0.4) {
-                        ctx.globalAlpha = t.cls ? 0.85 : 0.55;
-                        ctx.fillStyle = minimapColorForCls(t.cls);
-                        ctx.fillRect(runX, y, runW, h);
-                    }
-                }
+            const tokenW = t.text.length * targetCharW;
+            if (x < w && MINIMAP_HAS_NON_WS.test(t.text)) {
+                // Plain code (identifiers, punctuation — no special token class) is most of any
+                // real file's length, so it needs enough opacity on its own to make a line's
+                // true length obvious at a glance; comments and other classified tokens stay a
+                // notch brighter so a run of comment lines pops as a recognizable patch.
+                octx.globalAlpha = t.cls ? 0.95 : 0.8;
+                octx.fillStyle = minimapColorForCls(t.cls);
+                octx.fillText(t.text, x, baselineY);
             }
             x += tokenW;
         }
+        octx.restore();
     });
-    ctx.globalAlpha = 1;
+    octx.globalAlpha = 1;
+    return off;
+}
+// Blits a pre-built HQ offscreen canvas onto a target ctx sized in CSS pixels, with smoothing on
+// — this is the step that actually turns the crisp little glyphs into the soft antialiased
+// "tiny code" texture. Built once per renderMinimap() call and reused for both the blur and
+// sharp layers so we don't pay for the (more expensive) text rendering pass twice.
+function blitMinimapHQCanvas(ctx, hqCanvas, cssWidth, cssHeight) {
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    ctx.imageSmoothingEnabled = true;
+    if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(hqCanvas, 0, 0, hqCanvas.width, hqCanvas.height, 0, 0, cssWidth, cssHeight);
 }
 function renderMinimap(item) {
     const mm = document.getElementById('minimap-' + item.id);
@@ -1436,6 +1471,7 @@ function renderMinimap(item) {
         }
     });
 
+    const hqCanvas = buildMinimapHQCanvas(rows, cssWidth, mapHeight);
     [blurCanvas, sharpCanvas].forEach(canvas => {
         canvas.width = Math.max(1, Math.round(cssWidth * dpr));
         canvas.height = Math.max(1, Math.round(mapHeight * dpr));
@@ -1443,7 +1479,7 @@ function renderMinimap(item) {
         canvas.style.height = mapHeight + 'px';
         const ctx = canvas.getContext('2d');
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawMinimapContent(ctx, rows, cssWidth, mapHeight);
+        blitMinimapHQCanvas(ctx, hqCanvas, cssWidth, mapHeight);
     });
 
     updateMinimapViewport(item);
