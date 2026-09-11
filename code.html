@@ -694,6 +694,17 @@ function detectLanguage(code, filename) {
         }
     } catch (e) { /* not JSON */ }
 
+    // A document that actually STARTS with a doctype or <html> root tag is a full HTML page, no
+    // matter how much JS/CSS it embeds — a giant <script> block doesn't change what kind of file
+    // the document itself is, the same way a .vue file full of JS isn't reclassified as
+    // JavaScript. Without this early check, a self-contained HTML tool (small markup shell,
+    // thousands of lines of embedded <script>) loses the frequency-based vote below to
+    // JS/TS purely on raw token count, since the JS signals have no fixed cap while the HTML tag
+    // signal below is capped low — that's what was misdetecting this file as TypeScript.
+    if (/^<!doctype\s+html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) {
+        return { id: 'html', label: LANGS.html.label, score: 999, confidence: 'high', runnerUp: null };
+    }
+
     const raw = {};
     for (const id of Object.keys(SIGNALS)) raw[id] = scoreSignals(code, SIGNALS[id]);
 
