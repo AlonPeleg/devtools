@@ -1021,7 +1021,44 @@ const GRAMMARS = {
     plaintext: () => []
 };
 const GRAMMAR_FLAGS = { sql: 'gim' };
+// HTML is the one language whose grammar isn't a flat token set — the markup around <script> and
+// <style> is plain tags/attributes (xmlRules), but their CONTENTS are a different language entirely
+// (JS / CSS) and need that language's own rules, or things like CSS's `"Segoe UI", "SF Mono"` font
+// stacks get scanned by xmlRules' generic quoted-string matcher with no per-declaration boundaries:
+// a stray/odd quote pairing anywhere in the block can "run on" and swallow many following lines into
+// one big incorrectly-colored string. Segmenting out each <script>/<style> block and tokenizing its
+// inner text with the real JS/CSS grammar (same as Monaco's own embedded-language highlighting) is
+// what keeps our view-mode colors matching Monaco's edit-mode colors for HTML files.
+const HTML_EMBED_RE = /<(script|style)\b([^>]*)>([\s\S]*?)(<\/\1\s*>)/gi;
+function highlightHtmlToLines(code) {
+    let tokens = [];
+    let last = 0;
+    HTML_EMBED_RE.lastIndex = 0;
+    let m;
+    while ((m = HTML_EMBED_RE.exec(code))) {
+        const matchStart = m.index;
+        const matchEnd = matchStart + m[0].length;
+        const innerText = m[3];
+        const closeTagText = m[4];
+        // Reconstruct the exact opening-tag substring (attrs and all) by trimming the known
+        // inner/close text off the end of the full match, rather than re-deriving indices —
+        // keeps this independent of regex "indices" (the /d flag) for broader compatibility.
+        const openTagText = m[0].slice(0, m[0].length - innerText.length - closeTagText.length);
+        if (matchStart > last) tokens = tokens.concat(tokenize(code.slice(last, matchStart), xmlRules(), 'gm'));
+        tokens = tokens.concat(tokenize(openTagText, xmlRules(), 'gm'));
+        if (innerText.length) {
+            const innerRules = m[1].toLowerCase() === 'style' ? cssRules() : GRAMMARS.javascript();
+            tokens = tokens.concat(tokenize(innerText, innerRules, 'gm'));
+        }
+        tokens = tokens.concat(tokenize(closeTagText, xmlRules(), 'gm'));
+        last = matchEnd;
+        if (m[0].length === 0) HTML_EMBED_RE.lastIndex++;
+    }
+    if (last < code.length) tokens = tokens.concat(tokenize(code.slice(last), xmlRules(), 'gm'));
+    return splitTokensIntoLines(tokens);
+}
 function highlightToLines(code, langId) {
+    if (langId === 'html') return highlightHtmlToLines(code);
     const builder = GRAMMARS[langId] || GRAMMARS.plaintext;
     const rules = builder();
     const flags = GRAMMAR_FLAGS[langId] || 'gm';
@@ -1430,6 +1467,23 @@ function registerObjectScriptLanguage() {
                 [/""/, 'string'],
                 [/"/, { token: 'string.quote', next: '@pop' }]
             ]
+        }
+    });
+    // Monaco's built-in Sticky Scroll (and its fold-arrow gutter) picks whichever folding-range
+    // provider is registered for the language, then shows that range's OWN start line verbatim as
+    // the pinned "you're inside this scope" header. ObjectScript here is written Allman-style — the
+    // opening "{" sits alone on its own line below the "if"/"ClassMethod"/"try" line that explains
+    // what the block actually is — so Monaco's default indentation-based folding anchors each range
+    // to that bare brace line, and Sticky Scroll ends up pinning a useless lone "{" instead of the
+    // meaningful declaration. Our own hand-rolled view-mode renderer never has this problem because
+    // computeFoldRanges() already re-anchors any brace-only start line to the real statement above it
+    // (see the "Allman-style formatting" comment there) — registering that exact same logic as
+    // Monaco's folding-range provider makes its Sticky Scroll (and its fold arrows) match what the
+    // view-mode renderer already shows.
+    monaco.languages.registerFoldingRangeProvider('objectscript-custom', {
+        provideFoldingRanges(model) {
+            const ranges = computeFoldRanges(model.getValue(), 'objectscript');
+            return ranges.map(r => ({ start: r.start + 1, end: r.end + 1, kind: monaco.languages.FoldingRangeKind.Region }));
         }
     });
 }
