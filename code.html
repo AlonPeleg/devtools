@@ -1401,19 +1401,29 @@ function toggleEntryMinimapBtn(id, btnEl) {
     toggleEntryMinimap(id, next);
     if (btnEl) btnEl.classList.toggle('toggle-active', next);
 }
-function minimapColorForCls(cls) {
-    switch (cls) {
-        case 'tok-comment': return '#6a9955';
-        case 'tok-string': return '#ce9178';
-        case 'tok-keyword': return '#569cd6';
-        case 'tok-number': return '#b5cea8';
-        case 'tok-type': return '#4ec9b0';
-        case 'tok-func': return '#dcdcaa';
-        case 'tok-tag': return '#569cd6';
-        case 'tok-key': return '#9cdcfe';
-        case 'tok-macro': return '#c586c0';
-        default: return '#d4d4d4';
-    }
+// Reads the SAME theme-aware --tok-*/--text custom properties the real syntax-highlighted code
+// uses (see the .tok-comment etc. CSS rules), rather than a fixed palette. The fixed dark-theme
+// hex values used here previously (light blue/tan/yellow, meant for a dark background) were
+// exactly what made the minimap look washed out and illegible in light theme: those pastel
+// colors have plenty of contrast on var(--bg) #1e1e1e but almost none on light theme's #ffffff.
+function getMinimapPalette() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = (name, fallback) => { const val = cs.getPropertyValue(name); return val ? val.trim() || fallback : fallback; };
+    return {
+        'tok-comment': v('--tok-comment', '#6a9955'),
+        'tok-string': v('--tok-string', '#ce9178'),
+        'tok-keyword': v('--tok-keyword', '#569cd6'),
+        'tok-number': v('--tok-number', '#b5cea8'),
+        'tok-type': v('--tok-type', '#4ec9b0'),
+        'tok-func': v('--tok-func', '#dcdcaa'),
+        'tok-tag': v('--tok-tag', '#569cd6'),
+        'tok-key': v('--tok-key', '#9cdcfe'),
+        'tok-macro': v('--tok-macro', '#c586c0'),
+        'default': v('--text', '#d4d4d4')
+    };
+}
+function minimapColorForCls(cls, palette) {
+    return (cls && palette[cls]) || palette.default;
 }
 // Hand-drawn per-run rectangles read as a grid of little colored bars no matter how the gap/alpha
 // is tuned — real letterforms have curves, ascenders/descenders and varied widths that a
@@ -1447,6 +1457,7 @@ function buildMinimapHQCanvas(rows, cssWidth, cssHeight) {
     off.height = h;
     const octx = off.getContext('2d');
     const info = getMinimapFontInfo();
+    const palette = getMinimapPalette();
     const targetCharW = MINIMAP_CHAR_W * ss;
     const fontSize = info.baseSize * (targetCharW / info.baseCharW);
     octx.font = fontSize + 'px ' + info.family;
@@ -1475,7 +1486,7 @@ function buildMinimapHQCanvas(rows, cssWidth, cssHeight) {
                 // true length obvious at a glance; comments and other classified tokens stay a
                 // notch brighter so a run of comment lines pops as a recognizable patch.
                 octx.globalAlpha = t.cls ? 0.95 : 0.8;
-                octx.fillStyle = minimapColorForCls(t.cls);
+                octx.fillStyle = minimapColorForCls(t.cls, palette);
                 octx.fillText(t.text, x, baselineY);
             }
             x += tokenW;
@@ -2738,9 +2749,20 @@ init();
         if (btn) btn.title = theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
     }
 
+    function refreshCustomMinimaps() {
+        // The hand-rolled per-snippet minimap bakes its token colors into an offscreen canvas from
+        // the --tok-*/--text custom properties, so switching theme needs an explicit repaint.
+        try {
+            if (typeof postedEntries !== 'undefined' && typeof renderMinimap === 'function') {
+                postedEntries.forEach(function (item) { if (item.minimap) renderMinimap(item); });
+            }
+        } catch (e) {}
+    }
+
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
         updateToggleIcon(theme);
+        refreshCustomMinimaps();
     }
 
     window.toggleTheme = function () {
