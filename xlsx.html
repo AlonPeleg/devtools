@@ -4,6 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CSV/XLSX Viewer</title>
+<script>
+(function () {
+    try {
+        var qs = new URLSearchParams(location.search);
+        var qTheme = qs.get('theme');
+        var theme = null;
+        if (qTheme === 'light' || qTheme === 'dark') {
+            theme = qTheme;
+            localStorage.setItem('sheet_viewer_theme_v1', theme);
+        } else {
+            var saved = localStorage.getItem('sheet_viewer_theme_v1');
+            if (saved === 'light' || saved === 'dark') theme = saved;
+        }
+        if (theme) document.documentElement.setAttribute('data-theme', theme);
+    } catch (e) {}
+})();
+</script>
 <style>
     :root {
         --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -271,6 +288,38 @@
        both) is its own element and defaults to the browser's light UI color if unstyled —
        that's the stray white box in the bottom corner of a scrollable panel. */
     ::-webkit-scrollbar-corner { background: var(--bg); }
+
+    /* ---------- Light theme ---------- */
+    html[data-theme="light"] {
+        --bg: #ffffff;
+        --bg-panel: #f3f3f3;
+        --bg-elevated: #ececec;
+        --border: #d4d4d4;
+        --border-soft: rgba(0,0,0,0.16);
+        --text: #1e1e1e;
+        --text-dim: #6b6b6b;
+        --text-bright: #000000;
+        --accent: #086bb3;
+        --accent-fg: #ffffff;
+        --accent-hover: #0b7dcc;
+        --input-bg: #e8e8e8;
+        --hover-bg: #ebebeb;
+        --sel-bg: #cfe8fc;
+        --focus: #086bb3;
+        --csv-color: #0a7ea6;
+        --tsv-color: #7c4fbe;
+        --xlsx-color: #157347;
+        --num-color: #098658;
+        --bool-color: #0451a5;
+        --date-color: #8a5a1d;
+        --empty-bg: rgba(0,0,0,0.03);
+        --diff-add: #22863a;
+        --diff-remove: #cb2431;
+        --diff-change: #9a7d0a;
+        --shadow: rgba(0,0,0,0.15);
+    }
+    html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c1c1c1; }
+    html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
 </style>
 </head>
 <body>
@@ -278,6 +327,9 @@
         <div class="tab-link active" data-tab="viewer-pane" onclick="switchTab('viewer-pane', this)">Viewer</div>
         <div class="tab-link" data-tab="compare-pane" onclick="switchTab('compare-pane', this)">Compare</div>
         <div class="storage-io-bar">
+            <button class="btn-global-icon" id="themeToggleBtn" title="Toggle light / dark theme" onclick="toggleTheme()">
+                <span id="themeToggleIcon" style="display:flex"></span>
+            </button>
             <button class="btn-global-icon" id="storageExportBtn" title="Export local storage to a file" onclick="exportLocalStorageBackup()">
                 <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
             </button>
@@ -2847,5 +2899,42 @@
     setupFormulaPointClick('compareRight');
     loadEntriesFromStorage();
     </script>
+<script>
+(function () {
+    var THEME_KEY = 'sheet_viewer_theme_v1';
+    var moonIcon = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M6.5 1.3a6.7 6.7 0 1 0 8.2 8.2A6.95 6.95 0 0 1 6.5 1.3z"/></svg>';
+    var sunIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="8" cy="8" r="3.2" fill="currentColor" stroke="none"/><path d="M8 0.7v2.1M8 13.2v2.1M0.7 8h2.1M13.2 8h2.1M2.8 2.8l1.5 1.5M11.7 11.7l1.5 1.5M2.8 13.2l1.5-1.5M11.7 4.3l1.5-1.5"/></svg>';
+
+    function updateToggleIcon(theme) {
+        var icon = document.getElementById('themeToggleIcon');
+        var btn = document.getElementById('themeToggleBtn');
+        if (icon) icon.innerHTML = theme === 'light' ? sunIcon : moonIcon;
+        if (btn) btn.title = theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
+    }
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
+        updateToggleIcon(theme);
+    }
+
+    window.toggleTheme = function () {
+        var current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+        var next = current === 'light' ? 'dark' : 'light';
+        applyTheme(next);
+        try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+    };
+
+    window.addEventListener('message', function (e) {
+        var data = e.data;
+        if (data && data.__devToolkitThemeSet && (data.theme === 'light' || data.theme === 'dark')) {
+            applyTheme(data.theme);
+            try { localStorage.setItem(THEME_KEY, data.theme); } catch (err) {}
+        }
+    });
+
+    var initial = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    updateToggleIcon(initial);
+})();
+</script>
 </body>
 </html>
