@@ -53,6 +53,12 @@
         --tok-key: #9cdcfe;
         --tok-macro: #c586c0;
 
+        /* VS Code's default dark bracket-pair-colorization cycle (Gold / Orchid / Light-sky-blue). */
+        --brk-1: #ffd700;
+        --brk-2: #da70d6;
+        --brk-3: #179fff;
+        --brk-unmatched: #f44747;
+
         --diff-add: #4ec9b0;
         --diff-remove: #f48771;
         --diff-change: #dcdcaa;
@@ -220,6 +226,11 @@
     .fold-arrow.folded { color: var(--accent); opacity: 1; }
     .fold-placeholder { padding: 2px 10px 2px calc(4.6em + 4px); font-size: 11px; color: var(--text-dim); font-style: italic; cursor: pointer; background: rgba(255,255,255,0.03); border-top: 1px dashed var(--border-soft); border-bottom: 1px dashed var(--border-soft); user-select: none; }
     .fold-placeholder:hover { color: var(--text-bright); background: var(--hover-bg); }
+    /* Inline "collapsed" marker appended to the end of a fold's own start line — e.g.
+       "if (test=1) {⋯}" — so collapsing still shows whether an object/array/call was hidden,
+       VS Code-style, instead of a generic full-width "N lines hidden" bar. */
+    .fold-inline { color: var(--text-dim); font-style: italic; cursor: pointer; padding: 1px 5px; margin-left: 3px; border-radius: 3px; background: var(--hover-bg); user-select: none; }
+    .fold-inline:hover { color: var(--text-bright); background: var(--sel-bg); }
     .fold-controls { display: flex; align-items: center; gap: 2px; margin-left: auto; }
     .fold-controls .btn-icon { font-size: 10px; font-weight: 700; letter-spacing: -1px; padding: 4px 6px; }
 
@@ -262,6 +273,10 @@
     .tok-tag { color: var(--tok-tag); }
     .tok-key { color: var(--tok-key); }
     .tok-macro { color: var(--tok-macro); }
+    .brk-1 { color: var(--brk-1); }
+    .brk-2 { color: var(--brk-2); }
+    .brk-3 { color: var(--brk-3); }
+    .brk-unmatched { color: var(--brk-unmatched); }
     .match { background-color: rgba(220, 190, 0, 0.4); border-radius: 1px; }
     .match.current { background-color: #f7d75c; color: #000; border: 1px solid #ffaa00; font-weight: bold; }
 
@@ -409,6 +424,11 @@
         --tok-tag: #800000;
         --tok-key: #001080;
         --tok-macro: #af00db;
+        /* VS Code's default light (Light+) bracket-pair-colorization cycle (Blue / Green / Brown). */
+        --brk-1: #0431fa;
+        --brk-2: #319331;
+        --brk-3: #7b3814;
+        --brk-unmatched: #cc0000;
         --diff-add: #22863a;
         --diff-remove: #cb2431;
         --diff-change: #9a7d0a;
@@ -1067,6 +1087,48 @@ function highlightToLines(code, langId) {
 }
 function escapeHtml(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 
+/* ---------- bracket-pair colorization (view mode) ----------
+   Monaco colors matching ( ), [ ], { } pairs by nesting depth out of the box; our hand-rolled
+   view-mode renderer had no equivalent, so brackets all rendered in the plain default text color.
+   This walks the already-tokenized lines (skipping anything already classified as a string or
+   comment, exactly like computeFoldRanges' own brace-matching pass does) and re-splits each
+   remaining plain-text run so individual bracket characters become their own token, colored by
+   a 3-color cycle keyed to nesting depth — the same "Gold / Orchid / Light-sky-blue" cycle VS
+   Code/Monaco uses by default. A stack (shared across all three bracket kinds, matching Monaco's
+   default behavior) pairs each closer with its opener so both get the same color; a closer with
+   nothing left to pair against is marked unmatched rather than guessed at. */
+const BRACKET_COLOR_CLASSES = ['brk-1', 'brk-2', 'brk-3'];
+function annotateBracketColors(lines) {
+    const stack = [];
+    return lines.map(lineTokens => {
+        const outLine = [];
+        lineTokens.forEach(tok => {
+            if (tok.cls === 'tok-string' || tok.cls === 'tok-comment' || !/[{}()\[\]]/.test(tok.text)) {
+                outLine.push(tok);
+                return;
+            }
+            let buf = '';
+            for (let i = 0; i < tok.text.length; i++) {
+                const ch = tok.text[i];
+                if (ch === '(' || ch === '[' || ch === '{') {
+                    if (buf) { outLine.push({ text: buf, cls: tok.cls }); buf = ''; }
+                    const colorCls = BRACKET_COLOR_CLASSES[stack.length % BRACKET_COLOR_CLASSES.length];
+                    stack.push(colorCls);
+                    outLine.push({ text: ch, cls: colorCls });
+                } else if (ch === ')' || ch === ']' || ch === '}') {
+                    if (buf) { outLine.push({ text: buf, cls: tok.cls }); buf = ''; }
+                    const colorCls = stack.pop();
+                    outLine.push({ text: ch, cls: colorCls || 'brk-unmatched' });
+                } else {
+                    buf += ch;
+                }
+            }
+            if (buf) outLine.push({ text: buf, cls: tok.cls });
+        });
+        return outLine;
+    });
+}
+
 /* ---------- code folding: detect foldable ranges (functions/methods/blocks/labels) ---------- */
 const FOLD_BRACE_LANGS = new Set(['typescript','javascript','java','csharp','cpp','c','go','rust','kotlin','swift','php','css','json','objectscript']);
 function foldIndentWidth(line) {
@@ -1209,8 +1271,26 @@ function charDiff(sA, sB) {
 function escapeAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function debounce(fn, wait) { let t; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); }; }
 
+const FOLD_CLOSE_OF = { '{': '}', '[': ']', '(': ')' };
+// What to show at the end of a fold's start line once it's collapsed. VS Code/Monaco collapses a
+// block onto ONE line — "if (test=1) {...}" / "set filters=[...]" — so you can still tell an object
+// from an array from the bracket alone; our old behavior instead blanked the whole block out behind
+// a generic "N lines hidden" bar with no hint of what was inside. This looks at the fold's own start
+// line first (K&R style: the opening bracket, e.g. "{", is already the last character someone can
+// see — Allman-style ObjectScript instead puts it alone on the very next line, which is what gets
+// hidden) and only synthesizes the opening bracket into the placeholder when it isn't already visible.
+function foldInlinePlaceholder(rawLines, r) {
+    const startLine = rawLines[r.start] || '';
+    const lastCh = startLine.replace(/[ \t]+$/, '').slice(-1);
+    if (FOLD_CLOSE_OF[lastCh]) return '⋯' + FOLD_CLOSE_OF[lastCh];
+    const nextLine = rawLines[r.start + 1] || '';
+    const m = /^[ \t]*([{[(])[ \t]*$/.exec(nextLine);
+    if (m) return ' ' + m[1] + '⋯' + FOLD_CLOSE_OF[m[1]];
+    return ' ⋯'; // pure indentation-based fold (no braces) — no bracket to hint at
+}
 function renderCodeBlockHTML(code, langId, wrap, entryId, collapsedFolds, foldRanges) {
-    const lines = highlightToLines(code, langId);
+    const rawLines = code.split('\n');
+    const lines = annotateBracketColors(highlightToLines(code, langId));
     collapsedFolds = collapsedFolds || new Set();
     if (!foldRanges) foldRanges = entryId ? computeFoldRanges(code, langId) : [];
     const foldByStart = new Map();
@@ -1239,14 +1319,13 @@ function renderCodeBlockHTML(code, langId, wrap, entryId, collapsedFolds, foldRa
             const esc = escapeHtml(t.text);
             html += t.cls ? '<span class="' + t.cls + '">' + esc + '</span>' : esc;
         });
-        html += '</span></div>';
         if (foldRange) {
+            const isCollapsed = collapsedFolds.has(i);
             const count = foldRange.end - foldRange.start;
-            const collapsedNow = collapsedFolds.has(i);
-            const hiddenByAncestor = parents.some(p => collapsedFolds.has(p));
-            const parentsAttr2 = parents.length ? ' data-parent-folds="' + parents.join(',') + '"' : '';
-            html += '<div class="fold-placeholder" data-fold-placeholder="' + i + '"' + parentsAttr2 + ' style="display:' + ((collapsedNow && !hiddenByAncestor) ? 'block' : 'none') + ';" onclick="toggleFold(\'' + entryId + '\',' + i + ')">⋯ ' + count + ' line' + (count === 1 ? '' : 's') + ' hidden ⋯</div>';
+            const placeholderText = foldInlinePlaceholder(rawLines, foldRange);
+            html += '<span class="fold-inline" data-fold-inline="' + i + '" style="display:' + (isCollapsed ? 'inline' : 'none') + ';" title="' + count + ' line' + (count === 1 ? '' : 's') + ' hidden — click to expand" onclick="toggleFold(\'' + entryId + '\',' + i + ')">' + escapeHtml(placeholderText) + '</span>';
         }
+        html += '</span></div>';
     });
     html += '</div>';
     return html;
@@ -1984,12 +2063,12 @@ function applyFoldVisibility(item) {
         const parents = attr.split(',').map(Number);
         line.style.display = parents.some(p => collapsed.has(p)) ? 'none' : '';
     });
-    container.querySelectorAll('.fold-placeholder').forEach(ph => {
-        const foldStart = Number(ph.getAttribute('data-fold-placeholder'));
-        const parentsAttr = ph.getAttribute('data-parent-folds');
-        const parents = parentsAttr ? parentsAttr.split(',').map(Number) : [];
-        const hiddenByAncestor = parents.some(p => collapsed.has(p));
-        ph.style.display = (collapsed.has(foldStart) && !hiddenByAncestor) ? 'block' : 'none';
+    // The inline "{⋯}" marker lives inside the fold's own start-line div, so it inherits that
+    // line's visibility automatically when an ANCESTOR fold hides it — only its own collapsed
+    // state needs setting here.
+    container.querySelectorAll('.fold-inline').forEach(marker => {
+        const foldStart = Number(marker.getAttribute('data-fold-inline'));
+        marker.style.display = collapsed.has(foldStart) ? 'inline' : 'none';
     });
     container.querySelectorAll('.fold-arrow[data-fold]').forEach(arrow => {
         const foldStart = Number(arrow.getAttribute('data-fold'));
@@ -2012,12 +2091,19 @@ function collapseAllFolds(entryId) {
     const item = findEntry(entryId);
     if (!item) return;
     if (item.mode === 'edit' && item.editor) {
-        const action = item.editor.getAction('editor.foldAll');
+        // "editor.foldAll" folds literally everything, including the outermost Class/<html> wrapper
+        // — with that collapsed too there's nothing left on screen but its own declaration line.
+        // "editor.foldLevel2" instead folds every range at nesting depth >= 2 and leaves depth-1
+        // (top-level) ranges open, which is exactly "collapse all but the main tag/class".
+        const action = item.editor.getAction('editor.foldLevel2');
         if (action) action.run();
         return;
     }
     const ranges = computeFoldRanges(item.rawCode, effectiveLangId(item));
-    item.collapsedFolds = new Set(ranges.map(r => r.start));
+    // Same rule for view mode: don't collapse a range that has no enclosing range of its own —
+    // that's "the main tag/class" the file is built around — only collapse ranges nested inside it.
+    const isTopLevel = r => !ranges.some(other => other !== r && other.start <= r.start && other.end >= r.end);
+    item.collapsedFolds = new Set(ranges.filter(r => !isTopLevel(r)).map(r => r.start));
     applyFoldVisibility(item);
 }
 function expandAllFolds(entryId) {
