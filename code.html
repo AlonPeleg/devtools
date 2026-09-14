@@ -132,8 +132,14 @@
 
     .entry { border: 1px solid var(--border-soft); border-radius: 6px; overflow: hidden; background: var(--bg-panel); display: flex; flex-direction: column; max-height: 62vh; box-shadow: 0 1px 3px var(--shadow); }
     .entry.collapsed-entry { max-height: none; }
-    .entry.collapsed-entry .content, .entry.collapsed-entry .entry-toolbar-2 { display: none; }
+    .entry.collapsed-entry .content-row, .entry.collapsed-entry .entry-toolbar-2 { display: none; }
     .entry-header { background: var(--bg-elevated); padding: 4px 8px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border-soft); flex-shrink: 0; flex-wrap: wrap; }
+    /* .entry-body wraps the toolbar-2 + content-row pair so the whole pair can be swapped between
+       view-mode and edit-mode markup in one shot (see setEntryMode). It must itself be a flex
+       column filling the rest of .entry, or content-row's own flex:1/min-height:0 chain (which is
+       what lets .content scroll internally instead of just being clipped by .entry's max-height)
+       has no flex container to size against. */
+    .entry-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
     .master-toggle { cursor: pointer; font-size: 9px; width: 12px; display: inline-flex; justify-content: center; opacity: 0.7; user-select: none; color: var(--text); }
     .entry.collapsed-entry .master-toggle { transform: rotate(-90deg); }
     .time-tag { font-size: 9px; opacity: 0.55; font-family: var(--font-mono); white-space: nowrap; }
@@ -186,15 +192,18 @@
     /* ---------- Code display ---------- */
     .content-row { flex: 1 1 auto; display: flex; min-height: 0; }
     /* .content-wrap exists so the sticky-scroll breadcrumb can overlay .content from OUTSIDE its
-       scrollable box (see the sticky-scroll comment below) while still taking the same flex share
-       of .content-row that .content used to take directly. .content itself stays a normal (not
-       absolutely positioned) flex child inside it — it must keep contributing its real intrinsic
-       content size, since .entry only has a max-height, not a height: the flex column's auto
-       height is what clamps to that max-height in the first place, and it can only do that if a
-       descendant somewhere actually has real (large) content to clamp. Taking .content out of flow
-       here left nothing to measure and collapsed .entry down to its toolbars' height. */
+       scrollable box while still taking the same flex share of .content-row that .content used to
+       take directly — see the sticky-scroll comment below for why it lives outside .content. */
     .content-wrap { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; display: flex; }
     .content { flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--bg); position: relative; }
+    /* ---------- Monaco editor host (edit mode only — a snippet's default look is the view-mode
+       colored code block below; clicking its Edit icon swaps this in instead). A default fixed
+       height is set inline per-entry based on line count (see computeDefaultEditorHeight) so short
+       snippets stay compact and long ones settle at a sane cap with Monaco's own internal
+       scrolling. Focused/maximized mode overrides that with a generous viewport-relative height. */
+    .monaco-container { width: 100%; min-width: 0; position: relative; }
+    .entry.focused-entry .monaco-container { height: 74vh !important; }
+    .monaco-loading { color: var(--text-dim); font-size: 12px; font-family: var(--font-mono); padding: 16px; }
     .code-block { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre; }
     .code-block.wrap-on { white-space: pre-wrap; word-break: break-word; }
     .code-line { display: flex; }
@@ -214,19 +223,10 @@
     .fold-controls { display: flex; align-items: center; gap: 2px; margin-left: auto; }
     .fold-controls .btn-icon { font-size: 10px; font-weight: 700; letter-spacing: -1px; padding: 4px 6px; }
 
-    /* ---------- Sticky scope scroll (VS Code-style breadcrumb of enclosing class/method/label) ----------
-       This is a sibling of .content (both live inside .content-wrap), overlaid on top with
-       position:absolute — it is NOT a descendant of the scrollable .content box. That matters for
-       two separate reasons we hit in practice: (1) if it lived inside .content as a flex sibling,
-       its height (which changes as more/fewer ancestor lines qualify while you scroll) would
-       resize .content's own box, which the minimap mirrors via flex — constantly resizing the
-       minimap out from under itself. (2) if it lived inside .content as a position:sticky child
-       (an earlier attempt at fixing #1), it still reserved real box space in .content's normal
-       flow, so .content's scrollHeight and every code line's offsetTop shifted by however many
-       breadcrumb lines happened to be showing — which the minimap (and its viewport-highlight
-       math) both read directly, so that also drifted and jittered as you scrolled. Living outside
-       .content entirely means its size can never feed back into anything .content or the minimap
-       measure. */
+    /* ---------- Sticky scope scroll (VS Code-style breadcrumb of enclosing class/method/label,
+       view mode only) — a sibling of .content (both live inside .content-wrap), overlaid on top
+       with position:absolute so its height never feeds back into .content's scrollHeight (which
+       the minimap reads directly) as more/fewer breadcrumb lines show while scrolling. */
     .entry-sticky-scroll { position: absolute; top: 0; left: 0; right: 0; z-index: 3; background: var(--bg); }
     .entry-sticky-scroll:empty { display: none; }
     .sticky-line { display: flex; cursor: pointer; background: var(--bg-elevated); border-bottom: 1px solid var(--border-soft); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre; overflow: hidden; }
@@ -234,8 +234,8 @@
     .sticky-line .ln { flex: 0 0 auto; width: 4.6em; text-align: right; padding-right: 10px; color: var(--text-dim); opacity: 0.55; user-select: none; }
     .sticky-line .code-text { flex: 1 1 auto; padding-right: 12px; overflow: hidden; text-overflow: ellipsis; }
 
-    /* ---------- Minimap (VS Code-style; one switch per snippet, off by default, only offered while
-       that snippet is focused/maximized — see .entry.focused-entry rules below) ---------- */
+    /* ---------- Minimap (VS Code-style; view mode only, one switch per snippet, off by default,
+       only offered while that snippet is focused/maximized) ---------- */
     .minimap { width: 0; flex: 0 0 auto; overflow: hidden; position: relative; background: var(--bg); cursor: pointer; }
     .entry.focused-entry .minimap.mm-visible { width: 150px; border-left: 1px solid var(--border-soft); }
     .minimap-canvas { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
@@ -243,12 +243,9 @@
     .minimap-canvas-sharp { clip-path: inset(0 0 100% 0); }
     .minimap-viewport { position: absolute; left: 0; right: 0; top: 0; height: 20px; border: 1px solid rgba(255,255,255,0.5); box-sizing: border-box; pointer-events: none; }
     .minimap:hover .minimap-viewport { border-color: rgba(255,255,255,0.75); }
-    /* Mirrors the current text selection (mouse-drag or Ctrl/Cmd+A) onto the minimap, VS Code-style —
-       see updateMinimapSelectionOverlay(). Hidden by default; shown only while that entry actually
-       has a selection. */
     .minimap-selection { position: absolute; left: 0; right: 0; top: 0; height: 0; background: rgba(255,255,255,0.22); pointer-events: none; display: none; }
-    /* The minimap (and its per-snippet toggle) only ever appears once a snippet is focused/maximized.
-       Wrap's toggle is card-chrome the same way — it only shows once focused too. */
+    /* The minimap (and its per-snippet toggle) and wrap's toggle only ever appear once a snippet
+       is focused/maximized — same in both view mode (custom canvas) and edit mode (Monaco native). */
     .entry:not(.focused-entry) .minimap { display: none; }
     .entry:not(.focused-entry) .minimap-toggle { display: none; }
     .entry:not(.focused-entry) .wrap-toggle { display: none; }
@@ -299,7 +296,18 @@
     .compare-col-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border-soft); flex-wrap: wrap; flex-shrink: 0; }
     .compare-label { font-size: 10px; text-transform: uppercase; opacity: 0.7; font-weight: 800; letter-spacing: 0.4px; }
     .compare-col .content { flex-grow: 1; position: relative; }
-    .compare-col textarea.editor-textarea { width: 100%; height: 100%; resize: none; border: none; background: var(--bg); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 8px; outline: none; line-height: 1.5; }
+    /* Compare panels host a real Monaco editor (same as the Viewer tab's edit mode) instead of a
+       plain textarea. .content already resolves a definite height via the flex chain above it, so
+       absolutely filling it (rather than relying on percentage heights) is the reliable way to give
+       Monaco's automaticLayout something concrete to measure. */
+    .compare-col .monaco-container { position: absolute; inset: 0; }
+    /* Fallback "normal editing panel" — a plain textarea, toggled in per-panel in place of Monaco.
+       No-wrap (horizontal scroll) is the default per-panel state; .wrap-on switches to soft-wrap. */
+    .compare-col .editor-textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; border: none; background: var(--bg); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 8px; outline: none; line-height: 1.5; white-space: pre; overflow: auto; }
+    .compare-col .editor-textarea.wrap-on { white-space: pre-wrap; word-break: break-word; }
+    /* Stronger, more visible landing marker than Monaco's own selection highlight when a diff row
+       jump (revealComparePanelLine) lands on a line — fades out via the shared flash-pulse keyframes. */
+    .monaco-line-flash { background: rgba(14,143,217,0.35); animation: flash-pulse 0.9s ease-out; }
     .editor-mode-btn { font-size: 10px; padding: 3px 9px; white-space: nowrap; }
     /* Small "scroll to top" button floating over a long scrollable panel. Hidden until you've
        actually scrolled down, so it doesn't clutter the view when there's nothing to jump to. */
@@ -409,6 +417,56 @@
     html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c1c1c1; }
     html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js" onerror="window.__monacoShowFailure && window.__monacoShowFailure()"></script>
+<script>
+(function () {
+    window.__monacoReady = false;
+    window.__monacoShowFailure = function () {
+        if (window.__monacoReady || window.__monacoLoadFailed) return;
+        window.__monacoLoadFailed = true;
+        document.querySelectorAll('.monaco-container').forEach(function (el) {
+            el.innerHTML = '<div class="monaco-loading">Editor failed to load — check your connection and reload the page. Your saved code is safe.</div>';
+        });
+    };
+    var failTimer = setTimeout(window.__monacoShowFailure, 10000);
+    if (typeof require === 'undefined' || typeof require.config !== 'function') {
+        // The loader script itself never ran (blocked, offline, or errored before onerror fired) —
+        // don't wait for the 10s timer, but don't clear it either in case this races the loader.
+        window.__monacoShowFailure();
+        return;
+    }
+    var MONACO_MIN_BASE = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min';
+    require.config({ paths: { vs: MONACO_MIN_BASE + '/vs' } });
+    window.MonacoEnvironment = {
+        getWorkerUrl: function () {
+            var workerBootstrap = "self.MonacoEnvironment = { baseUrl: '" + MONACO_MIN_BASE + "/' };\n" +
+                "importScripts('" + MONACO_MIN_BASE + "/vs/base/worker/workerMain.js');";
+            // A blob: URL is honored by strict browser/corporate security policies that block
+            // Worker creation from a data: URL outright (some ad blockers and enterprise
+            // "restricted content types" policies do this specifically) — that's what produces
+            // Monaco's "Could not create web worker(s)" console warning and its main-thread
+            // fallback. Try blob: first since it's the more broadly-trusted option; keep the
+            // data: URI as a safety net for the rare environment where Blob/createObjectURL
+            // itself is unavailable.
+            try {
+                var blob = new Blob([workerBootstrap], { type: 'application/javascript' });
+                return URL.createObjectURL(blob);
+            } catch (e) {
+                return 'data:text/javascript;charset=utf-8,' + encodeURIComponent(workerBootstrap);
+            }
+        }
+    };
+    require(['vs/editor/editor.main'], function () {
+        clearTimeout(failTimer);
+        window.__monacoReady = true;
+        if (typeof window.onMonacoReady === 'function') window.onMonacoReady();
+    }, function (err) {
+        clearTimeout(failTimer);
+        console.error('Monaco failed to load:', err);
+        window.__monacoShowFailure();
+    });
+})();
+</script>
 </head>
 <body>
     <div class="tabs-header">
@@ -501,9 +559,13 @@
                         </div>
                         <div class="btn-delete" title="Clear Panel A" onclick="clearComparePanel('compareLeft')">×</div>
                     </div>
-                    <div class="content">
-                        <textarea class="editor-textarea" id="compareLeft" placeholder="Paste or load code into Panel A..."></textarea>
-                        <button type="button" class="scroll-top-btn" id="compareLeftScrollTop" title="Scroll to top" onclick="scrollElementToTop('compareLeft')">&#9650;</button>
+                    <div class="entry-toolbar-2">
+                        <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleComparePanelWrap('compareLeft', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
+                        <div class="btn-icon mode-toggle" title="Switch to plain text editor" onclick="toggleComparePanelMode('compareLeft', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
+                    </div>
+                    <div class="content" id="compareLeftContentBox">
+                        <div class="monaco-container" id="monaco-compareLeft"></div>
+                        <button type="button" class="scroll-top-btn" id="compareLeftScrollTop" title="Scroll to top" onclick="scrollComparePanelToTop('compareLeft')">&#9650;</button>
                     </div>
                 </div>
                 <div class="compare-col" id="compareRightCol" ondragover="allowCompareDrop(event)" ondrop="handleCompareDrop(event,'compareRight')" ondragenter="this.classList.add('drop-target')" ondragleave="this.classList.remove('drop-target')">
@@ -522,9 +584,13 @@
                         </div>
                         <div class="btn-delete" title="Clear Panel B" onclick="clearComparePanel('compareRight')">×</div>
                     </div>
-                    <div class="content">
-                        <textarea class="editor-textarea" id="compareRight" placeholder="Paste or load code into Panel B..."></textarea>
-                        <button type="button" class="scroll-top-btn" id="compareRightScrollTop" title="Scroll to top" onclick="scrollElementToTop('compareRight')">&#9650;</button>
+                    <div class="entry-toolbar-2">
+                        <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleComparePanelWrap('compareRight', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
+                        <div class="btn-icon mode-toggle" title="Switch to plain text editor" onclick="toggleComparePanelMode('compareRight', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
+                    </div>
+                    <div class="content" id="compareRightContentBox">
+                        <div class="monaco-container" id="monaco-compareRight"></div>
+                        <button type="button" class="scroll-top-btn" id="compareRightScrollTop" title="Scroll to top" onclick="scrollComparePanelToTop('compareRight')">&#9650;</button>
                     </div>
                 </div>
             </div>
@@ -1184,7 +1250,10 @@ function createEntry(code, opts) {
         collapsed: false,
         wrap: false,
         minimap: false,
-        collapsedFolds: new Set()
+        mode: 'view',
+        collapsedFolds: new Set(),
+        editor: null,
+        model: null
     };
     postedEntries.push(item);
     return item;
@@ -1248,10 +1317,32 @@ function buildEntryHtml(item) {
           <div class="btn-icon" title="Copy raw code" onclick="copyEntryRaw('${item.id}', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
           <div class="btn-icon" title="Copy as Markdown code fence" onclick="copyEntryFence('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 2 8 5 12"/><polyline points="11 4 14 8 11 12"/></svg></div>
           <div class="btn-icon" title="Download as file" onclick="downloadEntry('${item.id}')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.25 1.5h1.5v6h2l-2.75 3-2.75-3h2v-6z"/><path d="M2 12h12v2.5H2V12z"/></svg></div>
+          <div class="btn-icon btn-edit-toggle${item.mode === 'edit' ? ' toggle-active' : ''}" title="${item.mode === 'edit' ? 'Done editing — back to view' : 'Edit this snippet'}" onclick="toggleEntryEditMode('${item.id}')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.28 1.72a1 1 0 0 1 1.41 0l1.59 1.59a1 1 0 0 1 0 1.41l-8.5 8.5-3.5 1 1-3.5 8.5-8.5z"/></svg></div>
           <div class="btn-icon btn-focus" title="Focus (maximize)" onclick="focusEntry(this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg></div>
         </div>
         <div class="btn-delete" title="Delete snippet" onclick="removeEntry(this)">×</div>
       </div>
+      <div class="entry-body" id="entry-body-${item.id}">${buildEntryBodyHtml(item)}</div>
+    </div>`;
+}
+
+function buildEntryBodyHtml(item) {
+    if (item.mode === 'edit') {
+        return `
+      <div class="entry-toolbar-2">
+        <div class="btn-icon" title="Find (and replace) in this snippet" onclick="openEntryFind('${item.id}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6.8" cy="6.8" r="4.8"/><line x1="10.4" y1="10.4" x2="14.5" y2="14.5"/></svg></div>
+        <div class="fold-controls">
+          <div class="btn-icon wrap-toggle${item.wrap ? ' toggle-active' : ''}" title="Wrap long lines" onclick="toggleEntryWrapBtn('${item.id}', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
+          <div class="btn-icon minimap-toggle${item.minimap ? ' toggle-active' : ''}" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
+          <div class="btn-icon" title="Collapse all functions / blocks" onclick="collapseAllFolds('${item.id}')">▸▸</div>
+          <div class="btn-icon" title="Expand all functions / blocks" onclick="expandAllFolds('${item.id}')">▾▾</div>
+        </div>
+      </div>
+      <div class="content-row">
+        <div class="monaco-container" id="monaco-${item.id}"></div>
+      </div>`;
+    }
+    return `
       <div class="entry-toolbar-2">
         <div class="search-container">
           <input type="text" class="search-inline" placeholder="Find in code..." oninput="entrySearch('${item.id}', this)" onkeydown="entrySearchNav(event,'${item.id}')">
@@ -1277,11 +1368,181 @@ function buildEntryHtml(item) {
           <div class="minimap-selection" id="minimap-selection-${item.id}"></div>
           <div class="minimap-viewport" id="minimap-viewport-${item.id}"></div>
         </div>
-      </div>
-    </div>`;
+      </div>`;
 }
 
-function renderEntryContent(item) {
+/* =========================================================================
+   MONACO EDITOR INTEGRATION (Viewer tab)
+   Every posted snippet is a real, freely-editable Monaco instance — the same
+   editor engine VS Code uses. JS/TS/JSON get Monaco's real background
+   type-checking + IntelliSense; every other supported language gets a proper
+   Monarch grammar (syntax highlighting) plus basic word/snippet suggestions.
+   ========================================================================= */
+const MONACO_LANG_MAP = {
+    typescript: 'typescript', javascript: 'javascript', java: 'java', csharp: 'csharp',
+    python: 'python', objectscript: 'objectscript-custom', cpp: 'cpp', c: 'cpp',
+    go: 'go', rust: 'rust', php: 'php', ruby: 'ruby', kotlin: 'kotlin', swift: 'swift',
+    sql: 'sql', shell: 'shell', css: 'css', xml: 'xml', html: 'html', json: 'json',
+    yaml: 'yaml', plaintext: 'plaintext'
+};
+function getMonacoLangId(internalId) { return MONACO_LANG_MAP[internalId] || 'plaintext'; }
+
+function registerObjectScriptLanguage() {
+    if (!window.monaco) return;
+    if (monaco.languages.getLanguages().some(l => l.id === 'objectscript-custom')) return;
+    monaco.languages.register({ id: 'objectscript-custom', extensions: ['.cls', '.mac', '.int'], aliases: ['ObjectScript', 'Caché ObjectScript'] });
+    monaco.languages.setLanguageConfiguration('objectscript-custom', {
+        comments: { lineComment: '//', blockComment: ['/*', '*/'] },
+        brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+        autoClosingPairs: [
+            { open: '{', close: '}' }, { open: '[', close: ']' }, { open: '(', close: ')' }, { open: '"', close: '"' }
+        ]
+    });
+    monaco.languages.setMonarchTokensProvider('objectscript-custom', {
+        defaultToken: '',
+        keywords: OS_KEYWORDS,
+        tokenizer: {
+            root: [
+                [/##class\(/, { token: 'annotation', next: '@classref' }],
+                [/##super\(/, 'annotation'],
+                [/\$\$\$\w+/, 'macro'],
+                [/\$[A-Za-z]+\b/, 'keyword.system'],
+                [/%[A-Za-z][\w.]*/, 'type.identifier'],
+                [/\/\/.*$/, 'comment'],
+                [/\/\*/, { token: 'comment', next: '@comment' }],
+                [/"/, { token: 'string.quote', next: '@string' }],
+                [/\b\d+(\.\d+)?\b/, 'number'],
+                [/[A-Za-z_][\w]*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
+                [/[{}()\[\]]/, '@brackets'],
+                [/[;,]/, 'delimiter']
+            ],
+            classref: [
+                [/[^)]+/, 'type.identifier'],
+                [/\)/, { token: 'annotation', next: '@pop' }]
+            ],
+            comment: [
+                [/[^*/]+/, 'comment'],
+                [/\*\//, { token: 'comment', next: '@pop' }],
+                [/./, 'comment']
+            ],
+            string: [
+                [/[^"]+/, 'string'],
+                [/""/, 'string'],
+                [/"/, { token: 'string.quote', next: '@pop' }]
+            ]
+        }
+    });
+}
+
+let monacoReady = false;
+const pendingMonacoMounts = [];
+function onMonacoReady() {
+    monacoReady = true;
+    registerObjectScriptLanguage();
+    pendingMonacoMounts.splice(0).forEach(id => {
+        const it = findEntry(id);
+        if (it) mountMonacoEditor(it);
+    });
+    pendingComparePanelMounts.splice(0).forEach(panelId => mountComparePanelEditor(panelId));
+}
+window.onMonacoReady = onMonacoReady;
+
+function computeDefaultEditorHeight(lineCount) {
+    return Math.min(Math.max((lineCount || 1) * 19 + 18, 90), 460);
+}
+function disposeEntryEditor(item) {
+    if (item.editor) { try { item.editor.dispose(); } catch (e) {} item.editor = null; }
+    if (item.model) { try { item.model.dispose(); } catch (e) {} item.model = null; }
+}
+function refreshEntryHeaderChrome(item) {
+    const entryEl = document.querySelector('.entry[data-entry-id="' + item.id + '"]');
+    if (!entryEl) return;
+    const effId = effectiveLangId(item);
+    const lang = LANGS[effId];
+    const badge = entryEl.querySelector('.lang-badge');
+    const picker = entryEl.querySelector('.lang-picker');
+    const confClass = item.override ? 'conf-high' : ('conf-' + item.detected.confidence);
+    if (badge) {
+        badge.style.background = lang.color;
+        badge.style.color = lang.dark ? '#0b0b0b' : '#ffffff';
+        badge.classList.toggle('is-manual', !!item.override);
+        badge.innerHTML = '<span class="confidence-dot ' + confClass + '"></span>' + lang.label;
+    }
+    if (picker) picker.title = escapeAttr(langBadgeTooltip(item));
+}
+function updateEntryDims(item) {
+    const entryEl = document.querySelector('.entry[data-entry-id="' + item.id + '"]');
+    if (!entryEl) return;
+    const dimsEl = entryEl.querySelector('.dims-tag');
+    if (!dimsEl) return;
+    const lines = item.rawCode.split('\n').length;
+    const chars = item.rawCode.length;
+    dimsEl.textContent = lines + ' line' + (lines === 1 ? '' : 's') + ' · ' + chars + ' chars';
+}
+function mountMonacoEditor(item) {
+    const host = document.getElementById('monaco-' + item.id);
+    if (!host) return;
+    if (!window.monaco || !monacoReady) {
+        if (window.__monacoLoadFailed) {
+            host.innerHTML = '<div class="monaco-loading">Editor failed to load — check your connection and reload the page. Your saved code is safe.</div>';
+            return;
+        }
+        if (!pendingMonacoMounts.includes(item.id)) pendingMonacoMounts.push(item.id);
+        host.innerHTML = '<div class="monaco-loading">Loading editor…</div>';
+        return;
+    }
+    disposeEntryEditor(item);
+    host.innerHTML = '';
+    const effId = effectiveLangId(item);
+    const monacoLang = getMonacoLangId(effId);
+    const lineCount = item.rawCode ? item.rawCode.split('\n').length : 1;
+    host.style.height = computeDefaultEditorHeight(lineCount) + 'px';
+    const model = monaco.editor.createModel(item.rawCode || '', monacoLang);
+    const editor = monaco.editor.create(host, {
+        model: model,
+        theme: (document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark'),
+        automaticLayout: true,
+        minimap: { enabled: !!item.minimap },
+        wordWrap: item.wrap ? 'on' : 'off',
+        stickyScroll: { enabled: true },
+        fontFamily: "'Cascadia Code', 'SF Mono', Consolas, 'Courier New', monospace",
+        fontSize: 12.5,
+        scrollBeyondLastLine: false,
+        renderWhitespace: 'selection',
+        smoothScrolling: true,
+        tabSize: 4
+    });
+    item.editor = editor;
+    item.model = model;
+    let saveTimer = null;
+    editor.onDidChangeModelContent(() => {
+        item.rawCode = model.getValue();
+        if (!item.override) {
+            const detected = detectLanguage(item.rawCode);
+            const langChanged = detected.id !== item.detected.id;
+            item.detected = detected;
+            if (langChanged) monaco.editor.setModelLanguage(model, getMonacoLangId(detected.id));
+            refreshEntryHeaderChrome(item);
+        }
+        updateEntryDims(item);
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(saveEntriesToStorage, 500);
+    });
+}
+function openEntryFind(id) {
+    const item = findEntry(id);
+    if (!item || !item.editor) return;
+    item.editor.focus();
+    const action = item.editor.getAction('actions.find');
+    if (action) action.run();
+}
+
+/* =========================================================================
+   VIEW MODE: the original custom colored code-block renderer, restored as
+   the default look for every snippet — Monaco is only mounted once you
+   click a snippet's Edit icon (see setEntryMode / toggleEntryEditMode).
+   ========================================================================= */
+function renderViewModeContent(item) {
     const el = document.getElementById('content-inner-' + item.id);
     if (!el) return;
     const effId = effectiveLangId(item);
@@ -1322,10 +1583,6 @@ function updateStickyScroll(item) {
     const topLineIdx = findTopVisibleLineIndex(contentEl);
     if (topLineIdx === null) { stickyEl.innerHTML = ''; return; }
     const ranges = item._foldRanges || [];
-    // Ancestor scopes whose header line has scrolled out of view above the current top line.
-    // Ranges come back sorted outer-to-inner (by start ascending); keep the outermost ones first
-    // when there are more than fit, since global orientation (class/file) matters more than the
-    // deepest nested wrapper — this matches VS Code's own sticky-scroll truncation behavior.
     const ancestors = ranges.filter(r => r.start < topLineIdx && r.end >= topLineIdx).slice(0, STICKY_MAX_LINES);
     if (!ancestors.length) { stickyEl.innerHTML = ''; return; }
     stickyEl.innerHTML = ancestors.map(r => {
@@ -1349,20 +1606,7 @@ function scrollEntryToLine(entryId, lineIdx) {
 /* ---------- minimap: VS Code-style, one switch per snippet, off by default ---------- */
 const MINIMAP_WIDTH = 150;
 const MINIMAP_CHAR_W = 1.6;
-// Real VS Code doesn't squeeze the whole file into whatever box height happens to be available —
-// each line always gets the same small, fixed-height slice (independent of file length), and once
-// the file is longer than the visible minimap area it pans, scrolling in sync with the code, the
-// same way the code itself scrolls. That's what actually keeps a minimap legible: compressing a
-// long file down to fit forces every line's slice to sub-pixel height and everything overlaps into
-// a smear, no matter how the drawing is tuned. MINIMAP_SCALE is that fixed ratio (minimap px per
-// real content px) — ~0.14 puts a normal 18px code line at ~2.5px in the minimap, close to VS
-// Code's own default density.
 const MINIMAP_SCALE = 0.14;
-// A resize observer per entry keeps the canvas's backing resolution in sync with its actual
-// on-screen size. Without this, focusing/maximizing a snippet (or resizing the window) leaves
-// the canvas drawn at its old, smaller size while CSS stretches it to fill the new box — which
-// is what makes a minimap look blurry and its content drift out of alignment with the
-// viewport-highlight rectangle.
 const minimapResizeObservers = {};
 function observeMinimapResize(item) {
     if (!('ResizeObserver' in window)) return;
@@ -1388,19 +1632,6 @@ function applyMinimapForEntry(item) {
     observeMinimapResize(item);
     if (item.minimap) renderMinimap(item);
 }
-function toggleEntryMinimap(id, checked) {
-    const item = findEntry(id);
-    if (!item) return;
-    item.minimap = checked;
-    applyMinimapForEntry(item);
-}
-function toggleEntryMinimapBtn(id, btnEl) {
-    const item = findEntry(id);
-    if (!item) return;
-    const next = !item.minimap;
-    toggleEntryMinimap(id, next);
-    if (btnEl) btnEl.classList.toggle('toggle-active', next);
-}
 // Reads the SAME theme-aware --tok-*/--text custom properties the real syntax-highlighted code
 // uses (see the .tok-comment etc. CSS rules), rather than a fixed palette. The fixed dark-theme
 // hex values used here previously (light blue/tan/yellow, meant for a dark background) were
@@ -1425,13 +1656,13 @@ function getMinimapPalette() {
 function minimapColorForCls(cls, palette) {
     return (cls && palette[cls]) || palette.default;
 }
-// Hand-drawn per-run rectangles read as a grid of little colored bars no matter how the gap/alpha
-// is tuned — real letterforms have curves, ascenders/descenders and varied widths that a
-// rectangle can never have. Real VS Code's minimap is, at its core, actual text rendered tiny and
-// antialiased. We get the same effect the same way: render the real glyphs at a readable-ish size
-// onto an offscreen canvas, then scale that down onto the small minimap canvas with smoothing on
-// — the browser's own downsampling filter is what turns crisp little letters into the soft,
-// textured "tiny code" look instead of blocky rectangles.
+// Hand-drawn per-character rectangles (the old approach) read as a grid of little squares no
+// matter how the gap/alpha is tuned — real letterforms have curves, ascenders/descenders and
+// varied widths that a rectangle can never have. Real VS Code's minimap is, at its core, actual
+// text rendered tiny and antialiased. We get the same effect the same way: render the real
+// glyphs at a readable-ish size onto an offscreen canvas, then scale that down onto the small
+// minimap canvas with smoothing on — the browser's own downsampling filter is what turns crisp
+// little letters into the soft, textured "tiny code" look instead of blocky rectangles.
 const MINIMAP_SUPERSAMPLE = 2.4;
 const MINIMAP_HAS_NON_WS = /\S/;
 let _minimapFontInfo = null;
@@ -1445,9 +1676,6 @@ function getMinimapFontInfo() {
     _minimapFontInfo = { family, baseCharW, baseSize };
     return _minimapFontInfo;
 }
-// Builds the actual glyph rendering once per renderMinimap() call, at supersampled resolution.
-// `rows` is a list of { top, height, tokens } already expressed in canvas CSS-pixel coordinates;
-// a row with tokens === null is a fold placeholder / non-code gap and is left unpainted.
 function buildMinimapHQCanvas(rows, cssWidth, cssHeight) {
     const ss = MINIMAP_SUPERSAMPLE;
     const w = Math.max(1, Math.round(cssWidth * ss));
@@ -1520,20 +1748,9 @@ function renderMinimap(item) {
     const cssWidth = MINIMAP_WIDTH;
     const dpr = window.devicePixelRatio || 1;
     const scrollHeight = contentEl.scrollHeight || 1;
-    // The full map is drawn at a FIXED scale (see MINIMAP_SCALE) regardless of how tall the visible
-    // minimap box is — for a long file this canvas ends up taller than that box, and the box just
-    // pans over it (done in updateMinimapViewport) instead of squeezing every line down to fit.
     const mapHeight = Math.max(1, Math.round(scrollHeight * MINIMAP_SCALE));
     item._minimapContentHeight = mapHeight;
 
-    // Build the row list straight from the live DOM, in real document order, at each row's real
-    // pixel position and height scaled by the same fixed factor. This is what keeps the minimap
-    // pixel-aligned with the actual editor no matter what makes real rows uneven or changes their
-    // count versus a naive "N lines packed uniformly" model: a collapsed fold removes a run of
-    // lines and inserts a single placeholder bar in their place (a real, differently-sized row a
-    // line-count model never knew about), word-wrap turns one logical line into a taller
-    // multi-line row, etc. Reading each row's actual offsetTop/offsetHeight sidesteps modeling any
-    // of that — the minimap simply mirrors whatever the real editor laid out, just shrunk down.
     const rows = [];
     innerEl.querySelectorAll('.code-line, .fold-placeholder').forEach(el => {
         if (el.style.display === 'none') return;
@@ -1574,18 +1791,8 @@ function updateMinimapViewport(item) {
     const maxScroll = Math.max(1, scrollHeight - clientHeight);
     const scrollFrac = Math.min(1, Math.max(0, contentEl.scrollTop / maxScroll));
 
-    // The box can only ever travel across whichever is smaller: the visible window, or (for a
-    // short file where the fixed-scale map doesn't even fill the box) the map's own extent — a
-    // short map just sits statically at the top with empty space below, it doesn't stretch out to
-    // let the box roam the whole visible box height.
     const travelHeight = Math.min(mmHeight, mapHeight);
-    // Box height reflects "one screenful" at the SAME fixed scale as the map content, capped to
-    // that travel range (once the whole file fits on one screen, the box is just the whole thing).
     const boxHeight = Math.min(travelHeight, Math.max(8, clientHeight * MINIMAP_SCALE));
-    // How far the (possibly much taller than the box) map has to pan to bring the current scroll
-    // position into view, and where the highlighted box then sits within the visible box — both
-    // are plain linear functions of scroll fraction, so this is exactly as simple as the old
-    // "whole file always fits" math, just against mapHeight instead of mmHeight.
     const panRange = Math.max(0, mapHeight - mmHeight);
     const panOffset = scrollFrac * panRange;
     const boxTop = scrollFrac * Math.max(0, travelHeight - boxHeight);
@@ -1596,11 +1803,6 @@ function updateMinimapViewport(item) {
     if (blurCanvas) blurCanvas.style.top = (-panOffset) + 'px';
     if (sharpCanvas) {
         sharpCanvas.style.top = (-panOffset) + 'px';
-        // Reveal the sharp (crisp) canvas only within the viewport-indicator window; everywhere
-        // else shows through to the blurred canvas beneath it. The clip-path is relative to the
-        // canvas's OWN box, which is the full (panned) map, so it needs full-map-space coordinates
-        // — the visible box's position plus how far the map is currently panned — not the box's
-        // on-screen position within the small visible window.
         const boxTopFullMap = panOffset + boxTop;
         const bottomInset = Math.max(0, mapHeight - boxTopFullMap - boxHeight);
         sharpCanvas.style.clipPath = 'inset(' + boxTopFullMap + 'px 0 ' + bottomInset + 'px 0)';
@@ -1618,31 +1820,8 @@ function minimapPointerDown(e, entryId) {
     const vpRect = viewportEl.getBoundingClientRect();
     const boxHeight = vpRect.height || 1;
     const clickedInsideBox = e.clientY >= vpRect.top && e.clientY <= vpRect.bottom;
-    // Grabbing inside the highlighted box preserves the offset you grabbed it at, so it tracks
-    // the mouse 1:1 instead of re-centering under the cursor on every pixel of movement (which is
-    // what made dragging feel like it was "jumping around"). Clicking outside the box centers the
-    // clicked point in the resulting view (grabOffset = half the box height) so you land with
-    // context on both sides of what you pointed at, not with it pinned to the very top edge —
-    // same as VS Code's own minimap. The clamp in jumpToClick still holds near the start/end of
-    // the file, where there isn't a full screenful on one side to center against.
-    // `let`, not `const`: a real mouse/trackpad almost always fires at least one 1px-ish
-    // mousemove between its down and up even on a "plain click" (unlike a scripted click), which
-    // reaches trackDrag below. grabOffset gets re-anchored to the box's post-jump position right
-    // after jumpToClick runs (see there) so that stray movement can't use this pre-jump value.
     let grabOffset = clickedInsideBox ? (e.clientY - vpRect.top) : (boxHeight / 2);
 
-    // Landing a click and tracking an already-started drag turn out to need two different
-    // formulas once the map can be panned (long file). A plain click has to be interpreted against
-    // whatever content is CURRENTLY shown at that pixel — i.e. pan-aware — otherwise clicking a
-    // recognizable bit of code you can see jumps somewhere else entirely (screen position alone
-    // doesn't identify a fixed spot in the file once the map pans under it). But re-deriving that
-    // pan-aware position on every step of a CONTINUING drag doesn't track the mouse smoothly: pan
-    // itself moves several pixels for every one pixel of mouse movement on a long file (the map is
-    // much taller than the visible box), so by the time each step's stale pan value gets used the
-    // box has already fallen behind — the more the map is panning, the more it undershoots. The
-    // box's on-screen position, though, is always a plain function of scroll fraction alone
-    // (see updateMinimapViewport) — independent of pan — so once a drag is actually under way,
-    // tracking the mouse directly in screen space is both simpler and exact.
     const jumpToClick = (ev) => {
         const scrollHeight = contentEl.scrollHeight;
         const clientHeight = contentEl.clientHeight;
@@ -1669,22 +1848,6 @@ function minimapPointerDown(e, entryId) {
         updateStickyScroll(item);
     };
     jumpToClick(e);
-    // jumpToClick just moved the box out from under wherever it was when grabOffset was computed
-    // (that's the whole point of a "jump" click) — so grabOffset, measured against the box's OLD
-    // position, is now meaningless. Re-anchor it against the box's NEW (post-jump) position before
-    // any drag tracking can use it: without this, the smallest accidental mousemove during the
-    // click (real hardware essentially always produces one, even for a stationary "click") hits
-    // trackDrag with a stale grabOffset that can be on the order of a whole screenful off, and
-    // trackDrag — which is intentionally pan-agnostic screen-space math, see above — has no way to
-    // detect that its offset no longer means anything, so it throws the view somewhere far from
-    // both the click and the mouse. This was the real cause of the reported "over jump".
-    //
-    // This offset is NOT clamped to [0, boxHeight]: a jump that pans the map moves the box to
-    // reflect the new scroll fraction, which generally lands it far from the mouse's screen
-    // position (that's what "the mouse jumped a section of the map ahead of/behind where the box
-    // now sits" looks like numerically) — a real, possibly large gap, not a measurement error to
-    // clip away. trackDrag's own boxTop is what gets clamped to a valid on-screen range; leaving
-    // this offset unclamped is what makes that landed position the correct zero-movement baseline.
     const vpRectAfterJump = viewportEl.getBoundingClientRect();
     grabOffset = e.clientY - vpRectAfterJump.top;
     const up = () => {
@@ -1697,9 +1860,6 @@ function minimapPointerDown(e, entryId) {
 
 /* ---------- minimap selection mirroring (VS Code-style: a text selection, or Ctrl/Cmd+A,
    highlights the corresponding lines in the minimap) ---------- */
-// Which entry's code area a Ctrl/Cmd+A should act on — plain code text isn't natively focusable,
-// so document.activeElement can't tell us that; we track the entry the user last clicked into
-// instead, same idea VS Code uses ("select all" applies to whichever editor you were last in).
 let lastActiveContentId = null;
 document.addEventListener('mousedown', (e) => {
     const contentEl = e.target.closest && e.target.closest('.content');
@@ -1719,15 +1879,12 @@ document.addEventListener('keydown', (e) => {
     sel.removeAllRanges();
     sel.addRange(range);
 });
-// selectionchange fires continuously while dragging a selection, so coalesce to once per frame.
 let minimapSelectionFrame = null;
 document.addEventListener('selectionchange', () => {
     if (minimapSelectionFrame) return;
     minimapSelectionFrame = requestAnimationFrame(() => { minimapSelectionFrame = null; updateMinimapSelectionOverlay(); });
 });
 function updateMinimapSelectionOverlay() {
-    // Only one entry can hold the current selection at a time — hide every other entry's overlay,
-    // then (if there is a real, non-collapsed selection) show it for the entry that has it.
     document.querySelectorAll('.minimap-selection').forEach(el => { el.style.display = 'none'; });
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
@@ -1754,9 +1911,6 @@ function updateMinimapSelectionOverlay() {
         }
     });
     if (!isFinite(minTop)) return;
-    // Same fixed MINIMAP_SCALE the map itself is drawn at, then shifted by however far the map is
-    // currently panned (item._minimapPanOffset, kept current by updateMinimapViewport) to land in
-    // the same on-screen coordinate space as the viewport-highlight box.
     const panOffset = item._minimapPanOffset || 0;
     const top = minTop * MINIMAP_SCALE - panOffset;
     const height = Math.max(2, (maxBottom - minTop) * MINIMAP_SCALE);
@@ -1765,7 +1919,7 @@ function updateMinimapSelectionOverlay() {
     overlay.style.display = 'block';
 }
 
-/* ---------- code folding: toggle / collapse-all / expand-all ---------- */
+/* ---------- code folding: toggle / collapse-all / expand-all (view mode) ---------- */
 function applyFoldVisibility(item) {
     const container = document.getElementById('content-' + item.id);
     if (!container) return;
@@ -1803,6 +1957,11 @@ function toggleFold(entryId, foldStart) {
 function collapseAllFolds(entryId) {
     const item = findEntry(entryId);
     if (!item) return;
+    if (item.mode === 'edit' && item.editor) {
+        const action = item.editor.getAction('editor.foldAll');
+        if (action) action.run();
+        return;
+    }
     const ranges = computeFoldRanges(item.rawCode, effectiveLangId(item));
     item.collapsedFolds = new Set(ranges.map(r => r.start));
     applyFoldVisibility(item);
@@ -1810,9 +1969,110 @@ function collapseAllFolds(entryId) {
 function expandAllFolds(entryId) {
     const item = findEntry(entryId);
     if (!item) return;
+    if (item.mode === 'edit' && item.editor) {
+        const action = item.editor.getAction('editor.unfoldAll');
+        if (action) action.run();
+        return;
+    }
     item.collapsedFolds = new Set();
     applyFoldVisibility(item);
 }
+
+/* ---------- find-in-code (view mode) ---------- */
+function entrySearch(id, input) {
+    const query = input.value;
+    const container = document.getElementById('content-' + id);
+    if (!container) return;
+    container.querySelectorAll('span.match').forEach(m => {
+        const parent = m.parentNode;
+        if (!parent) return;
+        parent.replaceChild(document.createTextNode(m.textContent), m);
+        parent.normalize();
+    });
+    entrySearchState[id] = { matches: [], index: -1 };
+    const counter = document.getElementById('search-counter-' + id);
+    if (!query) { if (counter) counter.textContent = '0/0'; return; }
+    const lowerQuery = query.toLowerCase();
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+    let n, nodes = [];
+    while (n = walker.nextNode()) nodes.push(n);
+    nodes.forEach(node => {
+        let val = node.nodeValue;
+        let lowerVal = val.toLowerCase();
+        let index, startPos = 0;
+        while ((index = lowerVal.indexOf(lowerQuery, startPos)) !== -1) {
+            const span = document.createElement('span');
+            span.className = 'match';
+            span.textContent = val.substring(index, index + query.length);
+            const remaining = node.splitText(index);
+            remaining.nodeValue = remaining.nodeValue.substring(query.length);
+            node.parentNode.insertBefore(span, remaining);
+            entrySearchState[id].matches.push(span);
+            node = remaining;
+            val = node.nodeValue;
+            lowerVal = val.toLowerCase();
+            startPos = 0;
+        }
+    });
+    if (entrySearchState[id].matches.length > 0) { entrySearchState[id].index = 0; updateEntryMatchHighlight(id); }
+    else if (counter) counter.textContent = '0/0';
+}
+function entrySearchNav(e, id) {
+    if (e.key !== 'Enter') return;
+    const state = entrySearchState[id];
+    if (state && state.matches.length > 0) { state.index = (state.index + 1) % state.matches.length; updateEntryMatchHighlight(id); }
+}
+function updateEntryMatchHighlight(id) {
+    const state = entrySearchState[id];
+    const counter = document.getElementById('search-counter-' + id);
+    state.matches.forEach(m => m.classList.remove('current'));
+    const current = state.matches[state.index];
+    if (!current) return;
+    current.classList.add('current');
+    const item = findEntry(id);
+    if (item && item.collapsedFolds && item.collapsedFolds.size) {
+        const lineEl = current.closest('.code-line');
+        const attr = lineEl && lineEl.getAttribute('data-in-folds');
+        if (attr) {
+            let changed = false;
+            attr.split(',').map(Number).forEach(p => { if (item.collapsedFolds.delete(p)) changed = true; });
+            if (changed) applyFoldVisibility(item); // auto-unfold so the match is actually visible
+        }
+    }
+    current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (counter) counter.textContent = (state.index + 1) + '/' + state.matches.length;
+}
+
+/* ---------- view/edit mode switching ---------- */
+function updateEditToggleButton(item) {
+    const entryEl = document.querySelector('.entry[data-entry-id="' + item.id + '"]');
+    if (!entryEl) return;
+    const btn = entryEl.querySelector('.btn-edit-toggle');
+    if (!btn) return;
+    btn.classList.toggle('toggle-active', item.mode === 'edit');
+    btn.title = item.mode === 'edit' ? 'Done editing — back to view' : 'Edit this snippet';
+}
+function setEntryMode(id, mode) {
+    const item = findEntry(id);
+    if (!item || item.mode === mode) return;
+    if (item.mode === 'edit' && item.editor) {
+        item.rawCode = item.model.getValue();
+        disposeEntryEditor(item);
+    }
+    item.mode = mode;
+    const bodyEl = document.getElementById('entry-body-' + id);
+    if (bodyEl) bodyEl.innerHTML = buildEntryBodyHtml(item);
+    if (mode === 'edit') mountMonacoEditor(item);
+    else renderViewModeContent(item);
+    updateEditToggleButton(item);
+    saveEntriesToStorage();
+}
+function toggleEntryEditMode(id) {
+    const item = findEntry(id);
+    if (!item) return;
+    setEntryMode(id, item.mode === 'edit' ? 'view' : 'edit');
+}
+
 function renderEntryCard(item, prepend) {
     const container = document.getElementById('container');
     const empty = container.querySelector('.empty-state');
@@ -1820,18 +2080,9 @@ function renderEntryCard(item, prepend) {
     const html = buildEntryHtml(item);
     if (prepend) container.insertAdjacentHTML('afterbegin', html);
     else container.insertAdjacentHTML('beforeend', html);
-    renderEntryContent(item);
+    if (item.mode === 'edit') mountMonacoEditor(item);
+    else renderViewModeContent(item);
 }
-function rerenderEntryInPlace(item) {
-    const el = document.querySelector(`.entry[data-entry-id="${item.id}"]`);
-    if (!el) return;
-    const collapsedNow = el.classList.contains('collapsed-entry');
-    el.outerHTML = buildEntryHtml(item);
-    const newEl = document.querySelector(`.entry[data-entry-id="${item.id}"]`);
-    if (collapsedNow && newEl) newEl.classList.add('collapsed-entry');
-    renderEntryContent(item);
-}
-
 function switchTab(paneId, element) {
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
@@ -1853,6 +2104,7 @@ function applyLayout() {
     if (stackHalf) stackHalf.classList.toggle('active', !isGridView);
     if (gridHalf) gridHalf.classList.toggle('active', isGridView);
     if (btn) btn.title = isGridView ? 'Grid view — click for Stack view' : 'Stack view — click for Grid view';
+    requestAnimationFrame(() => postedEntries.forEach(item => refreshEntryChromeAfterResize(item.id)));
 }
 function loadLayout() {
     try { if (localStorage.getItem(LAYOUT_KEY) === 'grid') isGridView = true; } catch (e) {}
@@ -1860,14 +2112,22 @@ function loadLayout() {
 }
 function setAllCollapse(collapsed) {
     document.querySelectorAll('.entry').forEach(entry => collapsed ? entry.classList.add('collapsed-entry') : entry.classList.remove('collapsed-entry'));
+    if (!collapsed) {
+        postedEntries.forEach(item => refreshEntryChromeAfterResize(item.id));
+    }
 }
 function toggleEntryCollapse(el) {
     const entry = el.closest('.entry');
     entry.classList.toggle('collapsed-entry');
+    if (!entry.classList.contains('collapsed-entry')) {
+        refreshEntryChromeAfterResize(entry.dataset.entryId);
+    }
 }
 function removeEntry(el) {
     const entry = el.closest('.entry');
     const id = entry.dataset.entryId;
+    const item = findEntry(id);
+    if (item) disposeEntryEditor(item);
     postedEntries = postedEntries.filter(e => e.id !== id);
     entry.remove();
     if (postedEntries.length === 0) {
@@ -1877,6 +2137,7 @@ function removeEntry(el) {
     renderCompareChips();
 }
 function clearAllEntries() {
+    postedEntries.forEach(disposeEntryEditor);
     postedEntries = [];
     document.getElementById('container').innerHTML = '<div class="empty-state">No snippets yet — paste or upload some code above.</div>';
     saveEntriesToStorage();
@@ -1892,7 +2153,11 @@ function toggleEntryWrap(id, checked) {
     const item = findEntry(id);
     if (!item) return;
     item.wrap = checked;
-    renderEntryContent(item);
+    if (item.mode === 'edit' && item.editor) {
+        item.editor.updateOptions({ wordWrap: checked ? 'on' : 'off' });
+    } else {
+        renderViewModeContent(item);
+    }
 }
 function toggleEntryWrapBtn(id, btnEl) {
     const item = findEntry(id);
@@ -1901,12 +2166,37 @@ function toggleEntryWrapBtn(id, btnEl) {
     toggleEntryWrap(id, next);
     if (btnEl) btnEl.classList.toggle('toggle-active', next);
 }
+function toggleEntryMinimap(id, checked) {
+    const item = findEntry(id);
+    if (!item) return;
+    item.minimap = checked;
+    if (item.mode === 'edit' && item.editor) {
+        item.editor.updateOptions({ minimap: { enabled: checked } });
+        requestAnimationFrame(() => { try { item.editor.layout(); } catch (e) {} });
+    } else {
+        applyMinimapForEntry(item);
+    }
+}
+function toggleEntryMinimapBtn(id, btnEl) {
+    const item = findEntry(id);
+    if (!item) return;
+    const next = !item.minimap;
+    toggleEntryMinimap(id, next);
+    if (btnEl) btnEl.classList.toggle('toggle-active', next);
+}
 function onEntryLangChange(id, value) {
     const item = findEntry(id);
     if (!item) return;
     item.override = (value === 'auto') ? null : value;
-    item.collapsedFolds = new Set(); // fold ranges depend on the language grammar, so reset on change
-    rerenderEntryInPlace(item);
+    if (item.mode === 'edit') {
+        const effId = effectiveLangId(item);
+        if (item.model && window.monaco) monaco.editor.setModelLanguage(item.model, getMonacoLangId(effId));
+        refreshEntryHeaderChrome(item);
+    } else {
+        item.collapsedFolds = new Set(); // fold ranges depend on the language grammar, so reset on change
+        refreshEntryHeaderChrome(item);
+        renderViewModeContent(item);
+    }
     saveEntriesToStorage();
     renderCompareChips();
 }
@@ -2006,79 +2296,18 @@ function onEntryDragStart(e, entryId) {
     e.dataTransfer.effectAllowed = 'copy';
 }
 
-/* ---------- find-in-code ---------- */
-function entrySearch(id, input) {
-    const query = input.value;
-    const container = document.getElementById('content-' + id);
-    if (!container) return;
-    container.querySelectorAll('span.match').forEach(m => {
-        const parent = m.parentNode;
-        if (!parent) return;
-        parent.replaceChild(document.createTextNode(m.textContent), m);
-        parent.normalize();
-    });
-    entrySearchState[id] = { matches: [], index: -1 };
-    const counter = document.getElementById('search-counter-' + id);
-    if (!query) { if (counter) counter.textContent = '0/0'; return; }
-    const lowerQuery = query.toLowerCase();
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
-    let n, nodes = [];
-    while (n = walker.nextNode()) nodes.push(n);
-    nodes.forEach(node => {
-        let val = node.nodeValue;
-        let lowerVal = val.toLowerCase();
-        let index, startPos = 0;
-        while ((index = lowerVal.indexOf(lowerQuery, startPos)) !== -1) {
-            const span = document.createElement('span');
-            span.className = 'match';
-            span.textContent = val.substring(index, index + query.length);
-            const remaining = node.splitText(index);
-            remaining.nodeValue = remaining.nodeValue.substring(query.length);
-            node.parentNode.insertBefore(span, remaining);
-            entrySearchState[id].matches.push(span);
-            node = remaining;
-            val = node.nodeValue;
-            lowerVal = val.toLowerCase();
-            startPos = 0;
-        }
-    });
-    if (entrySearchState[id].matches.length > 0) { entrySearchState[id].index = 0; updateEntryMatchHighlight(id); }
-    else if (counter) counter.textContent = '0/0';
-}
-function entrySearchNav(e, id) {
-    if (e.key !== 'Enter') return;
-    const state = entrySearchState[id];
-    if (state && state.matches.length > 0) { state.index = (state.index + 1) % state.matches.length; updateEntryMatchHighlight(id); }
-}
-function updateEntryMatchHighlight(id) {
-    const state = entrySearchState[id];
-    const counter = document.getElementById('search-counter-' + id);
-    state.matches.forEach(m => m.classList.remove('current'));
-    const current = state.matches[state.index];
-    if (!current) return;
-    current.classList.add('current');
-    const item = findEntry(id);
-    if (item && item.collapsedFolds && item.collapsedFolds.size) {
-        const lineEl = current.closest('.code-line');
-        const attr = lineEl && lineEl.getAttribute('data-in-folds');
-        if (attr) {
-            let changed = false;
-            attr.split(',').map(Number).forEach(p => { if (item.collapsedFolds.delete(p)) changed = true; });
-            if (changed) applyFoldVisibility(item); // auto-unfold so the match is actually visible
-        }
-    }
-    current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (counter) counter.textContent = (state.index + 1) + '/' + state.matches.length;
-}
-
 /* ---------- focus / maximize ---------- */
 function refreshEntryChromeAfterResize(entryId) {
-    // Focusing/closing changes the snippet's box size outside the normal render path, so the
-    // sticky-scroll breadcrumb and minimap (whose canvas has its own fixed-resolution backing
-    // store) need to be told explicitly — the ResizeObserver on the minimap catches this too, but
-    // doing it here as well means it's correct on the very next frame, not just eventually.
+    // Focusing/closing changes the snippet's box size outside the normal render path. In edit mode
+    // Monaco's automaticLayout catches most of this on its own, but calling layout() explicitly
+    // here means it's correct on the very next frame, not just eventually; in view mode the sticky
+    // breadcrumb and minimap (fixed-resolution canvas) need the same explicit nudge.
     const item = findEntry(entryId);
     if (!item) return;
+    if (item.mode === 'edit' && item.editor) {
+        requestAnimationFrame(() => { try { item.editor.layout(); } catch (e) {} });
+        return;
+    }
     requestAnimationFrame(() => {
         updateStickyScroll(item);
         if (item.minimap) renderMinimap(item);
@@ -2118,6 +2347,227 @@ document.addEventListener('keydown', (e) => {
 function emptyPanelState() { return { override: null, detected: detectLanguage(''), sourceEntryId: null }; }
 const comparePanels = { compareLeft: emptyPanelState(), compareRight: emptyPanelState() };
 
+/* ---------- Compare panel Monaco editors ----------
+   Panel A / Panel B are now real, freely-editable Monaco instances — the same engine and
+   options used for a snippet's edit mode in the Viewer tab (real syntax highlighting,
+   IntelliSense/suggestions, etc.) instead of plain <textarea>s. The editor/model instances
+   live here in compareEditors (keyed by panel id) rather than on comparePanels itself, since
+   comparePanels' fields (override/detected/sourceEntryId) get swapped wholesale by
+   swapComparePanels() and an editor instance is tied to its DOM host, not to "which side"
+   the data currently represents. */
+// richMode: true = Monaco ("rich"); false = the plain <textarea> fallback ("normal editing
+// panel"). wrap: whether long lines soft-wrap, independent of richMode and OFF by default (so a
+// jumped-to line lands as one full-width row instead of being split across wrapped lines, which
+// is what made a highlighted change hard to spot against long ObjectScript lines).
+const compareEditors = {
+    compareLeft: { editor: null, model: null, pendingValue: null, richMode: true, wrap: false, plainInputHandler: null, plainScrollHandler: null },
+    compareRight: { editor: null, model: null, pendingValue: null, richMode: true, wrap: false, plainInputHandler: null, plainScrollHandler: null }
+};
+const pendingComparePanelMounts = [];
+let compareSyncing = false;
+
+function getPanelCode(panelId) {
+    const ce = compareEditors[panelId];
+    if (!ce) return '';
+    if (ce.richMode) return ce.model ? ce.model.getValue() : (ce.pendingValue || '');
+    const ta = document.getElementById('plain-' + panelId);
+    return ta ? ta.value : (ce.pendingValue || '');
+}
+function setPanelCode(panelId, code) {
+    const ce = compareEditors[panelId];
+    if (!ce) return;
+    if (ce.richMode) {
+        if (ce.model) ce.model.setValue(code || '');
+        else ce.pendingValue = code || '';
+    } else {
+        const ta = document.getElementById('plain-' + panelId);
+        if (ta) ta.value = code || '';
+        else ce.pendingValue = code || '';
+    }
+}
+function wireComparePanelScrollTop(panelId) {
+    const ce = compareEditors[panelId];
+    const btn = document.getElementById(panelId + 'ScrollTop');
+    if (!ce || !ce.editor || !btn) return;
+    const update = () => btn.classList.toggle('visible', ce.editor.getScrollTop() > 40);
+    ce.editor.onDidScrollChange(update);
+    update();
+}
+function wireComparePanelScrollTopPlain(panelId) {
+    const ta = document.getElementById('plain-' + panelId);
+    const btn = document.getElementById(panelId + 'ScrollTop');
+    if (!ta || !btn) return;
+    const update = () => btn.classList.toggle('visible', ta.scrollTop > 40);
+    ta.addEventListener('scroll', update);
+    update();
+}
+function scrollComparePanelToTop(panelId) {
+    const ce = compareEditors[panelId];
+    if (!ce) return;
+    if (ce.richMode) { if (ce.editor) ce.editor.setScrollTop(0); }
+    else { const ta = document.getElementById('plain-' + panelId); if (ta) ta.scrollTo({ top: 0, behavior: 'smooth' }); }
+}
+// Sync Scroll compares scroll-ratio between the two panels regardless of which side is Monaco vs
+// the plain-textarea fallback, so the toggle keeps working across any combination of modes.
+function syncOtherPanelScroll(panelId, ratio) {
+    const otherId = panelId === 'compareLeft' ? 'compareRight' : 'compareLeft';
+    const other = compareEditors[otherId];
+    if (!other) return;
+    if (other.richMode) {
+        if (!other.editor) return;
+        const tgtMax = Math.max(0, other.editor.getScrollHeight() - other.editor.getLayoutInfo().height);
+        other.editor.setScrollTop(ratio * tgtMax);
+    } else {
+        const ta = document.getElementById('plain-' + otherId);
+        if (ta) ta.scrollTop = ratio * Math.max(0, ta.scrollHeight - ta.clientHeight);
+    }
+}
+function wireComparePanelSyncScroll(panelId) {
+    const ce = compareEditors[panelId];
+    if (!ce || !ce.editor) return;
+    ce.editor.onDidScrollChange(() => {
+        if (compareSyncing) return;
+        if (!document.getElementById('compareSyncScrollToggle').checked) return;
+        compareSyncing = true;
+        const srcMax = Math.max(1, ce.editor.getScrollHeight() - ce.editor.getLayoutInfo().height);
+        syncOtherPanelScroll(panelId, ce.editor.getScrollTop() / srcMax);
+        setTimeout(() => { compareSyncing = false; }, 20);
+    });
+}
+function wireComparePanelSyncScrollPlain(panelId) {
+    const ta = document.getElementById('plain-' + panelId);
+    if (!ta) return;
+    const handler = () => {
+        if (compareSyncing) return;
+        if (!document.getElementById('compareSyncScrollToggle').checked) return;
+        compareSyncing = true;
+        const ratio = ta.scrollTop / Math.max(1, ta.scrollHeight - ta.clientHeight);
+        syncOtherPanelScroll(panelId, ratio);
+        setTimeout(() => { compareSyncing = false; }, 20);
+    };
+    const ce = compareEditors[panelId];
+    if (ce) ce.plainScrollHandler = handler;
+    ta.addEventListener('scroll', handler);
+}
+function mountComparePanelEditor(panelId) {
+    const host = document.getElementById('monaco-' + panelId);
+    if (!host) return;
+    if (!window.monaco || !monacoReady) {
+        if (window.__monacoLoadFailed) {
+            host.innerHTML = '<div class="monaco-loading">Editor failed to load — check your connection and reload the page. Your saved code is safe.</div>';
+            return;
+        }
+        if (!pendingComparePanelMounts.includes(panelId)) pendingComparePanelMounts.push(panelId);
+        host.innerHTML = '<div class="monaco-loading">Loading editor…</div>';
+        return;
+    }
+    const ce = compareEditors[panelId];
+    const p = comparePanels[panelId];
+    const initialCode = ce.model ? ce.model.getValue() : (ce.pendingValue || '');
+    if (ce.editor) { try { ce.editor.dispose(); } catch (e) {} ce.editor = null; }
+    if (ce.model) { try { ce.model.dispose(); } catch (e) {} ce.model = null; }
+    host.innerHTML = '';
+    const effId = p.override || p.detected.id;
+    const model = monaco.editor.createModel(initialCode, getMonacoLangId(effId));
+    const editor = monaco.editor.create(host, {
+        model: model,
+        theme: (document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark'),
+        automaticLayout: true,
+        minimap: { enabled: false },
+        wordWrap: ce.wrap ? 'on' : 'off',
+        stickyScroll: { enabled: false },
+        fontFamily: "'Cascadia Code', 'SF Mono', Consolas, 'Courier New', monospace",
+        fontSize: 12.5,
+        scrollBeyondLastLine: false,
+        renderWhitespace: 'selection',
+        smoothScrolling: true,
+        tabSize: 4
+    });
+    ce.editor = editor;
+    ce.model = model;
+    ce.pendingValue = null;
+    let debounceTimer = null;
+    editor.onDidChangeModelContent(() => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => refreshCompareBadge(panelId), 200);
+    });
+    wireComparePanelScrollTop(panelId);
+    wireComparePanelSyncScroll(panelId);
+}
+// Builds the plain <textarea> "normal editing panel" fallback and wires it up the same way
+// mountComparePanelEditor wires Monaco — scroll-to-top button, sync scroll, and (debounced)
+// re-detection of the language on every keystroke.
+function mountComparePlainEditor(panelId) {
+    const ta = document.getElementById('plain-' + panelId);
+    if (!ta) return;
+    ta.classList.toggle('wrap-on', !!compareEditors[panelId].wrap);
+    const debouncedRefresh = debounce(() => refreshCompareBadge(panelId), 200);
+    compareEditors[panelId].plainInputHandler = debouncedRefresh;
+    ta.addEventListener('input', debouncedRefresh);
+    wireComparePanelScrollTopPlain(panelId);
+    wireComparePanelSyncScrollPlain(panelId);
+}
+function comparePanelHostInnerHtml(panelId) {
+    const ce = compareEditors[panelId];
+    const scrollBtn = `<button type="button" class="scroll-top-btn" id="${panelId}ScrollTop" title="Scroll to top" onclick="scrollComparePanelToTop('${panelId}')">&#9650;</button>`;
+    if (ce.richMode) return `<div class="monaco-container" id="monaco-${panelId}"></div>` + scrollBtn;
+    const placeholder = panelId === 'compareLeft' ? 'Paste or load code into Panel A...' : 'Paste or load code into Panel B...';
+    return `<textarea class="editor-textarea" id="plain-${panelId}" placeholder="${placeholder}"></textarea>` + scrollBtn;
+}
+function updateComparePanelModeToggleUI(panelId) {
+    const ce = compareEditors[panelId];
+    const col = document.getElementById(panelId === 'compareLeft' ? 'compareLeftCol' : 'compareRightCol');
+    if (!col) return;
+    const btn = col.querySelector('.mode-toggle');
+    if (btn) {
+        btn.classList.toggle('toggle-active', !ce.richMode);
+        btn.title = ce.richMode ? 'Switch to plain text editor' : 'Switch to code editor (Monaco)';
+    }
+    const wrapBtn = col.querySelector('.wrap-toggle');
+    if (wrapBtn) wrapBtn.classList.toggle('toggle-active', !!ce.wrap);
+}
+function toggleComparePanelWrap(panelId, btnEl) {
+    const ce = compareEditors[panelId];
+    if (!ce) return;
+    ce.wrap = !ce.wrap;
+    if (ce.richMode) {
+        if (ce.editor) ce.editor.updateOptions({ wordWrap: ce.wrap ? 'on' : 'off' });
+    } else {
+        const ta = document.getElementById('plain-' + panelId);
+        if (ta) ta.classList.toggle('wrap-on', ce.wrap);
+    }
+    if (btnEl) btnEl.classList.toggle('toggle-active', ce.wrap);
+}
+// Toggles a single panel between the rich Monaco editor and the plain textarea "normal editing
+// panel" — content, panel name, and language override all carry over untouched either way.
+function toggleComparePanelMode(panelId) {
+    const ce = compareEditors[panelId];
+    if (!ce) return;
+    const code = getPanelCode(panelId);
+    if (ce.richMode) {
+        if (ce.editor) { try { ce.editor.dispose(); } catch (e) {} }
+        if (ce.model) { try { ce.model.dispose(); } catch (e) {} }
+        ce.editor = null; ce.model = null;
+    } else {
+        const ta = document.getElementById('plain-' + panelId);
+        if (ta && ce.plainInputHandler) ta.removeEventListener('input', ce.plainInputHandler);
+        if (ta && ce.plainScrollHandler) ta.removeEventListener('scroll', ce.plainScrollHandler);
+        ce.plainInputHandler = null; ce.plainScrollHandler = null;
+    }
+    ce.richMode = !ce.richMode;
+    ce.pendingValue = code;
+    const host = document.getElementById(panelId + 'ContentBox');
+    if (host) host.innerHTML = comparePanelHostInnerHtml(panelId);
+    if (ce.richMode) {
+        mountComparePanelEditor(panelId);
+    } else {
+        setPanelCode(panelId, code);
+        ce.pendingValue = null;
+        mountComparePlainEditor(panelId);
+    }
+    updateComparePanelModeToggleUI(panelId);
+}
+
 function renderCompareChips() {
     const box = document.getElementById('compareChips');
     if (!box) return;
@@ -2150,7 +2600,7 @@ function populateCompareSelect(panelId) {
 }
 function refreshCompareBadge(panelId) {
     const p = comparePanels[panelId];
-    const code = document.getElementById(panelId).value;
+    const code = getPanelCode(panelId);
     if (!p.override) p.detected = detectLanguage(code);
     const effId = p.override || p.detected.id;
     const lang = LANGS[effId];
@@ -2164,6 +2614,10 @@ function refreshCompareBadge(panelId) {
         : ('Auto-detected as ' + lang.label + ' (' + p.detected.confidence + ' confidence). Click to override.' + (p.detected.runnerUp ? ' Could also be ' + LANGS[p.detected.runnerUp].label + '.' : ''));
     const sel = document.getElementById(panelId + 'Select');
     sel.value = p.override || 'auto';
+    // Keep the Monaco model's grammar in sync with the (possibly just re-detected) language so
+    // the panel's coloring/IntelliSense always matches what the badge says.
+    const ce = compareEditors[panelId];
+    if (ce && ce.model && window.monaco) monaco.editor.setModelLanguage(ce.model, getMonacoLangId(effId));
 }
 function onCompareLangChange(panelId, value) {
     const p = comparePanels[panelId];
@@ -2176,12 +2630,15 @@ function loadEntryIntoPanel(entryId, panelId) {
     const p = comparePanels[panelId];
     p.override = item.override;
     p.sourceEntryId = item.id;
-    document.getElementById(panelId).value = item.rawCode;
+    setPanelCode(panelId, item.rawCode);
     document.getElementById(panelId + 'Name').value = item.name || '';
     refreshCompareBadge(panelId);
-    const ta = document.getElementById(panelId);
-    ta.classList.add('flash-active');
-    setTimeout(() => ta.classList.remove('flash-active'), 900);
+    const ce = compareEditors[panelId];
+    const flashEl = document.getElementById((ce && ce.richMode ? 'monaco-' : 'plain-') + panelId);
+    if (flashEl) {
+        flashEl.classList.add('flash-active');
+        setTimeout(() => flashEl.classList.remove('flash-active'), 900);
+    }
 }
 function allowCompareDrop(e) { e.preventDefault(); }
 function handleCompareDrop(e, panelId) {
@@ -2191,14 +2648,14 @@ function handleCompareDrop(e, panelId) {
     if (entryId) loadEntryIntoPanel(entryId, panelId);
 }
 function copyPanelRaw(panelId, btn) {
-    const code = document.getElementById(panelId).value;
+    const code = getPanelCode(panelId);
     navigator.clipboard.writeText(code).then(() => flashIcon(btn)).catch(() => {});
 }
 function copyPanelFence(panelId, btn) {
     const p = comparePanels[panelId];
     const effId = p.override || p.detected.id;
     const fenceLang = effId === 'plaintext' ? '' : effId;
-    const code = document.getElementById(panelId).value;
+    const code = getPanelCode(panelId);
     navigator.clipboard.writeText('```' + fenceLang + '\n' + code + '\n```').then(() => flashIcon(btn)).catch(() => {});
 }
 function downloadPanel(panelId) {
@@ -2207,11 +2664,11 @@ function downloadPanel(panelId) {
     const ext = LANGS[effId].ext;
     const nameInput = document.getElementById(panelId + 'Name');
     const name = (nameInput.value && nameInput.value.trim()) ? nameInput.value.trim().replace(/[\\/:*?"<>|]/g, '_') : panelId;
-    const code = document.getElementById(panelId).value;
+    const code = getPanelCode(panelId);
     triggerDownload(code, name + '.' + ext);
 }
 function savePanelToViewer(panelId, btn) {
-    const code = document.getElementById(panelId).value;
+    const code = getPanelCode(panelId);
     if (!code.trim()) { alert('Panel is empty — nothing to save.'); return; }
     const nameInput = document.getElementById(panelId + 'Name');
     const p = comparePanels[panelId];
@@ -2219,19 +2676,19 @@ function savePanelToViewer(panelId, btn) {
     flashIcon(btn);
 }
 function clearComparePanel(panelId) {
-    document.getElementById(panelId).value = '';
+    setPanelCode(panelId, '');
     document.getElementById(panelId + 'Name').value = '';
     comparePanels[panelId] = emptyPanelState();
     refreshCompareBadge(panelId);
 }
 function swapComparePanels() {
-    const lVal = document.getElementById('compareLeft').value;
-    const rVal = document.getElementById('compareRight').value;
+    const lVal = getPanelCode('compareLeft');
+    const rVal = getPanelCode('compareRight');
     const lName = document.getElementById('compareLeftName').value;
     const rName = document.getElementById('compareRightName').value;
     const lP = comparePanels.compareLeft, rP = comparePanels.compareRight;
-    document.getElementById('compareLeft').value = rVal;
-    document.getElementById('compareRight').value = lVal;
+    setPanelCode('compareLeft', rVal);
+    setPanelCode('compareRight', lVal);
     document.getElementById('compareLeftName').value = rName;
     document.getElementById('compareRightName').value = lName;
     comparePanels.compareLeft = rP; comparePanels.compareRight = lP;
@@ -2242,33 +2699,11 @@ function resetCompareSection() {
     clearComparePanel('compareRight');
     clearCompareResults();
 }
-// Generic "jump to top" for any scrollable element (the two source panels, or the diff results).
+// Generic "jump to top" for any scrollable element (currently just the diff results — the two
+// source panels are Monaco editors now and use scrollComparePanelToTop instead).
 function scrollElementToTop(id) {
     const el = document.getElementById(id);
     if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
-}
-// Shows a floating scroll-to-top button only once you've actually scrolled down a bit, so it
-// doesn't sit on top of code that's already fully visible.
-function wireScrollTopButton(scrollElId, btnId, threshold) {
-    const scrollEl = document.getElementById(scrollElId);
-    const btn = document.getElementById(btnId);
-    if (!scrollEl || !btn) return;
-    const update = () => btn.classList.toggle('visible', scrollEl.scrollTop > (threshold || 40));
-    scrollEl.addEventListener('scroll', update);
-    update();
-}
-function wireSyncScroll() {
-    const l = document.getElementById('compareLeft'), r = document.getElementById('compareRight');
-    let syncing = false;
-    function sync(source, target) {
-        if (!document.getElementById('compareSyncScrollToggle').checked || syncing) return;
-        syncing = true;
-        const ratio = source.scrollTop / Math.max(1, (source.scrollHeight - source.clientHeight));
-        target.scrollTop = ratio * (target.scrollHeight - target.clientHeight);
-        setTimeout(() => { syncing = false; }, 20);
-    }
-    l.addEventListener('scroll', () => sync(l, r));
-    r.addEventListener('scroll', () => sync(r, l));
 }
 
 /* ---------- diff computation ---------- */
@@ -2333,8 +2768,8 @@ function toggleCompareDiffMode() {
 }
 function runCompare() {
     const results = document.getElementById('compareResults');
-    const codeA = document.getElementById('compareLeft').value;
-    const codeB = document.getElementById('compareRight').value;
+    const codeA = getPanelCode('compareLeft');
+    const codeB = getPanelCode('compareRight');
     if (!codeA.trim() && !codeB.trim()) { results.innerHTML = 'Load code into each panel, then click "Compare".'; lastDiffResult = null; return; }
     const opts = {
         ignoreWhitespace: document.getElementById('ignoreWhitespaceToggle').checked,
@@ -2377,8 +2812,38 @@ function renderCompareResults(diff) {
         results.appendChild(ok);
         return;
     }
+    annotateDiffAnchors(groups, filteredA, filteredB);
     if (isCompareSideMode) renderSideBySide(results, groups, filteredA, filteredB);
     else renderListView(results, groups, filteredA, filteredB);
+}
+// For every diff group, works out which original line in EACH panel it should scroll to when
+// clicked — even a pure add/remove group (which only has a line on one side) gets an anchor line
+// on the other side, so clicking it lands both panels on the same visual row instead of leaving
+// whichever side has no line of its own stuck wherever it was last scrolled. The anchor for the
+// missing side is simply the nearest surrounding line the two files do have in common (forward
+// pass, then a backward pass for a diff that starts with a pure add/remove and has nothing
+// before it yet).
+function annotateDiffAnchors(groups, filteredA, filteredB) {
+    let lastAOrig = null, lastBOrig = null;
+    groups.forEach(g => {
+        let aOrig = null, bOrig = null;
+        if (g.type === 'equal') { aOrig = filteredA[g.aIdx].orig; bOrig = filteredB[g.bIdx].orig; }
+        else if (g.type === 'changed') { aOrig = filteredA[g.removeOp.aIdx].orig; bOrig = filteredB[g.addOp.bIdx].orig; }
+        else if (g.type === 'remove') { aOrig = filteredA[g.aIdx].orig; }
+        else if (g.type === 'add') { bOrig = filteredB[g.bIdx].orig; }
+        g.anchorAOrig = aOrig != null ? aOrig : lastAOrig;
+        g.anchorBOrig = bOrig != null ? bOrig : lastBOrig;
+        if (aOrig != null) lastAOrig = aOrig;
+        if (bOrig != null) lastBOrig = bOrig;
+    });
+    let nextAOrig = null, nextBOrig = null;
+    for (let i = groups.length - 1; i >= 0; i--) {
+        const g = groups[i];
+        if (g.anchorAOrig == null) g.anchorAOrig = nextAOrig;
+        if (g.anchorBOrig == null) g.anchorBOrig = nextBOrig;
+        if (g.anchorAOrig != null) nextAOrig = g.anchorAOrig;
+        if (g.anchorBOrig != null) nextBOrig = g.anchorBOrig;
+    }
 }
 function renderCharDiffSpan(aText, bText, side) {
     const span = document.createElement('span');
@@ -2405,11 +2870,11 @@ function renderListView(container, groups, filteredA, filteredB) {
         if (g.type === 'remove') {
             icon.textContent = '-'; lnum.textContent = 'A:' + (filteredA[g.aIdx].orig + 1);
             text.textContent = filteredA[g.aIdx].text;
-            row.onclick = () => scrollTextareaToLine('compareLeft', filteredA[g.aIdx].orig);
+            row.onclick = () => jumpToDiffPair(g.anchorAOrig, g.anchorBOrig);
         } else if (g.type === 'add') {
             icon.textContent = '+'; lnum.textContent = 'B:' + (filteredB[g.bIdx].orig + 1);
             text.textContent = filteredB[g.bIdx].text;
-            row.onclick = () => scrollTextareaToLine('compareRight', filteredB[g.bIdx].orig);
+            row.onclick = () => jumpToDiffPair(g.anchorAOrig, g.anchorBOrig);
         } else if (g.type === 'changed') {
             icon.textContent = 'Δ';
             const aLine = filteredA[g.removeOp.aIdx], bLine = filteredB[g.addOp.bIdx];
@@ -2417,7 +2882,7 @@ function renderListView(container, groups, filteredA, filteredB) {
             text.appendChild(renderCharDiffSpan(aLine.text, bLine.text, 'remove'));
             text.appendChild(document.createElement('br'));
             text.appendChild(renderCharDiffSpan(aLine.text, bLine.text, 'add'));
-            row.onclick = () => { scrollTextareaToLine('compareLeft', aLine.orig); scrollTextareaToLine('compareRight', bLine.orig); };
+            row.onclick = () => jumpToDiffPair(g.anchorAOrig, g.anchorBOrig);
         }
         box.appendChild(icon); box.appendChild(lnum); box.appendChild(text);
         row.appendChild(box);
@@ -2455,16 +2920,21 @@ function appendEqualRow(grid, g, filteredA, filteredB) {
     const aLine = filteredA[g.aIdx], bLine = filteredB[g.bIdx];
     const leftCell = makeSideCell('equal', aLine.orig, document.createTextNode(aLine.text));
     const rightCell = makeSideCell('equal', bLine.orig, document.createTextNode(bLine.text));
-    leftCell.onclick = () => { setActiveSideRow(leftCell, rightCell); scrollTextareaToLine('compareLeft', aLine.orig); };
-    rightCell.onclick = () => { setActiveSideRow(leftCell, rightCell); scrollTextareaToLine('compareRight', bLine.orig); };
+    const jump = () => { setActiveSideRow(leftCell, rightCell); jumpToDiffPair(aLine.orig, bLine.orig); };
+    leftCell.onclick = jump;
+    rightCell.onclick = jump;
     pairSideCells(leftCell, rightCell);
     grid.appendChild(leftCell); grid.appendChild(rightCell);
 }
-function appendPairRow(grid, left, right) {
+// left/right may each be null (pure add/remove — the other side gets a blank filler cell), but
+// anchorAOrig/anchorBOrig are always both set (see annotateDiffAnchors) so clicking EITHER cell,
+// blank filler included, still jumps both panels to a row-aligned pair of lines.
+function appendPairRow(grid, left, right, anchorAOrig, anchorBOrig) {
     const leftCell = left ? makeSideCell(left.cls, left.orig, document.createTextNode(left.text)) : makeSideCell('blank', null, null);
     const rightCell = right ? makeSideCell(right.cls, right.orig, document.createTextNode(right.text)) : makeSideCell('blank', null, null);
-    if (left) leftCell.onclick = () => { setActiveSideRow(leftCell, rightCell); syncCompareNavToCell(leftCell); scrollTextareaToLine('compareLeft', left.orig); };
-    if (right) rightCell.onclick = () => { setActiveSideRow(leftCell, rightCell); syncCompareNavToCell(leftCell); scrollTextareaToLine('compareRight', right.orig); };
+    const jump = () => { setActiveSideRow(leftCell, rightCell); syncCompareNavToCell(leftCell); jumpToDiffPair(anchorAOrig, anchorBOrig); };
+    leftCell.onclick = jump;
+    rightCell.onclick = jump;
     pairSideCells(leftCell, rightCell);
     grid.appendChild(leftCell); grid.appendChild(rightCell);
     return { leftCell, rightCell };
@@ -2473,8 +2943,9 @@ function appendChangedRow(grid, aLine, bLine) {
     const leftCell = makeSideCell('changed-remove', aLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'remove'));
     const rightCell = makeSideCell('changed-add', bLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'add'));
     pairSideCells(leftCell, rightCell);
-    leftCell.onclick = () => { setActiveSideRow(leftCell, rightCell); syncCompareNavToCell(leftCell); scrollTextareaToLine('compareLeft', aLine.orig); };
-    rightCell.onclick = () => { setActiveSideRow(leftCell, rightCell); syncCompareNavToCell(leftCell); scrollTextareaToLine('compareRight', bLine.orig); };
+    const jump = () => { setActiveSideRow(leftCell, rightCell); syncCompareNavToCell(leftCell); jumpToDiffPair(aLine.orig, bLine.orig); };
+    leftCell.onclick = jump;
+    rightCell.onclick = jump;
     grid.appendChild(leftCell); grid.appendChild(rightCell);
     return { leftCell, rightCell };
 }
@@ -2518,12 +2989,12 @@ function renderSideBySide(container, groups, filteredA, filteredB) {
         const g = groups[i];
         if (g.type === 'remove') {
             const aOrig = filteredA[g.aIdx].orig;
-            const { leftCell, rightCell } = appendPairRow(grid, { orig: aOrig, text: filteredA[g.aIdx].text, cls: 'removed' }, null);
-            jumpTargets.push({ leftCell, rightCell, aOrig, bOrig: null });
+            const { leftCell, rightCell } = appendPairRow(grid, { orig: aOrig, text: filteredA[g.aIdx].text, cls: 'removed' }, null, g.anchorAOrig, g.anchorBOrig);
+            jumpTargets.push({ leftCell, rightCell, aOrig: g.anchorAOrig, bOrig: g.anchorBOrig });
         } else if (g.type === 'add') {
             const bOrig = filteredB[g.bIdx].orig;
-            const { leftCell, rightCell } = appendPairRow(grid, null, { orig: bOrig, text: filteredB[g.bIdx].text, cls: 'added' });
-            jumpTargets.push({ leftCell, rightCell, aOrig: null, bOrig });
+            const { leftCell, rightCell } = appendPairRow(grid, null, { orig: bOrig, text: filteredB[g.bIdx].text, cls: 'added' }, g.anchorAOrig, g.anchorBOrig);
+            jumpTargets.push({ leftCell, rightCell, aOrig: g.anchorAOrig, bOrig: g.anchorBOrig });
         } else if (g.type === 'changed') {
             const aOrig = filteredA[g.removeOp.aIdx].orig, bOrig = filteredB[g.addOp.bIdx].orig;
             const { leftCell, rightCell } = appendChangedRow(grid, filteredA[g.removeOp.aIdx], filteredB[g.addOp.bIdx]);
@@ -2636,10 +3107,75 @@ function syncCompareNavToCell(leftCell) {
     compareNavIndex = idx;
     _compareNavUpdateUI();
 }
-// Hidden div that mirrors a textarea's text layout (font, padding, wrapping) so we can
-// measure exactly where a given character offset lands vertically — a plain line-count
-// ratio breaks as soon as any line is long enough to soft-wrap onto multiple visual rows,
-// which is common in dense/minified code and was causing the jump-to-random-place bug.
+// Jumps a single compare panel to a given (0-based) original line: selects the line, scrolls it
+// into view, and briefly flashes the panel so it's obvious where you landed.
+function revealComparePanelLine(panelId, origLineIdx) {
+    const ce = compareEditors[panelId];
+    if (!ce) return;
+    if (ce.richMode) {
+        if (!ce.editor || !ce.model) return;
+        const editor = ce.editor, model = ce.model;
+        const lineNumber = Math.min(Math.max(origLineIdx + 1, 1), model.getLineCount());
+        const lineLength = model.getLineMaxColumn(lineNumber);
+        editor.focus();
+        editor.setSelection(new monaco.Range(lineNumber, 1, lineNumber, lineLength));
+        // Deliberately not revealLineInCenter(): that centers against each editor's OWN rounded
+        // "how many whole lines fit" viewport calc, so two editors jumping to a matched pair of
+        // lines could land a row apart from each other even with identical panel heights. Since
+        // Panel A and Panel B always share the same viewport height and line height, computing the
+        // scrollTop explicitly with the same formula for both guarantees they land on the exact
+        // same relative row.
+        const lineTop = editor.getTopForLineNumber(lineNumber);
+        const viewportHeight = editor.getLayoutInfo().height;
+        const lineHeight = editor.getOption(monaco.editor.EditorOption.lineHeight);
+        editor.setScrollTop(Math.max(0, lineTop - (viewportHeight - lineHeight) / 2));
+        // Monaco's own selection highlight can be subtle against syntax-colored text (especially
+        // with wrap off, where the selection is easy to lose track of on a long line), so also
+        // drop a brief, full-width background flash on that exact line.
+        const decorations = editor.createDecorationsCollection([
+            { range: new monaco.Range(lineNumber, 1, lineNumber, 1), options: { isWholeLine: true, className: 'monaco-line-flash' } }
+        ]);
+        setTimeout(() => { try { decorations.clear(); } catch (e) {} }, 900);
+    } else {
+        const ta = document.getElementById('plain-' + panelId);
+        if (!ta) return;
+        const lines = ta.value.split('\n');
+        let offset = 0;
+        for (let i = 0; i < origLineIdx && i < lines.length; i++) offset += lines[i].length + 1;
+        const lineText = lines[origLineIdx] || '';
+        ta.focus();
+        ta.setSelectionRange(offset, offset + lineText.length);
+        // Measure the real pixel position of this line by rendering everything before it (plus a
+        // zero-width marker) through a mirror element with identical text layout — a plain
+        // line-count ratio breaks as soon as any line is long enough to soft-wrap onto multiple
+        // visual rows (moot with wrap off, but the panel can still be toggled to wrap-on).
+        const mirror = getScrollMirrorDiv(ta);
+        mirror.textContent = '';
+        mirror.appendChild(document.createTextNode(ta.value.slice(0, offset)));
+        const marker = document.createElement('span');
+        marker.textContent = '​';
+        mirror.appendChild(marker);
+        const targetTop = marker.offsetTop;
+        const maxScroll = Math.max(0, ta.scrollHeight - ta.clientHeight);
+        ta.scrollTop = Math.min(maxScroll, Math.max(0, targetTop - ta.clientHeight / 2));
+    }
+
+    const flashEl = document.getElementById(ce.richMode ? 'monaco-' + panelId : 'plain-' + panelId);
+    if (flashEl) {
+        flashEl.classList.add('flash-active');
+        setTimeout(() => flashEl.classList.remove('flash-active'), 900);
+    }
+}
+// Jumps BOTH panels together to a matched pair of original lines (either side may be null for a
+// pure add/remove — see annotateDiffAnchors, which fills in the nearest corresponding line on the
+// side that has no line of its own) so the two panels always land row-aligned on the same change,
+// not just whichever single side actually has that line.
+function jumpToDiffPair(aOrig, bOrig) {
+    if (aOrig != null) revealComparePanelLine('compareLeft', aOrig);
+    if (bOrig != null) revealComparePanelLine('compareRight', bOrig);
+}
+// Hidden div that mirrors a textarea's text layout (font, padding, wrapping) — used only by the
+// plain-textarea fallback above to measure exactly where a given character offset lands vertically.
 let _scrollMirrorDiv = null;
 function getScrollMirrorDiv(ta) {
     if (!_scrollMirrorDiv) {
@@ -2667,42 +3203,15 @@ function getScrollMirrorDiv(ta) {
     mirror.style.lineHeight = cs.lineHeight;
     mirror.style.letterSpacing = cs.letterSpacing;
     mirror.style.tabSize = cs.tabSize;
-    mirror.style.whiteSpace = 'pre-wrap';
+    mirror.style.whiteSpace = ta.classList.contains('wrap-on') ? 'pre-wrap' : 'pre';
     mirror.style.wordWrap = 'break-word';
     mirror.style.overflowWrap = 'break-word';
     return mirror;
-}
-function scrollTextareaToLine(panelId, lineIdx) {
-    const ta = document.getElementById(panelId);
-    const lines = ta.value.split('\n');
-    let offset = 0;
-    for (let i = 0; i < lineIdx && i < lines.length; i++) offset += lines[i].length + 1;
-    const lineText = lines[lineIdx] || '';
-    ta.focus();
-    ta.setSelectionRange(offset, offset + lineText.length);
-
-    // Measure the real pixel position of this line by rendering everything before it
-    // (plus a zero-width marker) through a mirror element with identical text layout.
-    const mirror = getScrollMirrorDiv(ta);
-    mirror.textContent = '';
-    mirror.appendChild(document.createTextNode(ta.value.slice(0, offset)));
-    const marker = document.createElement('span');
-    marker.textContent = '​';
-    mirror.appendChild(marker);
-    const targetTop = marker.offsetTop;
-    const maxScroll = Math.max(0, ta.scrollHeight - ta.clientHeight);
-    ta.scrollTop = Math.min(maxScroll, Math.max(0, targetTop - ta.clientHeight / 3));
-
-    ta.classList.add('flash-active');
-    setTimeout(() => ta.classList.remove('flash-active'), 900);
 }
 
 /* =========================================================================
    INIT
    ========================================================================= */
-const debouncedRefreshLeft = debounce(() => refreshCompareBadge('compareLeft'), 200);
-const debouncedRefreshRight = debounce(() => refreshCompareBadge('compareRight'), 200);
-
 function init() {
     loadLayout();
     loadEntriesFromStorage();
@@ -2711,9 +3220,8 @@ function init() {
     populateCompareSelect('compareRight');
     refreshCompareBadge('compareLeft');
     refreshCompareBadge('compareRight');
-    wireSyncScroll();
-    wireScrollTopButton('compareLeft', 'compareLeftScrollTop');
-    wireScrollTopButton('compareRight', 'compareRightScrollTop');
+    mountComparePanelEditor('compareLeft');
+    mountComparePanelEditor('compareRight');
 
     const pasteZone = document.getElementById('pasteZone');
     pasteZone.addEventListener('dragover', e => { e.preventDefault(); pasteZone.classList.add('file-drop-target'); });
@@ -2726,8 +3234,6 @@ function init() {
     document.getElementById('pasteInput').addEventListener('keydown', e => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addFromPasteBox(); }
     });
-    document.getElementById('compareLeft').addEventListener('input', debouncedRefreshLeft);
-    document.getElementById('compareRight').addEventListener('input', debouncedRefreshRight);
     window.addEventListener('resize', debounce(() => {
         // Fallback for browsers without ResizeObserver; the observer set up per entry (see
         // observeMinimapResize) is what normally catches focus-mode and layout-driven resizes.
@@ -2749,9 +3255,18 @@ init();
         if (btn) btn.title = theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
     }
 
+    function syncMonacoTheme(theme) {
+        try {
+            if (window.monaco && window.monaco.editor) {
+                monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
+            }
+        } catch (e) {}
+    }
+
     function refreshCustomMinimaps() {
-        // The hand-rolled per-snippet minimap bakes its token colors into an offscreen canvas from
-        // the --tok-*/--text custom properties, so switching theme needs an explicit repaint.
+        // The hand-rolled per-snippet minimap (view mode) bakes its token colors into an offscreen
+        // canvas from the --tok-*/--text custom properties, so switching theme needs an explicit
+        // repaint — unlike Monaco's own minimap (edit mode), which re-themes itself automatically.
         try {
             if (typeof postedEntries !== 'undefined' && typeof renderMinimap === 'function') {
                 postedEntries.forEach(function (item) { if (item.minimap) renderMinimap(item); });
@@ -2762,6 +3277,7 @@ init();
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
         updateToggleIcon(theme);
+        syncMonacoTheme(theme);
         refreshCustomMinimaps();
     }
 
