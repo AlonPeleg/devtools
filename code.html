@@ -582,6 +582,11 @@
                     <div class="entry-toolbar-2">
                         <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleComparePanelWrap('compareLeft', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                         <div class="btn-icon mode-toggle" title="Switch to plain text editor" onclick="toggleComparePanelMode('compareLeft', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
+                        <div class="fold-controls">
+                          <div class="btn-icon format-entry-btn" title="Format / beautify this panel" onclick="formatComparePanel('compareLeft', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.2 4.8L14 7l-4.8 1.2L8 13l-1.2-4.8L2 7l4.8-1.2L8 1z"/></svg></div>
+                          <div class="btn-icon" title="Collapse all functions / blocks" onclick="collapseAllComparePanel('compareLeft')">▸▸</div>
+                          <div class="btn-icon" title="Expand all functions / blocks" onclick="expandAllComparePanel('compareLeft')">▾▾</div>
+                        </div>
                     </div>
                     <div class="content" id="compareLeftContentBox">
                         <div class="monaco-container" id="monaco-compareLeft"></div>
@@ -607,6 +612,11 @@
                     <div class="entry-toolbar-2">
                         <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleComparePanelWrap('compareRight', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                         <div class="btn-icon mode-toggle" title="Switch to plain text editor" onclick="toggleComparePanelMode('compareRight', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
+                        <div class="fold-controls">
+                          <div class="btn-icon format-entry-btn" title="Format / beautify this panel" onclick="formatComparePanel('compareRight', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.2 4.8L14 7l-4.8 1.2L8 13l-1.2-4.8L2 7l4.8-1.2L8 1z"/></svg></div>
+                          <div class="btn-icon" title="Collapse all functions / blocks" onclick="collapseAllComparePanel('compareRight')">▸▸</div>
+                          <div class="btn-icon" title="Expand all functions / blocks" onclick="expandAllComparePanel('compareRight')">▾▾</div>
+                        </div>
                     </div>
                     <div class="content" id="compareRightContentBox">
                         <div class="monaco-container" id="monaco-compareRight"></div>
@@ -3101,6 +3111,61 @@ function toggleComparePanelMode(panelId) {
         mountComparePlainEditor(panelId);
     }
     updateComparePanelModeToggleUI(panelId);
+}
+
+// Collapse/expand-all for a compare panel just drives Monaco's own folding commands on the live
+// editor (including our custom ObjectScript folding-range provider, already registered in
+// registerObjectScriptLanguage) — there's no separate custom-rendered "view mode" here the way the
+// Viewer tab has, so there's nothing to do while a panel is in the plain-textarea fallback mode.
+function collapseAllComparePanel(panelId) {
+    const ce = compareEditors[panelId];
+    if (!ce || !ce.richMode || !ce.editor) return;
+    const action = ce.editor.getAction('editor.foldAll');
+    if (action) action.run();
+}
+function expandAllComparePanel(panelId) {
+    const ce = compareEditors[panelId];
+    if (!ce || !ce.richMode || !ce.editor) return;
+    const action = ce.editor.getAction('editor.unfoldAll');
+    if (action) action.run();
+}
+
+// Format / beautify a compare panel. Mirrors formatEntry in the Viewer tab: in rich (Monaco) mode
+// it runs Format Document on the live editor directly; in plain-textarea mode there's no live
+// editor to format, so it tries the same formatting through a hidden throwaway Monaco editor first
+// and falls back to the fully synchronous local beautifiers if Monaco isn't loaded.
+const formatInFlightPanels = new Set();
+async function formatComparePanel(panelId, btnEl) {
+    if (formatInFlightPanels.has(panelId)) return;
+    const ce = compareEditors[panelId];
+    if (!ce) return;
+    formatInFlightPanels.add(panelId);
+    try {
+        if (ce.richMode && ce.editor && ce.model) {
+            const before = ce.model.getValue();
+            const action = ce.editor.getAction('editor.action.formatDocument');
+            if (action) { try { await action.run(); } catch (e) {} }
+            if (ce.model.getValue() !== before) refreshCompareBadge(panelId);
+        } else {
+            const p = comparePanels[panelId];
+            const effId = p.override || p.detected.id;
+            const code = getPanelCode(panelId);
+            let result = null;
+            if (window.monaco && monacoReady) {
+                try { result = await formatViaHiddenMonaco(code, getMonacoLangId(effId)); } catch (e) { result = null; }
+            }
+            if (result == null) {
+                try { result = formatCodeLocally(code, effId); } catch (e) { result = null; }
+            }
+            if (typeof result === 'string' && result !== code) {
+                setPanelCode(panelId, result);
+                refreshCompareBadge(panelId);
+            }
+        }
+    } finally {
+        formatInFlightPanels.delete(panelId);
+        if (btnEl) flashIcon(btnEl);
+    }
 }
 
 function renderCompareChips() {
