@@ -22,6 +22,9 @@
     --tab-active-bg: #1e1e1e;
     --accent: #007acc;
     --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* Opposite of the current background, not a themed color — dark mode gets a white
+       cursor, light mode gets a black one, so it always pops against the bar. */
+    --cursor-color: #ffffff;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -56,6 +59,17 @@
     padding: 0 14px 0 4px;
     letter-spacing: 0.2px;
     white-space: nowrap;
+  }
+  #tabbar .brand::after {
+    content: "_";
+    color: var(--cursor-color);
+    text-shadow: 0 0 6px var(--cursor-color);
+    margin-left: 2px;
+    animation: brandCursorBlink 1.1s steps(1) infinite;
+  }
+  @keyframes brandCursorBlink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
   }
   .tab {
     display: flex;
@@ -159,6 +173,7 @@
     --tab-fg-active: #000000;
     --tab-active-bg: #ffffff;
     --accent: #086bb3;
+    --cursor-color: #000000;
   }
   html[data-theme="light"] .placeholder { color: #6b6b6b; }
   html[data-theme="light"] .brand { color: #3a3a3a; }
