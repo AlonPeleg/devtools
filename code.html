@@ -853,6 +853,16 @@ function detectLanguage(code, filename) {
     if (raw.cpp >= 4) { raw.c = 0; }
     if (raw.html >= 5) { raw.xml = 0; }
 
+    // A single well-formed root element with matching open/close tags (e.g. <root><a>1</a></root>)
+    // reads as XML confidently even with no <?xml ...?> prolog and no xmlns attribute — most real
+    // XML snippets (config fragments, SOAP bodies, custom markup) have neither. Before this, xml's
+    // only signal was raw closing-tag frequency, which a short snippet like that scores too low on
+    // to beat the plaintext floor below. This defers to HTML whenever the content already scored as
+    // HTML-ish (raw.html >= 5, matched above) so real HTML fragments aren't reclassified.
+    if (raw.html < 5 && /^<([a-zA-Z_][\w:.-]*)\b[^>]*>[\s\S]*<\/\1>\s*$/.test(trimmed)) {
+        raw.xml = Math.max(raw.xml, 6);
+    }
+
     let bestId = 'plaintext', bestScore = 0, second = 0;
     const entries = Object.keys(raw).map(id => [id, raw[id]]).sort((a, b) => b[1] - a[1]);
     if (entries.length) { bestId = entries[0][0]; bestScore = entries[0][1]; second = entries[1] ? entries[1][1] : 0; }
@@ -865,6 +875,276 @@ function detectLanguage(code, filename) {
     else if (bestScore >= 5) confidence = 'medium';
     const runnerUp = (second >= 3 && entries[1]) ? entries[1][0] : null;
     return { id: bestId, label: LANGS[bestId].label, score: bestScore, confidence, runnerUp };
+}
+
+/* =========================================================================
+   FORMAT / BEAUTIFY — hand-rolled, dependency-free pretty-printers. These are
+   used directly as the synchronous local fallback (Monaco not loaded, or a
+   view-mode format request), and are also wrapped as Monaco
+   registerDocumentFormattingEditProvider implementations (see
+   registerCustomFormatters, near the Monaco integration below) for every
+   language Monaco's bundled "editor.main" build has no native formatter for
+   — so both the live editor's own Format Document command and the plain
+   view-mode renderer end up running the exact same formatting logic.
+   ========================================================================= */
+function tidyWhitespace(code) {
+    const lines = code.replace(/\r\n?/g, '\n').split('\n').map(l => l.replace(/[ \t]+$/, ''));
+    const out = [];
+    let blankRun = 0;
+    for (const l of lines) {
+        if (l === '') { blankRun++; if (blankRun <= 1) out.push(l); }
+        else { blankRun = 0; out.push(l); }
+    }
+    while (out.length && out[out.length - 1] === '') out.pop();
+    return out.join('\n');
+}
+
+// Rough "does this look minified" heuristic — only when code is basically unbroken do we risk
+// inserting new line breaks (the one part of this feature that changes more than indentation).
+function looksMinified(code) {
+    const lines = code.split('\n');
+    if (lines.length <= 2 && code.length > 200) return true;
+    return (code.length / lines.length) > 300;
+}
+
+// Inserts line breaks after `{`, `;` and around `}` so minified/dense brace-language code gets
+// split into one-statement-per-line before the indent pass below. String/template/char literals
+// and comments are tracked so their contents are never split or altered.
+function splitCodeStatements(code) {
+    let out = '';
+    let i = 0;
+    const n = code.length;
+    let state = 'normal';
+    while (i < n) {
+        const ch = code[i], next = code[i + 1];
+        if (state === 'normal') {
+            if (ch === '/' && next === '/') { state = 'line'; out += ch; i++; continue; }
+            if (ch === '/' && next === '*') { state = 'block'; out += ch; i++; continue; }
+            if (ch === "'") { state = 'sq'; out += ch; i++; continue; }
+            if (ch === '"') { state = 'dq'; out += ch; i++; continue; }
+            if (ch === '`') { state = 'bt'; out += ch; i++; continue; }
+            if (ch === '{') {
+                out += ch;
+                if (next !== '}' && next !== undefined && next !== '\n') out += '\n';
+                i++; continue;
+            }
+            if (ch === '}') {
+                if (out.length && out[out.length - 1] !== '\n' && out[out.length - 1] !== '{') out += '\n';
+                out += ch;
+                if (next !== undefined && next !== '\n' && next !== ';' && next !== ',' && next !== ')') out += '\n';
+                i++; continue;
+            }
+            if (ch === ';') {
+                out += ch;
+                if (next !== undefined && next !== '\n') out += '\n';
+                i++; continue;
+            }
+            out += ch; i++; continue;
+        }
+        if (state === 'line') { out += ch; if (ch === '\n') state = 'normal'; i++; continue; }
+        if (state === 'block') { out += ch; if (ch === '*' && next === '/') { out += next; i += 2; state = 'normal'; continue; } i++; continue; }
+        // sq / dq / bt string states
+        out += ch;
+        if (ch === '\\' && next !== undefined) { out += next; i += 2; continue; }
+        const closer = state === 'sq' ? "'" : state === 'dq' ? '"' : '`';
+        if (ch === closer) state = 'normal';
+        i++; continue;
+    }
+    return out;
+}
+
+// Re-indents brace/bracket/paren-nested code line by line, purely from bracket depth. Never
+// rewrites a line's own text — only the leading whitespace in front of it — so it's safe to run
+// on already-reasonable code as a "clean up the indentation" pass.
+function reindentBraceCode(code, indentUnit) {
+    indentUnit = indentUnit || '  ';
+    const lines = code.split('\n');
+    let depth = 0;
+    let inBlockComment = false;
+    const out = [];
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (inBlockComment) {
+            out.push(line);
+            if (line.indexOf('*/') !== -1) inBlockComment = false;
+            continue;
+        }
+        if (line === '') { out.push(''); continue; }
+        let leadDedent = 0, j = 0;
+        while (j < line.length && (line[j] === '}' || line[j] === ')' || line[j] === ']')) {
+            leadDedent++; j++;
+            while (j < line.length && line[j] === ' ') j++;
+        }
+        const printDepth = Math.max(0, depth - leadDedent);
+        out.push(indentUnit.repeat(printDepth) + line);
+
+        let delta = 0, k = 0, localState = 'normal';
+        while (k < line.length) {
+            const ch = line[k], nx = line[k + 1];
+            if (localState === 'normal') {
+                if (ch === '/' && nx === '/') break;
+                if (ch === '/' && nx === '*') { localState = 'block'; k += 2; continue; }
+                if (ch === "'") { localState = 'sq'; k++; continue; }
+                if (ch === '"') { localState = 'dq'; k++; continue; }
+                if (ch === '`') { localState = 'bt'; k++; continue; }
+                if (ch === '{' || ch === '(' || ch === '[') delta++;
+                else if (ch === '}' || ch === ')' || ch === ']') delta--;
+                k++; continue;
+            }
+            if (localState === 'block') { if (ch === '*' && nx === '/') { localState = 'normal'; k += 2; continue; } k++; continue; }
+            if (ch === '\\') { k += 2; continue; }
+            const closer = localState === 'sq' ? "'" : localState === 'dq' ? '"' : '`';
+            if (ch === closer) localState = 'normal';
+            k++; continue;
+        }
+        if (localState === 'block') inBlockComment = true;
+        depth = Math.max(0, depth + delta);
+    }
+    return out.join('\n');
+}
+function formatBraceLanguage(code) {
+    const prepared = looksMinified(code) ? splitCodeStatements(code) : code;
+    return reindentBraceCode(prepared, '  ');
+}
+
+// XML/HTML pretty-printer: tokenizes tags/text/comments/doctype/PI/CDATA and re-indents by nesting
+// depth. A leaf element whose only content is a single run of text (e.g. <a>1</a>) is kept on one
+// line, matching how most XML/HTML formatters render simple leaves.
+const XML_VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+// These are built by concatenation — never spelled out as a literal contiguous open/close
+// HTML-comment marker or CDATA-open marker anywhere in this file's own source, including in this
+// comment. That exact character run has special meaning to HTML's OWN tokenizer even inside a
+// <script> block (it's the legacy "hide script body from old browsers" comment rule) — spelling
+// it out literally here could make an editor's embedded-HTML/JS language service (and, per spec, a
+// real browser) misparse everything after this point in the file.
+const XML_COMMENT_OPEN = '<!' + '--';
+const XML_COMMENT_CLOSE = '--' + '>';
+const XML_CDATA_OPEN = '<!' + '[CDATA[';
+function formatXML(code) {
+    const src = code.trim();
+    if (!src) return code;
+    const re = new RegExp(
+        XML_COMMENT_OPEN + '[\\s\\S]*?' + XML_COMMENT_CLOSE +
+        '|' + XML_CDATA_OPEN.replace('[', '\\[').replace('[', '\\[') + '[\\s\\S]*?\\]\\]>' +
+        '|<!DOCTYPE[^>]*>|<\\?[\\s\\S]*?\\?>|<\\/[^>]+>|<[^>]+>|[^<]+',
+        'g'
+    );
+    const tokens = [];
+    let m;
+    while ((m = re.exec(src))) {
+        const t = m[0];
+        if (t[0] !== '<') { if (t.trim()) tokens.push({ type: 'text', raw: t.trim() }); continue; }
+        if (t.slice(0, XML_COMMENT_OPEN.length) === XML_COMMENT_OPEN || /^<!DOCTYPE/i.test(t) || t.slice(0, 2) === '<?' || t.slice(0, XML_CDATA_OPEN.length) === XML_CDATA_OPEN) { tokens.push({ type: 'other', raw: t }); continue; }
+        if (t.slice(0, 2) === '</') { tokens.push({ type: 'close', raw: t, name: (/^<\/\s*([a-zA-Z_][\w:.-]*)/.exec(t) || [])[1] }); continue; }
+        const selfClose = /\/>\s*$/.test(t);
+        const name = (/^<\s*([a-zA-Z_][\w:.-]*)/.exec(t) || [])[1];
+        tokens.push({ type: selfClose ? 'selfclose' : 'open', raw: t, name: name });
+    }
+    const indentUnit = '  ';
+    let depth = 0;
+    const lines = [];
+    let i = 0;
+    while (i < tokens.length) {
+        const tok = tokens[i];
+        if (tok.type === 'other' || tok.type === 'text') { lines.push(indentUnit.repeat(depth) + tok.raw); i++; continue; }
+        if (tok.type === 'close') { depth = Math.max(0, depth - 1); lines.push(indentUnit.repeat(depth) + tok.raw); i++; continue; }
+        if (tok.type === 'selfclose') { lines.push(indentUnit.repeat(depth) + tok.raw); i++; continue; }
+        // open tag
+        if (tok.name && XML_VOID_TAGS.has(tok.name.toLowerCase())) { lines.push(indentUnit.repeat(depth) + tok.raw); i++; continue; }
+        const next1 = tokens[i + 1], next2 = tokens[i + 2];
+        if (next1 && next1.type === 'text' && next2 && next2.type === 'close' && next2.name === tok.name) {
+            lines.push(indentUnit.repeat(depth) + tok.raw + next1.raw + next2.raw);
+            i += 3; continue;
+        }
+        if (next1 && next1.type === 'close' && next1.name === tok.name) {
+            lines.push(indentUnit.repeat(depth) + tok.raw + next1.raw);
+            i += 2; continue;
+        }
+        lines.push(indentUnit.repeat(depth) + tok.raw);
+        depth++; i++;
+    }
+    return lines.join('\n');
+}
+
+// CSS pretty-printer: ignores the source's own line breaks entirely and rebuilds layout purely
+// from `{` / `}` / `;` (so minified CSS unpacks the same way hand-formatted CSS gets cleaned up),
+// while keeping comments and string contents verbatim.
+function formatCSS(code) {
+    const src = code.trim();
+    if (!src) return code;
+    const indentUnit = '  ';
+    let depth = 0, i = 0, cur = '';
+    const n = src.length;
+    const lines = [];
+    // isDeclaration: only a `prop:value;`-style line (flushed on `;`, or an unterminated one
+    // flushed right before `}`) gets a space forced after its first colon — a selector line like
+    // `a:hover {` is flushed via the `{` branch instead and is left alone, so pseudo-classes and
+    // pseudo-elements in selectors are never touched.
+    function flushLine(isDeclaration) {
+        let t = cur.trim();
+        if (t) {
+            if (isDeclaration) {
+                if (t[t.length - 1] !== ';') t += ';';
+                const ci = t.indexOf(':');
+                if (ci !== -1 && t[ci + 1] !== ' ') t = t.slice(0, ci + 1) + ' ' + t.slice(ci + 1);
+            }
+            lines.push(indentUnit.repeat(depth) + t);
+        }
+        cur = '';
+    }
+    while (i < n) {
+        const ch = src[i], nx = src[i + 1];
+        if (ch === '/' && nx === '*') {
+            const end = src.indexOf('*/', i + 2);
+            const block = end === -1 ? src.slice(i) : src.slice(i, end + 2);
+            cur += block; i += block.length; continue;
+        }
+        if (ch === '"' || ch === "'") {
+            const quote = ch; let j = i + 1, s = ch;
+            while (j < n && src[j] !== quote) { if (src[j] === '\\') { s += src[j] + (src[j + 1] || ''); j += 2; continue; } s += src[j]; j++; }
+            s += src[j] || ''; cur += s; i = j + 1; continue;
+        }
+        if (ch === '{') { cur += cur.trim() ? ' {' : '{'; flushLine(false); depth++; i++; continue; }
+        if (ch === '}') { flushLine(true); depth = Math.max(0, depth - 1); lines.push(indentUnit.repeat(depth) + '}'); i++; continue; }
+        if (ch === ';') { cur += ';'; flushLine(true); i++; continue; }
+        if (/\s/.test(ch)) { if (cur.length && !/\s$/.test(cur)) cur += ' '; i++; continue; }
+        cur += ch; i++; continue;
+    }
+    flushLine(false);
+    return lines.join('\n');
+}
+
+// SQL formatter: uppercases recognized keywords (outside strings/comments) and breaks the major
+// clauses onto their own lines — a lightweight pass, not a real SQL parser.
+const SQL_CLAUSE_KEYWORDS = ['SELECT', 'FROM', 'WHERE', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'FULL JOIN', 'JOIN', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION ALL', 'UNION', 'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'CREATE TABLE', 'CREATE INDEX', 'ALTER TABLE', 'DROP TABLE', 'WITH'];
+const SQL_UPPER_WORDS = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'ON', 'AND', 'OR', 'NOT', 'IN', 'IS', 'NULL', 'AS', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'ALL', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'CREATE', 'TABLE', 'INDEX', 'ALTER', 'DROP', 'WITH', 'DISTINCT', 'ASC', 'DESC', 'BETWEEN', 'LIKE', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
+function formatSQL(code) {
+    // Protect string/comment spans, uppercase keywords in the rest, then re-join.
+    const parts = code.split(/('(?:[^'\\]|\\.)*'|--[^\n]*|\/\*[\s\S]*?\*\/)/);
+    for (let p = 0; p < parts.length; p += 2) {
+        parts[p] = parts[p].replace(/\b[A-Za-z]+\b/g, w => SQL_UPPER_WORDS.includes(w.toUpperCase()) ? w.toUpperCase() : w);
+    }
+    let joined = parts.join('');
+    const clausePattern = new RegExp('\\s+(' + SQL_CLAUSE_KEYWORDS.slice().sort((a, b) => b.length - a.length).join('|') + ')\\b', 'g');
+    joined = joined.replace(clausePattern, (m, kw) => '\n' + kw);
+    return joined.split('\n').map(l => l.trim()).filter((l, idx, arr) => l !== '' || (idx > 0 && arr[idx - 1] !== '')).join('\n').trim();
+}
+
+// Same language grouping used to pick a local fallback formatter (below) AND, per-language, to
+// decide which languages get a custom Monaco document-formatting-edit-provider registered for
+// them (see registerCustomFormatters) — languages Monaco's own bundled build already formats
+// natively (TS/JS/CSS/JSON/HTML) are deliberately left out of both.
+const BRACE_FORMAT_LANGS = new Set(['typescript', 'javascript', 'java', 'csharp', 'cpp', 'c', 'go', 'rust', 'kotlin', 'swift', 'php', 'objectscript']);
+function formatCodeLocally(code, langId) {
+    if (!code || !code.trim()) return code;
+    try {
+        if (langId === 'json') { return JSON.stringify(JSON.parse(code), null, 2); }
+        if (langId === 'xml' || langId === 'html') return formatXML(code);
+        if (langId === 'css') return formatCSS(code);
+        if (langId === 'sql') return formatSQL(code);
+        if (BRACE_FORMAT_LANGS.has(langId)) return formatBraceLanguage(code);
+    } catch (e) { /* fall through to the safe whitespace tidy below */ }
+    return tidyWhitespace(code);
 }
 
 /* ---------- tokenizer ---------- */
@@ -989,7 +1269,7 @@ function cssRules() {
 }
 function xmlRules() {
     return [
-        { name: 'comment', pattern: '<!--[\\s\\S]*?-->', cls: 'tok-comment' },
+        { name: 'comment', pattern: ('<!' + '--') + '[\\s\\S]*?' + ('--' + '>'), cls: 'tok-comment' },
         { name: 'doctype', pattern: '<!DOCTYPE[^>]*>', cls: 'tok-macro' },
         { name: 'tagopen', pattern: '</?[a-zA-Z_][\\w:.-]*', cls: 'tok-tag' },
         { name: 'attr', pattern: '[a-zA-Z_:][\\w:.-]*(?==)', cls: 'tok-key' },
@@ -1450,6 +1730,7 @@ function buildEntryBodyHtml(item) {
         <div class="fold-controls">
           <div class="btn-icon wrap-toggle${item.wrap ? ' toggle-active' : ''}" title="Wrap long lines" onclick="toggleEntryWrapBtn('${item.id}', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
           <div class="btn-icon minimap-toggle${item.minimap ? ' toggle-active' : ''}" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
+          <div class="btn-icon format-entry-btn" title="Format / beautify this snippet" onclick="formatEntry('${item.id}', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.2 4.8L14 7l-4.8 1.2L8 13l-1.2-4.8L2 7l4.8-1.2L8 1z"/></svg></div>
           <div class="btn-icon" title="Collapse all functions / blocks" onclick="collapseAllFolds('${item.id}')">▸▸</div>
           <div class="btn-icon" title="Expand all functions / blocks" onclick="expandAllFolds('${item.id}')">▾▾</div>
         </div>
@@ -1467,6 +1748,7 @@ function buildEntryBodyHtml(item) {
         <div class="fold-controls">
           <div class="btn-icon wrap-toggle${item.wrap ? ' toggle-active' : ''}" title="Wrap long lines" onclick="toggleEntryWrapBtn('${item.id}', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
           <div class="btn-icon minimap-toggle${item.minimap ? ' toggle-active' : ''}" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
+          <div class="btn-icon format-entry-btn" title="Format / beautify this snippet" onclick="formatEntry('${item.id}', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.2 4.8L14 7l-4.8 1.2L8 13l-1.2-4.8L2 7l4.8-1.2L8 1z"/></svg></div>
           <div class="btn-icon" title="Collapse all functions / blocks / labels" onclick="collapseAllFolds('${item.id}')">▸▸</div>
           <div class="btn-icon" title="Expand all functions / blocks / labels" onclick="expandAllFolds('${item.id}')">▾▾</div>
         </div>
@@ -1567,11 +1849,45 @@ function registerObjectScriptLanguage() {
     });
 }
 
+// Monaco's bundled "editor.main" build already ships real document-formatting-edit-providers for
+// these — Format Document just works for them with nothing extra registered. Every other language
+// Monaco knows about here only has a Monarch (syntax-highlighting-only) grammar, so Format Document
+// would otherwise silently do nothing for them; the providers below wire it up to our own
+// hand-rolled beautifiers instead, the same ones formatCodeLocally uses for the synchronous
+// no-Monaco fallback — one set of formatting logic, reused from both places.
+function registerCustomFormatters() {
+    if (!window.monaco) return;
+    if (window.__customFormattersRegistered) return;
+    window.__customFormattersRegistered = true;
+    function provider(fn) {
+        return {
+            provideDocumentFormattingEdits(model) {
+                const before = model.getValue();
+                let out = null;
+                try { out = fn(before); } catch (e) { out = null; }
+                if (typeof out !== 'string' || out === before) return [];
+                return [{ range: model.getFullModelRange(), text: out }];
+            }
+        };
+    }
+    monaco.languages.registerDocumentFormattingEditProvider('xml', provider(formatXML));
+    monaco.languages.registerDocumentFormattingEditProvider('sql', provider(formatSQL));
+    ['java', 'csharp', 'cpp', 'go', 'rust', 'kotlin', 'swift', 'php', 'objectscript-custom'].forEach(id => {
+        monaco.languages.registerDocumentFormattingEditProvider(id, provider(formatBraceLanguage));
+    });
+    // No hand-rolled formatter exists for these — Format Document still does something useful
+    // (trims trailing whitespace, collapses runs of blank lines) rather than nothing at all.
+    ['python', 'yaml', 'shell', 'ruby', 'plaintext'].forEach(id => {
+        monaco.languages.registerDocumentFormattingEditProvider(id, provider(tidyWhitespace));
+    });
+}
+
 let monacoReady = false;
 const pendingMonacoMounts = [];
 function onMonacoReady() {
     monacoReady = true;
     registerObjectScriptLanguage();
+    registerCustomFormatters();
     pendingMonacoMounts.splice(0).forEach(id => {
         const it = findEntry(id);
         if (it) mountMonacoEditor(it);
@@ -1668,6 +1984,85 @@ function openEntryFind(id) {
     item.editor.focus();
     const action = item.editor.getAction('actions.find');
     if (action) action.run();
+}
+
+// Formats code through a detached, never-displayed Monaco editor + model — this is how view mode
+// (which has no live editor of its own) gets Monaco's real formatters (native ones for TS/JS/CSS/
+// JSON/HTML, and our custom-registered ones for everything else) without mounting a visible editor.
+// Resolves to the formatted string, or null if no provider produced an edit for this language.
+function formatViaHiddenMonaco(code, monacoLangId) {
+    return new Promise((resolve) => {
+        let container = null, model = null, editor = null;
+        function cleanup() {
+            try { if (editor) editor.dispose(); } catch (e) {}
+            try { if (model) model.dispose(); } catch (e) {}
+            if (container && container.parentNode) container.parentNode.removeChild(container);
+        }
+        try {
+            container = document.createElement('div');
+            container.style.cssText = 'position:fixed; top:-99999px; left:-99999px; width:800px; height:600px;';
+            document.body.appendChild(container);
+            model = monaco.editor.createModel(code, monacoLangId);
+            editor = monaco.editor.create(container, { model: model, automaticLayout: false });
+            const action = editor.getAction('editor.action.formatDocument');
+            if (!action) { cleanup(); resolve(null); return; }
+            action.run().then(() => {
+                const out = model.getValue();
+                cleanup();
+                resolve(out === code ? null : out);
+            }).catch(() => { cleanup(); resolve(null); });
+        } catch (e) {
+            cleanup();
+            resolve(null);
+        }
+    });
+}
+
+// Per-entry Format / beautify. Edit mode formats the live Monaco editor in place via its own
+// Format Document command (whose provider — native or one of ours — already keeps item.rawCode /
+// language detection / dims / autosave in sync through the editor's existing onDidChangeModelContent
+// listener, so nothing else needs to be re-synced here). View mode has no live editor, so it tries
+// the same formatting through a hidden throwaway editor first, and falls back to the fully
+// synchronous local beautifiers if Monaco isn't loaded (or has no provider for this language).
+const formatInFlightEntries = new Set();
+async function formatEntry(id, btnEl) {
+    if (formatInFlightEntries.has(id)) return;
+    const item = findEntry(id);
+    if (!item) return;
+    formatInFlightEntries.add(id);
+    try {
+        if (item.mode === 'edit' && item.editor && item.model) {
+            const before = item.model.getValue();
+            const action = item.editor.getAction('editor.action.formatDocument');
+            if (action) { try { await action.run(); } catch (e) {} }
+            if (item.model.getValue() !== before) {
+                item.collapsedFolds = new Set();
+                saveEntriesToStorage();
+                renderCompareChips();
+            }
+        } else {
+            const effId = effectiveLangId(item);
+            let result = null;
+            if (window.monaco && monacoReady) {
+                try { result = await formatViaHiddenMonaco(item.rawCode, getMonacoLangId(effId)); } catch (e) { result = null; }
+            }
+            if (result == null) {
+                try { result = formatCodeLocally(item.rawCode, effId); } catch (e) { result = null; }
+            }
+            if (typeof result === 'string' && result !== item.rawCode) {
+                item.rawCode = result;
+                item.collapsedFolds = new Set();
+                renderViewModeContent(item);
+                updateEntryDims(item);
+                saveEntriesToStorage();
+                renderCompareChips();
+            }
+        }
+    } finally {
+        formatInFlightEntries.delete(id);
+        const freshBtn = document.querySelector('.entry[data-entry-id="' + id + '"] .format-entry-btn') || btnEl;
+        if (freshBtn) flashIcon(freshBtn);
+    }
 }
 
 /* =========================================================================
