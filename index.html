@@ -720,6 +720,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
      ========================================================================= */
   var loaded = { code: false, json: false, xlsx: false };
   var hello = {};
+  var innerTab = {};   // last Viewer/Compare tab a tool reported ('viewer' | 'compare')
   var frameLoaded = {}, wantInput = {};   // wantInput: put the cursor in the paste box as soon as that tool finishes loading
   var active = null;
 
@@ -759,6 +760,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     document.title = META[tool].short + ' — Dev Toolkit';
     if (!(opts && opts.silent)) announce(META[tool].title);
     if (!(opts && opts.noFocus)) focusActivePane();
+    if (opts && opts.viewer && frameLoaded[tool] && getInnerTab(tool) !== 'viewer') setInnerTab(tool, 'viewer');
     if (opts && opts.focusInput) focusToolInput(tool);
   }
   function goTo(tool, opts) { activate(tool, opts); }
@@ -780,6 +782,283 @@ window.addEventListener('beforeinstallprompt', function (e) {
     } catch (err) {}
     if (!done) postTo(f, { __devToolkitCmd: 'focusInput' });
   }
+
+  /* ---------- a tool's own Viewer / Compare tabs ---------- */
+  function toolFrame(tool) { return document.querySelector('#pane-' + tool + ' iframe'); }
+  function toolDoc(tool) {
+    try { var f = toolFrame(tool); return (f && frameLoaded[tool] && f.contentDocument) || null; } catch (err) { return null; }
+  }
+  function getInnerTab(tool) {
+    var d = toolDoc(tool);
+    if (d) { var p = d.querySelector('.tab-pane.active'); if (p) return p.id === 'viewer-pane' ? 'viewer' : 'compare'; }
+    return innerTab[tool] || 'viewer';
+  }
+  function setInnerTab(tool, which) {
+    var f = toolFrame(tool);
+    if (!f || !frameLoaded[tool]) return;   // not loaded yet: a tool always starts on its Viewer
+    innerTab[tool] = which;
+    var d = toolDoc(tool);
+    if (d) {
+      var pane = which === 'viewer' ? 'viewer-pane' : (d.getElementById('compare-pane') ? 'compare-pane' : 'editor-pane');
+      var link = d.querySelector('.tab-link[onclick*="' + pane + '"]');
+      if (link) { link.click(); return; }
+    }
+    postTo(f, { __devToolkitCmd: 'setInnerTab', pane: which });
+  }
+  // Runs one of the tool's own clear functions (directly when possible, otherwise by message).
+  function callTool(tool, fn) {
+    var f = toolFrame(tool);
+    if (!f || !frameLoaded[tool]) return;
+    try { if (typeof f.contentWindow[fn] === 'function') { f.contentWindow[fn](); return; } } catch (err) {}
+    postTo(f, { __devToolkitCmd: 'call', fn: fn });
+  }
+
+  /* =========================================================================
+     Sample data for the palette's "Add sample" commands.
+     Generated from fixed seeds, so every run produces exactly the same text.
+     ========================================================================= */
+  var SAMPLE_INFO = { code: ['15 lines', '400+ lines'], json: ['1 object', '400 records'], xlsx: ['10 rows', '1,000 rows'] };
+
+  function sampleRng(seed) {
+    var x = seed >>> 0;
+    return function () { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296; };
+  }
+  function samplePick(rand, list) { return list[Math.floor(rand() * list.length)]; }
+  function sampleIsoDate(dayOffset) { return new Date(Date.UTC(2021, 0, 1) + dayOffset * 86400000).toISOString().slice(0, 10); }
+  var S_FIRST = ['Ada', 'Noa', 'Liam', 'Maya', 'Omar', 'Ines', 'Yuki', 'Ravi', 'Lena', 'Diego', 'Amir', 'Sara', 'Tomas', 'Dana', 'Kofi', 'Elif', 'Hugo', 'Mei', 'Ben', 'Zoe'];
+  var S_LAST = ['Cohen', 'Silva', 'Novak', 'Khan', 'Tanaka', 'Rossi', 'Murphy', 'Haddad', 'Berg', 'Okafor', 'Levi', 'Meyer', 'Costa', 'Ivanov', 'Park', 'Duarte', 'Stein', 'Ali', 'Dupont', 'Reyes'];
+  var S_CITIES = ['Tel Aviv', 'Haifa', 'Lisbon', 'Berlin', 'Osaka', 'Toronto', 'Dublin', 'Austin', 'Nairobi', 'Lima', 'Oslo', 'Prague'];
+  var S_DEPTS = ['Engineering', 'Design', 'Sales', 'Support', 'Finance', 'Operations', 'Marketing', 'Legal'];
+
+  function sampleCode(long) {
+    if (!long) {
+      return [
+        '// Debounce: wait until the user stops calling before running the function.',
+        'function debounce(fn, wait = 200) {',
+        '  let timer;',
+        '  return function (...args) {',
+        '    clearTimeout(timer);',
+        '    timer = setTimeout(() => fn.apply(this, args), wait);',
+        '  };',
+        '}',
+        '',
+        'const saveDraft = debounce((text) => {',
+        "  localStorage.setItem('draft', text);",
+        '  console.log(`Saved ${text.length} characters`);',
+        '}, 500);',
+        '',
+        "document.querySelector('#editor').addEventListener('input', (e) => saveDraft(e.target.value));"
+      ].join('\n');
+    }
+    var fns = [
+      ['sum', 'numbers', 'Adds up every number in a list.', ['  return numbers.reduce((total, n) => total + n, 0);']],
+      ['average', 'numbers', 'Mean of a list; an empty list gives 0.', ['  if (numbers.length === 0) return 0;', '  return sum(numbers) / numbers.length;']],
+      ['median', 'numbers', 'Middle value of a list (average of the two middle values when the length is even).',
+        ['  if (numbers.length === 0) return 0;', '  const sorted = [...numbers].sort((a, b) => a - b);', '  const mid = Math.floor(sorted.length / 2);', '  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;']],
+      ['clamp', 'value, min, max', 'Keeps a number between min and max.', ['  return Math.min(max, Math.max(min, value));']],
+      ['percent', 'part, total', 'Part as a percentage of the total, rounded to one decimal.', ['  if (!total) return 0;', '  return Math.round((part / total) * 1000) / 10;']],
+      ['range', 'start, end, step = 1', 'Numbers from start up to (not including) end.', ['  const out = [];', '  for (let n = start; n < end; n += step) out.push(n);', '  return out;']],
+      ['unique', 'items', 'Removes duplicates, keeping the first of each.', ['  return [...new Set(items)];']],
+      ['chunk', 'items, size', 'Splits a list into groups of at most `size`.', ['  const groups = [];', '  for (let i = 0; i < items.length; i += size) {', '    groups.push(items.slice(i, i + size));', '  }', '  return groups;']],
+      ['flatten', 'items', 'Flattens one level of nesting.', ['  return items.reduce((all, item) => all.concat(item), []);']],
+      ['zip', 'left, right', 'Pairs up two lists by position.', ['  const length = Math.min(left.length, right.length);', '  return Array.from({ length }, (_, i) => [left[i], right[i]]);']],
+      ['groupBy', 'items, keyFn', 'Groups items into an object by the key the function returns.', ['  const groups = {};', '  for (const item of items) {', '    const key = keyFn(item);', '    (groups[key] = groups[key] || []).push(item);', '  }', '  return groups;']],
+      ['countBy', 'items, keyFn', 'Counts items per key.', ['  const counts = {};', '  for (const item of items) {', '    const key = keyFn(item);', '    counts[key] = (counts[key] || 0) + 1;', '  }', '  return counts;']],
+      ['sortBy', 'items, keyFn', 'Returns a sorted copy, ordered by the key the function returns.', ['  return [...items].sort((a, b) => {', '    const left = keyFn(a);', '    const right = keyFn(b);', '    return left < right ? -1 : left > right ? 1 : 0;', '  });']],
+      ['pick', 'object, keys', 'Copy of an object with only the listed keys.', ['  const result = {};', '  for (const key of keys) {', '    if (key in object) result[key] = object[key];', '  }', '  return result;']],
+      ['omit', 'object, keys', 'Copy of an object without the listed keys.', ['  const result = { ...object };', '  for (const key of keys) delete result[key];', '  return result;']],
+      ['deepClone', 'value', 'Deep copy of plain data (objects, arrays, dates).', ['  if (value === null || typeof value !== \'object\') return value;', '  if (value instanceof Date) return new Date(value.getTime());', '  if (Array.isArray(value)) return value.map(deepClone);', '  const copy = {};', '  for (const key of Object.keys(value)) copy[key] = deepClone(value[key]);', '  return copy;']],
+      ['capitalize', 'text', 'Upper-cases the first letter.', ['  return text ? text[0].toUpperCase() + text.slice(1) : text;']],
+      ['slugify', 'text', 'Turns a title into a URL-friendly slug.', ['  return text', '    .toLowerCase()', "    .replace(/[^a-z0-9]+/g, '-')", "    .replace(/^-+|-+$/g, '');"]],
+      ['truncate', 'text, max', 'Shortens text and adds an ellipsis when it is longer than max.', ['  if (text.length <= max) return text;', "  return text.slice(0, Math.max(0, max - 1)) + '…';"]],
+      ['isEmail', 'text', 'Rough check that a string looks like an email address.', ['  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(text);']],
+      ['formatCurrency', 'amount, currency = DEFAULT_CURRENCY', 'Formats a number as money for the current locale.', ["  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);"]],
+      ['formatDate', 'date', 'Formats a date as YYYY-MM-DD.', ['  return new Date(date).toISOString().slice(0, 10);']],
+      ['addDays', 'date, days', 'A new date `days` days after the given one.', ['  const result = new Date(date);', '  result.setDate(result.getDate() + days);', '  return result;']],
+      ['daysBetween', 'from, to', 'Whole days between two dates.', ['  return Math.round((new Date(to) - new Date(from)) / MS_PER_DAY);']],
+      ['parseQuery', 'url', 'Reads the query string of a URL into an object.', ['  const params = new URL(url, \'http://localhost\').searchParams;', '  return Object.fromEntries(params.entries());']],
+      ['buildQuery', 'params', 'Builds a query string from an object, skipping empty values.', ['  const search = new URLSearchParams();', '  for (const [key, value] of Object.entries(params)) {', '    if (value !== undefined && value !== null && value !== \'\') search.set(key, value);', '  }', '  return search.toString();']],
+      ['sleep', 'ms', 'Resolves after the given number of milliseconds.', ['  return new Promise((resolve) => setTimeout(resolve, ms));']],
+      ['retry', 'task, attempts = 3', 'Runs an async task again if it fails, up to `attempts` times.', ['  let lastError;', '  for (let attempt = 1; attempt <= attempts; attempt++) {', '    try {', '      return await task(attempt);', '    } catch (error) {', '      lastError = error;', '      await sleep(100 * attempt);', '    }', '  }', '  throw lastError;']],
+      ['throttle', 'fn, limit', 'Runs the function at most once per `limit` milliseconds.', ['  let last = 0;', '  return (...args) => {', '    const now = Date.now();', '    if (now - last >= limit) {', '      last = now;', '      return fn(...args);', '    }', '  };']],
+      ['roundTo', 'value, decimals = 2', 'Rounds a number to a fixed number of decimals.', ['  const factor = 10 ** decimals;', '  return Math.round(value * factor) / factor;']],
+      ['lerp', 'from, to, t', 'Linear interpolation between two numbers (t from 0 to 1).', ['  return from + (to - from) * clamp(t, 0, 1);']],
+      ['gcd', 'a, b', 'Greatest common divisor.', ['  while (b !== 0) {', '    [a, b] = [b, a % b];', '  }', '  return Math.abs(a);']],
+      ['isPrime', 'n', 'True when n is a prime number.', ['  if (n < 2) return false;', '  for (let divisor = 2; divisor * divisor <= n; divisor++) {', '    if (n % divisor === 0) return false;', '  }', '  return true;']],
+      ['factorial', 'n', 'n! for small whole numbers.', ['  let result = 1;', '  for (let i = 2; i <= n; i++) result *= i;', '  return result;']],
+      ['fibonacci', 'count', 'The first `count` Fibonacci numbers.', ['  const numbers = [];', '  for (let i = 0; i < count; i++) {', '    numbers.push(i < 2 ? i : numbers[i - 1] + numbers[i - 2]);', '  }', '  return numbers;']],
+      ['padNumber', 'value, width = 2', 'Left-pads a number with zeros.', ["  return String(value).padStart(width, '0');"]],
+      ['wordCount', 'text', 'Counts the words in a piece of text.', ['  const trimmed = text.trim();', '  return trimmed ? trimmed.split(/\\s+/).length : 0;']],
+      ['toTitleCase', 'text', 'Capitalises every word.', ["  return text.replace(/\\b\\w/g, (letter) => letter.toUpperCase());"]],
+      ['isPalindrome', 'text', 'True when the text reads the same backwards (letters and digits only).', ["  const clean = text.toLowerCase().replace(/[^a-z0-9]/g, '');", "  return clean === [...clean].reverse().join('');"]],
+      ['randomId', 'length = 8', 'A random lowercase-alphanumeric id.', ["  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';", "  let id = '';", '  for (let i = 0; i < length; i++) {', '    id += alphabet[Math.floor(Math.random() * alphabet.length)];', '  }', '  return id;']],
+      ['hexToRgb', 'hex', 'Converts #rrggbb to an { r, g, b } object.', ["  const value = parseInt(hex.replace('#', ''), 16);", '  return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };']],
+      ['rgbToHex', 'r, g, b', 'Converts red, green and blue (0-255) to #rrggbb.', ["  return '#' + [r, g, b].map((channel) => padNumber(channel.toString(16), 2)).join('');"]],
+      ['byteSize', 'bytes', 'Human-readable file size.', ["  const units = ['B', 'KB', 'MB', 'GB', 'TB'];", '  let size = bytes;', '  let unit = 0;', '  while (size >= 1024 && unit < units.length - 1) {', '    size /= 1024;', '    unit++;', '  }', "  return roundTo(size, 1) + ' ' + units[unit];"]],
+      ['once', 'fn', 'Wraps a function so it only runs the first time.', ['  let called = false;', '  let result;', '  return (...args) => {', '    if (!called) {', '      called = true;', '      result = fn(...args);', '    }', '    return result;', '  };']],
+      ['memoize', 'fn', 'Caches results by the first argument.', ['  const cache = new Map();', '  return (key, ...rest) => {', '    if (!cache.has(key)) cache.set(key, fn(key, ...rest));', '    return cache.get(key);', '  };']],
+      ['partition', 'items, predicate', 'Splits a list into [matching, others].', ['  const matching = [];', '  const others = [];', '  for (const item of items) (predicate(item) ? matching : others).push(item);', '  return [matching, others];']],
+      ['take', 'items, count', 'The first `count` items.', ['  return items.slice(0, Math.max(0, count));']],
+      ['last', 'items', 'The final item, or undefined for an empty list.', ['  return items[items.length - 1];']]
+    ];
+    var out = [
+      '/**',
+      ' * inventory.js: a sample module for trying out the code viewer.',
+      ' * It is long on purpose, so you can scroll, fold, search and use the minimap.',
+      ' */',
+      '',
+      "const DEFAULT_CURRENCY = 'USD';",
+      'const LOW_STOCK_LIMIT = 5;',
+      'const MS_PER_DAY = 24 * 60 * 60 * 1000;',
+      ''
+    ];
+    fns.forEach(function (f) {
+      var isAsync = f[0] === 'retry';
+      out.push('/**', ' * ' + f[2], ' */', 'export ' + (isAsync ? 'async ' : '') + 'function ' + f[0] + '(' + f[1] + ') {');
+      Array.prototype.push.apply(out, f[3]);
+      out.push('}', '');
+    });
+    Array.prototype.push.apply(out, [
+      '/** One product in stock. */',
+      'export class Inventory {',
+      '  #items = new Map();',
+      '',
+      '  /** Adds a product, or increases the quantity if the SKU already exists. */',
+      '  add({ sku, name, price, quantity = 1 }) {',
+      '    const existing = this.#items.get(sku);',
+      '    if (existing) {',
+      '      existing.quantity += quantity;',
+      '      return existing;',
+      '    }',
+      '    const item = { sku, name, price, quantity };',
+      '    this.#items.set(sku, item);',
+      '    return item;',
+      '  }',
+      '',
+      '  /** Removes some (or all) of a product. Returns true if anything was removed. */',
+      '  remove(sku, quantity = Infinity) {',
+      '    const item = this.#items.get(sku);',
+      '    if (!item) return false;',
+      '    item.quantity -= quantity;',
+      '    if (item.quantity <= 0) this.#items.delete(sku);',
+      '    return true;',
+      '  }',
+      '',
+      '  find(sku) {',
+      '    return this.#items.get(sku) ?? null;',
+      '  }',
+      '',
+      '  get totalValue() {',
+      '    return sum([...this.#items.values()].map((item) => item.price * item.quantity));',
+      '  }',
+      '',
+      '  lowStock(limit = LOW_STOCK_LIMIT) {',
+      '    return sortBy([...this.#items.values()].filter((item) => item.quantity <= limit), (item) => item.quantity);',
+      '  }',
+      '',
+      '  report() {',
+      '    return [...this.#items.values()].map((item) => ({',
+      '      sku: item.sku,',
+      '      name: truncate(item.name, 24),',
+      '      value: formatCurrency(item.price * item.quantity),',
+      '      share: percent(item.price * item.quantity, this.totalValue) + \'%\'',
+      '    }));',
+      '  }',
+      '',
+      '  toJSON() {',
+      '    return [...this.#items.values()];',
+      '  }',
+      '}',
+      ''
+    ]);
+    // A long "usage" section so the file is comfortably long
+    var products = ['Notebook', 'Desk lamp', 'USB hub', 'Monitor arm', 'Keyboard', 'Webcam', 'Headset', 'Mouse pad', 'Cable tidy', 'Footrest'];
+    out.push('// ---- Example usage ----', 'const stock = new Inventory();');
+    products.forEach(function (name, i) {
+      out.push("stock.add({ sku: 'SKU-" + (100 + i) + "', name: '" + name + "', price: " + (4.5 + i * 3.25).toFixed(2) + ', quantity: ' + (2 + (i * 7) % 11) + ' });');
+    });
+    out.push('', "console.log('Total value:', formatCurrency(stock.totalValue));", "console.table(stock.report());", "console.log('Low stock:', stock.lowStock().map((item) => item.name));");
+    return out.join('\n');
+  }
+
+  function sampleJson(long) {
+    if (!long) {
+      return JSON.stringify({
+        name: 'dev-toolkit-sample',
+        version: '1.0.0',
+        private: true,
+        author: { name: 'Ada Lovelace', email: 'ada@example.com' },
+        tags: ['json', 'viewer', 'sample'],
+        scripts: { build: 'vite build', test: 'vitest run', lint: 'eslint .' },
+        dependencies: { react: '^18.3.0', zod: '^3.23.8' },
+        settings: { theme: 'dark', autosave: true, retries: 3, ratio: 0.75, proxy: null },
+        releases: [
+          { version: '1.0.0', date: '2026-01-15', notes: ['First release'] },
+          { version: '1.1.0', date: '2026-03-02', notes: ['Search', 'Dark mode'] }
+        ]
+      }, null, 2);
+    }
+    var rand = sampleRng(20260101), tags = ['admin', 'beta', 'staff', 'trial', 'vip', 'newsletter'], skus = ['A-100', 'B-220', 'C-315', 'D-408', 'E-512'];
+    var users = [];
+    for (var i = 0; i < 400; i++) {
+      var first = samplePick(rand, S_FIRST), last = samplePick(rand, S_LAST), city = samplePick(rand, S_CITIES);
+      var orders = [], orderCount = Math.floor(rand() * 4);
+      for (var o = 0; o < orderCount; o++) {
+        var items = [], itemCount = 1 + Math.floor(rand() * 3);
+        for (var k = 0; k < itemCount; k++) items.push({ sku: samplePick(rand, skus), qty: 1 + Math.floor(rand() * 4), price: Math.round((5 + rand() * 95) * 100) / 100 });
+        orders.push({ id: 'ORD-' + (1000 + i) + '-' + (o + 1), placed: sampleIsoDate(Math.floor(rand() * 1800)), items: items });
+      }
+      var userTags = tags.filter(function () { return rand() < 0.3; });
+      users.push({
+        id: 1000 + i,
+        name: first + ' ' + last,
+        email: (first + '.' + last).toLowerCase() + i + '@example.com',
+        active: rand() < 0.8,
+        score: Math.round(rand() * 1000) / 10,
+        address: { city: city, street: Math.floor(1 + rand() * 199) + ' ' + samplePick(rand, ['Oak', 'Maple', 'Cedar', 'Elm', 'Birch']) + ' St', geo: { lat: Math.round((rand() * 140 - 70) * 1000) / 1000, lng: Math.round((rand() * 340 - 170) * 1000) / 1000 } },
+        tags: userTags,
+        orders: orders,
+        lastLogin: sampleIsoDate(1700 + Math.floor(rand() * 100)) + 'T' + ('0' + Math.floor(rand() * 24)).slice(-2) + ':' + ('0' + Math.floor(rand() * 60)).slice(-2) + ':00Z',
+        notes: rand() < 0.15 ? 'Prefers e-mail, not phone' : null
+      });
+    }
+    return JSON.stringify({ generatedAt: '2026-04-01T00:00:00Z', count: users.length, users: users }, null, 2);
+  }
+
+  function sampleCsv(long) {
+    function cell(v) { v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    var rand = sampleRng(long ? 7071 : 42), rows = [];
+    var n = long ? 1000 : 10;
+    rows.push((long ? ['id', 'name', 'email', 'department', 'city', 'salary', 'start_date', 'active', 'notes'] : ['id', 'name', 'department', 'city', 'salary', 'start_date']).join(','));
+    for (var i = 0; i < n; i++) {
+      var first = samplePick(rand, S_FIRST), last = samplePick(rand, S_LAST);
+      var salary = 42000 + Math.floor(rand() * 90) * 1000;
+      var row = long
+        ? [1001 + i, first + ' ' + last, (first + '.' + last).toLowerCase() + i + '@example.com', samplePick(rand, S_DEPTS), samplePick(rand, S_CITIES), salary, sampleIsoDate(Math.floor(rand() * 1900)), rand() < 0.85 ? 'true' : 'false',
+           rand() < 0.12 ? 'Prefers remote, part-time' : (rand() < 0.05 ? 'Nickname "' + first[0] + last[0] + '"' : '')]
+        : [1 + i, first + ' ' + last, samplePick(rand, S_DEPTS), samplePick(rand, S_CITIES), salary, sampleIsoDate(Math.floor(rand() * 1900))];
+      rows.push(row.map(cell).join(','));
+    }
+    return rows.join('\n');
+  }
+
+  function buildSample(tool, long) {
+    if (tool === 'code') return { text: sampleCode(long), name: long ? 'Sample (long)' : 'Sample' };
+    if (tool === 'json') return { text: sampleJson(long), name: long ? 'Sample (long)' : 'Sample' };
+    return { text: sampleCsv(long), name: long ? 'Sample (long)' : 'Sample' };
+  }
+  // Adds the sample as a new entry in the tool's Viewer (directly when same-origin, otherwise by message).
+  function addSample(tool, long) {
+    var f = toolFrame(tool);
+    if (!f || !frameLoaded[tool]) return;
+    var s = buildSample(tool, long);
+    try {
+      var w = f.contentWindow;
+      if (w.DT && typeof w.DT.addSample === 'function') { w.DT.addSample(s.text, s.name); return; }
+    } catch (err) { /* cross-origin: use the message below */ }
+    postTo(f, { __devToolkitCmd: 'addSample', text: s.text, name: s.name });
+  }
+
   var staleShown = false;
   function showStaleNotice() {
     if (staleShown) return;
@@ -851,8 +1130,36 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function commandList() {
     var g = settings.general, list = [];
     TOOLS.forEach(function (t, i) {
-      list.push({ title: 'Go to ' + META[t].title, kw: t + ' ' + META[t].kw + ' tab switch open', hint: MOD + '+' + (i + 1), run: function () { goTo(t, { focusInput: true }); } });
+      list.push({ title: 'Go to ' + META[t].title, kw: t + ' ' + META[t].kw + ' tab switch open', hint: MOD + '+' + (i + 1), run: function () { goTo(t, { focusInput: true, viewer: true }); } });
     });
+    var ct = active || 'code', cm = META[ct], pane = getInnerTab(ct), csz = settings[ct].size, dsz = DEFAULTS[ct].size;
+    var NOUN = { code: 'snippets', json: 'entries', xlsx: 'files' };
+    var CLEAR_PANELS = { code: 'resetCompareSection', json: 'clearEditorCompareAll', xlsx: 'resetCompareSection' };      // both panels + results
+    var CLEAR_RESULTS = { code: 'clearCompareResults', json: 'clearEditorCompareResults', xlsx: 'clearCompareResults' };   // results area only
+    function fmtSize(n) { return (Math.round(n * 10) / 10) + 'px'; }
+    list.push({ title: pane === 'viewer' ? 'Show the Compare tab (' + cm.short + ')' : 'Show the Viewer tab (' + cm.short + ')', kw: 'compare viewer tab diff switch inner',
+      run: function () { var to = pane === 'viewer' ? 'compare' : 'viewer'; setInnerTab(ct, to); if (to === 'viewer') focusToolInput(ct); } });
+    if (csz < 24) list.push({ title: 'Font size: larger (' + cm.short + ')', kw: 'text bigger increase zoom', hint: fmtSize(csz) + ' → ' + fmtSize(csz + 1),
+      run: function () { setVal(ct, 'size', Math.min(24, csz + 1)); announce('Font size ' + fmtSize(settings[ct].size)); } });
+    if (csz > 9) list.push({ title: 'Font size: smaller (' + cm.short + ')', kw: 'text decrease shrink zoom', hint: fmtSize(csz) + ' → ' + fmtSize(csz - 1),
+      run: function () { setVal(ct, 'size', Math.max(9, csz - 1)); announce('Font size ' + fmtSize(settings[ct].size)); } });
+    if (csz !== dsz) list.push({ title: 'Font size: reset (' + cm.short + ')', kw: 'text default', hint: fmtSize(dsz),
+      run: function () { setVal(ct, 'size', dsz); announce('Font size ' + fmtSize(dsz)); } });
+    if (pane === 'viewer') {
+      list.push({ title: 'Add sample to ' + cm.short, kw: 'example demo test data try dummy', hint: SAMPLE_INFO[ct][0],
+        run: function () { addSample(ct, false); announce('Added a sample to ' + cm.short); } });
+      list.push({ title: 'Add sample (long) to ' + cm.short, kw: 'example demo test data try dummy big large', hint: SAMPLE_INFO[ct][1],
+        run: function () { addSample(ct, true); announce('Added a long sample to ' + cm.short); } });
+    }
+    if (pane === 'viewer') {
+      list.push({ title: 'Clear all ' + NOUN[ct] + ' (' + cm.short + ')', kw: 'delete remove empty wipe reset list',
+        run: function () { if (confirm('Clear all ' + NOUN[ct] + ' in ' + cm.short + '?\n\nThey are removed from this browser and can’t be undone.')) { callTool(ct, 'clearAllEntries'); announce('Cleared all ' + NOUN[ct]); } } });
+    } else {
+      list.push({ title: 'Clear all — both compare panels and the results (' + cm.short + ')', kw: 'delete remove empty wipe reset panels',
+        run: function () { callTool(ct, CLEAR_PANELS[ct]); announce('Compare panels and results cleared'); } });
+      list.push({ title: 'Clear compare — results only (' + cm.short + ')', kw: 'delete remove empty results diff output',
+        run: function () { callTool(ct, CLEAR_RESULTS[ct]); announce('Compare results cleared'); } });
+    }
     list.push({ title: 'Open settings', kw: 'preferences options', hint: MOD + '+,', run: function () { openSettings('general'); } });
     list.push({ title: 'Settings: Code Viewer (font, size, tabs, wrap)', kw: 'code font size line height tab wrap', run: function () { openSettings('code'); } });
     list.push({ title: 'Settings: JSON / XML Viewer (font, size, expand)', kw: 'json xml font size expand levels', run: function () { openSettings('json'); } });
@@ -1301,7 +1608,16 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function runShortcut(name) {
     if (name === 'palette') { paletteOpen ? closePalette() : openPalette(); }
     else if (name === 'settings') { settingsOpen ? closeSettings() : openSettings(); }
-    else if (name.indexOf('tab:') === 0) { closePalette(); closeSettings(true); goTo(name.slice(4), { focusInput: true }); }
+    else if (name.indexOf('tab:') === 0) { var t = name.slice(4);
+      closePalette(); closeSettings(true);
+      if (t === active && frameLoaded[t]) {   // already in this tool: flip between its Viewer and Compare tabs
+        var next = getInnerTab(t) === 'viewer' ? 'compare' : 'viewer';
+        setInnerTab(t, next);
+        focusActivePane();
+        if (next === 'viewer') focusToolInput(t);
+        announce(META[t].short + ': ' + (next === 'viewer' ? 'Viewer' : 'Compare') + ' tab');
+      } else goTo(t, { focusInput: true, viewer: true });
+    }
   }
   document.addEventListener('keydown', function (e) {
     var s = shortcutFor(e);
@@ -1337,6 +1653,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     var d = e.data;
     if (!d || typeof d !== 'object') return;
     if (d.__devToolkit === 'hello') { hello[d.tool] = true; }
+    else if (d.__devToolkit === 'innerTab') { innerTab[d.tool] = d.pane === 'viewer' ? 'viewer' : 'compare'; }
     else if (d.__devToolkit === 'key') {
       var s = shortcutFor({ metaKey: !!d.meta, ctrlKey: !!d.ctrl, altKey: !!d.alt, shiftKey: !!d.shift, key: d.key, code: d.code });
       if (s) runShortcut(s);

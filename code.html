@@ -335,6 +335,13 @@
         };
     };
 
+    // Adds text as a new entry in this tool's Viewer (used by the palette's "Add sample" commands).
+    DT.addSample = function (text, name) {
+        if (TOOL === 'code') addEntryAndRender(text, { name: name });
+        else if (TOOL === 'json') processInput(String(text).trim(), name);
+        else if (TOOL === 'xlsx') addEntry(name, 'csv', [makeSheet('Sample', parseDelimited(String(text), ','), dtHeaderDefault())]);
+    };
+
     function apply(s) {
         DT.settings = (s && typeof s === 'object') ? s : {};
         var g = DT.settings.general || {}, t = DT.sec();
@@ -363,6 +370,15 @@
             var ta = document.querySelector('#viewer-pane.active textarea');
             if (ta && ta.offsetParent !== null) { try { ta.focus(); } catch (err) {} }
         }
+        else if (d.__devToolkitCmd === 'setInnerTab') {
+            var want = d.pane === 'viewer' ? 'viewer-pane' : (document.getElementById('compare-pane') ? 'compare-pane' : 'editor-pane');
+            var link = document.querySelector('.tab-link[onclick*="' + want + '"]');
+            if (link) link.click();
+        }
+        else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults'].indexOf(d.fn) >= 0 && typeof window[d.fn] === 'function') {
+            window[d.fn]();
+        }
+        else if (d.__devToolkitCmd === 'addSample' && typeof d.text === 'string') DT.addSample(d.text, d.name || 'Sample');
     });
 
     /* ---------- Tab inserts a tab in text boxes (instead of jumping to the next control) ----------
@@ -411,6 +427,19 @@
         }
     }, true);
     document.addEventListener('focusout', function () { tabEscape = false; }, true);
+
+    // Report which inner tab (Viewer / Compare) is showing, so the shell's palette offers the right commands.
+    var lastPane = null;
+    function reportInnerTab() {
+        var p = document.querySelector('.tab-pane.active');
+        var pane = p && p.id === 'viewer-pane' ? 'viewer' : 'compare';
+        if (pane !== lastPane) { lastPane = pane; DT.post({ __devToolkit: 'innerTab', tool: TOOL, pane: pane }); }
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        reportInnerTab();
+        var vp = document.querySelector('.tab-viewport');
+        if (vp && window.MutationObserver) new MutationObserver(reportInnerTab).observe(vp, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    });
 
     // Tell the shell this page understands its messages (it warns if an old, cached copy is being used).
     DT.post({ __devToolkit: 'hello', tool: TOOL, version: 2 });
