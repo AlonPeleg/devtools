@@ -213,7 +213,7 @@ Open them with the gear icon, <kbd>Ctrl</kbd>+<kbd>,</kbd>, or the palette. Chan
 
 | Section | Options |
 |---|---|
-| **General** | Theme (system / dark / light), interface size (90-150%), contrast, animations, welcome screen on/off, install as an app, storage meter and "protect my data", keyboard shortcut list |
+| **General** | Theme (system / dark / light), interface size (90-150%), contrast, animations, welcome screen on/off (you can also switch it off right on the welcome screen with **Don’t show this page again**), install as an app, storage meter and "protect my data", keyboard shortcut list |
 | **Code Viewer** | Font, font size, line spacing, tab width, wrap long lines by default |
 | **JSON / XML** | Font, font size, how many tree levels open by default |
 | **CSV / XLSX** | Font, font size, row density, treat the first row as a header by default |

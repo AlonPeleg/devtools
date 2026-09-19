@@ -251,6 +251,22 @@ window.addEventListener('beforeinstallprompt', function (e) {
   #splash .splash-gh { color: var(--accent-strong); text-decoration: none; padding: 0.25rem 0.5rem; border-radius: 4px; }
   #splash .splash-gh:hover { text-decoration: underline; }
   #splash:focus-visible .splash-hint { text-decoration: underline; }
+  #splash .splash-off {
+    font: inherit; color: var(--text-dim); background: transparent; border: 1px solid var(--bar-border);
+    padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer;
+  }
+  #splash .splash-off:hover { color: var(--text); background: var(--hover-bg, rgba(127,127,127,0.15)); }
+  #splash .splash-off:focus-visible { outline: 2px solid var(--focus, #0e8fd9); outline-offset: 2px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 2500;
+    display: flex; align-items: center; gap: 0.875rem; max-width: min(34rem, calc(100vw - 1.5rem));
+    padding: 0.625rem 0.875rem; border-radius: 8px; font-size: 0.8125rem; line-height: 1.4;
+    background: var(--bar-bg); color: var(--text); border: 1px solid var(--bar-border); box-shadow: 0 8px 28px var(--shadow);
+    transition: opacity 0.2s;
+  }
+  .toast.hide { opacity: 0; }
+  .toast button { font: inherit; font-weight: 600; color: var(--accent-strong); background: transparent; border: 0; cursor: pointer; padding: 0.125rem 0.375rem; border-radius: 4px; }
+  .toast button:hover { text-decoration: underline; }
   html[data-theme="light"] #splash img { box-shadow: 0 16px 48px rgba(0,0,0,0.18); border: 1px solid var(--bar-border); }
   #splash.hide { opacity: 0; pointer-events: none; }
   #staleNotice {
@@ -455,7 +471,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     <div class="pane" id="pane-xlsx" role="tabpanel" aria-labelledby="tab-xlsx" data-tool="xlsx"><div class="placeholder">Loading XLSX Viewer…</div></div>
     <div id="splash" role="button" tabindex="0" aria-label="Welcome to Dev Toolkit. Click, or press any key, to continue.">
       <img id="splashImg" width="1200" height="630" alt="Dev Toolkit: view and compare code, JSON/XML and CSV/XLSX, free, open source and running in your browser." fetchpriority="high" draggable="false">
-      <div class="splash-foot"><span class="splash-hint">Click anywhere to continue</span><a class="splash-gh" href="https://github.com/AlonPeleg/devtools" target="_blank" rel="noopener noreferrer">GitHub</a></div>
+      <div class="splash-foot"><span class="splash-hint">Click anywhere to continue</span><a class="splash-gh" href="https://github.com/AlonPeleg/devtools" target="_blank" rel="noopener noreferrer">GitHub</a><button type="button" class="splash-off" id="splashOff">Don’t show this page again</button></div>
     </div>
     <noscript>
       <div class="placeholder" style="flex-direction:column; gap:.5rem; padding:1rem; text-align:center">
@@ -695,6 +711,21 @@ window.addEventListener('beforeinstallprompt', function (e) {
     saveSettings();
     broadcast();
     if (settingsOpen) { if (!(opts && opts.keepControls)) renderControls(); renderPreview(); }
+  }
+  // A short message at the bottom of the window, with an optional action (e.g. Undo).
+  function toast(message, actionLabel, onAction) {
+    var t = document.createElement('div');
+    t.className = 'toast'; t.setAttribute('role', 'status');
+    t.appendChild(document.createTextNode(message));
+    var timer;
+    function gone() { clearTimeout(timer); t.classList.add('hide'); setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 220); }
+    if (actionLabel) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = actionLabel;
+      b.addEventListener('click', function () { gone(); if (onAction) onAction(); });
+      t.appendChild(b);
+    }
+    document.body.appendChild(t);
+    timer = setTimeout(gone, 8000);
   }
   function setVal(section, key, value, opts) {
     settings[section][key] = value;
@@ -1768,14 +1799,21 @@ window.addEventListener('beforeinstallprompt', function (e) {
   if (splash) {
     document.addEventListener('pointerdown', function (e) {
       if (!splashShown()) return;
-      if (e.target.closest && e.target.closest('#githubLink, .splash-gh')) return;
+      if (e.target.closest && e.target.closest('#githubLink, .splash-gh, .splash-off')) return;
       dismissSplash();
     }, true);
     document.addEventListener('keydown', function (e) {
       if (!splashShown()) return;
       if (['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'ContextMenu'].indexOf(e.key) >= 0) return;
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('.splash-off')) return;   // let the button do its job
       dismissSplash();
     }, true);
+    $('splashOff').addEventListener('click', function () {
+      dismissSplash();
+      setVal('general', 'splash', false);
+      announce('The welcome screen is turned off.');
+      toast('The welcome screen is turned off. You can turn it back on in Settings → General → Startup.', 'Undo', function () { setVal('general', 'splash', true); announce('The welcome screen is turned on again.'); });
+    });
     window.addEventListener('DOMContentLoaded', function () { try { splash.focus({ preventScroll: true }); } catch (e) {} });
     try { splash.focus({ preventScroll: true }); } catch (e) {}
   }
