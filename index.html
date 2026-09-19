@@ -6,13 +6,13 @@
 <title>Dev Toolkit — code, JSON/XML and CSV/XLSX viewer &amp; compare</title>
 <meta name="description" content="Free browser-based dev tools: view and compare code, JSON/XML and CSV/XLSX files side by side. Everything runs locally in your browser, so your files never leave your device.">
 <link rel="canonical" href="https://alonpeleg.github.io/devtools/">
-<meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#f3f3f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" id="themeColorMeta" content="#252526">
 
 <!-- Icons -->
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
 
 <!-- Link previews (Slack, LinkedIn, Discord, WhatsApp, Reddit, X) -->
 <meta property="og:type" content="website">
@@ -59,6 +59,8 @@
                   : (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
         }
         root.setAttribute('data-theme', theme);
+        var tc = document.getElementById('themeColorMeta');
+        if (tc) tc.setAttribute('content', theme === 'light' ? '#f3f3f3' : '#252526');
         if (g.contrast === 'high') root.setAttribute('data-hc', '1');
         if (g.motion === 'reduce' || g.motion === 'full') root.setAttribute('data-motion', g.motion);
         if (g.splash === false) root.setAttribute('data-splash', 'off');
@@ -67,6 +69,15 @@
         root.style.fontSize = (16 * scale) + 'px';
     } catch (e) {}
 })();
+</script>
+
+<!-- Chrome / Edge tell the page when it can be installed; keep the event so Settings and the palette can offer it. -->
+<script>
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();
+  window.__dtInstall = e;
+  window.dispatchEvent(new Event('dt-install-available'));
+});
 </script>
 
 <style>
@@ -315,7 +326,7 @@
   .dlg-foot { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1rem; border-top: 1px solid var(--bar-border); font-size: 0.75rem; color: var(--text-dim); }
   .dlg-foot .spacer { flex: 1; }
 
-  #storageBox, #shortcutsBox { margin-top: 1rem; }
+  #installBox, #storageBox, #shortcutsBox { margin-top: 1rem; }
   .grp { margin: 0 0 0.25rem; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.4px; color: var(--text-dim); padding: 0.25rem 0 0.375rem; border-bottom: 1px solid var(--bar-border); }
   .grp:not(:first-child) { margin-top: 1rem; }
   .ctl { padding: 0.625rem 0 0.125rem; }
@@ -657,6 +668,8 @@
     root.style.setProperty('--ui-scale', scale);
     root.style.fontSize = (16 * scale) + 'px';
     $('themeToggleIcon').innerHTML = theme === 'light' ? sunIcon : moonIcon;
+    var tcm = $('themeColorMeta');
+    if (tcm) tcm.setAttribute('content', theme === 'light' ? '#f3f3f3' : '#252526');
     var si = $('splashImg');
     if (si && settings.general.splash !== false) { var want = theme === 'light' ? 'og-image-light.png' : 'og-image.png'; if (si.getAttribute('src') !== want) si.setAttribute('src', want); }
     var other = theme === 'light' ? 'dark' : 'light';
@@ -836,6 +849,7 @@
       if (f) postTo(f, { __devToolkitCmd: 'export' });
     } });
     list.push({ title: 'Show keyboard shortcuts', kw: 'keys help hotkeys', run: function () { openSettings('general', 'shortcuts'); } });
+    if (canInstall()) list.push({ title: 'Install Dev Toolkit as an app', kw: 'pwa desktop app window download', run: runInstall });
     list.push({ title: 'Star Dev Toolkit on GitHub', kw: 'github repo support', run: function () { window.open(REPO_URL, '_blank', 'noopener'); } });
     return list;
   }
@@ -944,6 +958,7 @@
       { key: 'motion', type: 'seg', label: 'Animations', options: [['system', 'System'], ['reduce', 'Reduce'], ['full', 'Full']], help: 'Reduce turns off blinking, transitions and smooth scrolling. System follows your device setting.' },
       { group: 'Startup' },
       { key: 'splash', type: 'switch', label: 'Show the welcome screen when Dev Toolkit opens', help: 'Click anywhere (or press a key) to dismiss it. Takes effect the next time you open the page.' },
+      { custom: 'install' },
       { custom: 'storage' },
       { custom: 'shortcuts' }
     ],
@@ -1101,6 +1116,7 @@
     box.innerHTML = '';
     SCHEMA[section].forEach(function (spec) {
       if (spec.group) box.appendChild(h('div', { class: 'grp', text: spec.group }));
+      else if (spec.custom === 'install') { var ib = buildInstall(); if (ib) box.appendChild(ib); }
       else if (spec.custom === 'storage') box.appendChild(buildStorage());
       else if (spec.custom === 'shortcuts') box.appendChild(buildShortcuts());
       else box.appendChild(buildControl(spec, section));
@@ -1113,6 +1129,7 @@
 
   function renderNav() {
     var nav = $('setNav');
+    var hadFocus = nav.contains(document.activeElement);   // the buttons are rebuilt; keep keyboard focus on the current one
     nav.innerHTML = '';
     SECTIONS.forEach(function (s) {
       nav.appendChild(h('button', {
@@ -1120,6 +1137,7 @@
         onclick: function () { section = s[0]; renderNav(); renderControls(); renderPreview(); }
       }, [h('span', { class: 'dot' }), s[1]]));
     });
+    if (hadFocus) { var cur = $('setnav-' + section); if (cur) cur.focus(); }
   }
 
   /* ---------- Previews ---------- */
@@ -1229,6 +1247,12 @@
     if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
     else trapTab(e, $('settings'));
   });
+  // Safety net: Esc closes an open dialog even if keyboard focus ended up outside it.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (paletteOpen) { e.preventDefault(); closePalette(); }
+    else if (settingsOpen) { e.preventDefault(); closeSettings(); }
+  });
   $('resetSection').addEventListener('click', function () {
     if (!confirm('Reset the “' + SECTIONS.filter(function (s) { return s[0] === section; })[0][1] + '” settings to their defaults?')) return;
     settings[section] = JSON.parse(JSON.stringify(DEFAULTS[section]));
@@ -1297,6 +1321,41 @@
     } else if (d.__devToolkit === 'themeToggle') toggleTheme();
     else if (d.__devToolkit === 'reloadAll') resetPanes();
   });
+
+  /* =========================================================================
+     Install as an app (Chrome / Edge only: other browsers never fire the install event, so nothing shows)
+     ========================================================================= */
+  function isStandalone() {
+    return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+  function canInstall() { return !!window.__dtInstall && !isStandalone(); }
+  function refreshInstallUi() { if (settingsOpen && section === 'general') renderControls(); }
+  function runInstall() {
+    var ev = window.__dtInstall;
+    if (!ev) return;
+    window.__dtInstall = null;   // an install prompt can only be used once
+    try {
+      ev.prompt();
+      if (ev.userChoice) ev.userChoice.then(function (r) { announce(r && r.outcome === 'accepted' ? 'Installing Dev Toolkit' : 'Install cancelled'); });
+    } catch (err) {}
+    refreshInstallUi();
+  }
+  function buildInstall() {
+    if (!canInstall()) return null;
+    return h('div', { id: 'installBox' }, [
+      h('div', { class: 'grp', text: 'App' }),
+      h('div', { class: 'ctl' }, [
+        h('p', { class: 'help', style: 'margin-top:0', text: 'Open Dev Toolkit in its own window, without browser tabs. It uses the same saved files as this website in this browser.' }),
+        h('div', { style: 'margin-top:0.5rem' }, [h('button', { class: 'btn primary', type: 'button', text: 'Install Dev Toolkit', onclick: runInstall })])
+      ])
+    ]);
+  }
+  window.addEventListener('dt-install-available', refreshInstallUi);
+  window.addEventListener('appinstalled', function () { window.__dtInstall = null; announce('Dev Toolkit was installed as an app'); refreshInstallUi(); });
+  // The service worker only exists so the browser offers installing; it caches nothing (see sw.js).
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  }
 
   /* =========================================================================
      Welcome screen: shown on every open until you click / press a key.
