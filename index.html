@@ -3,315 +3,1339 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dev Toolkit</title>
+<title>Dev Toolkit — code, JSON/XML and CSV/XLSX viewer &amp; compare</title>
+<meta name="description" content="Free browser-based dev tools: view and compare code, JSON/XML and CSV/XLSX files side by side. Everything runs locally in your browser, so your files never leave your device.">
+<link rel="canonical" href="https://alonpeleg.github.io/devtools/">
+<meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f3f3" media="(prefers-color-scheme: light)">
+
+<!-- Icons -->
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+<!-- Link previews (Slack, LinkedIn, Discord, WhatsApp, Reddit, X) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Dev Toolkit">
+<meta property="og:title" content="Dev Toolkit — code, JSON/XML and CSV/XLSX viewer &amp; compare">
+<meta property="og:description" content="View and compare code, JSON/XML and CSV/XLSX files side by side. Free, open source, and 100% in your browser — nothing is uploaded.">
+<meta property="og:url" content="https://alonpeleg.github.io/devtools/">
+<meta property="og:image" content="https://alonpeleg.github.io/devtools/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Dev Toolkit: code, JSON/XML and CSV/XLSX viewers with side-by-side compare, running locally in your browser.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Dev Toolkit — code, JSON/XML and CSV/XLSX viewer &amp; compare">
+<meta name="twitter:description" content="View and compare code, JSON/XML and CSV/XLSX files side by side. Free and 100% in your browser.">
+<meta name="twitter:image" content="https://alonpeleg.github.io/devtools/og-image.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Dev Toolkit",
+  "url": "https://alonpeleg.github.io/devtools/",
+  "description": "Browser-based viewers with side-by-side compare for code, JSON/XML and CSV/XLSX files. Runs entirely on the user's device.",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Any (web browser)",
+  "browserRequirements": "Requires JavaScript",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Alon Peleg", "url": "https://github.com/AlonPeleg" }
+}
+</script>
+
+<!-- Apply saved settings before first paint (no theme flash) -->
 <script>
 (function () {
     try {
-        var saved = localStorage.getItem('dev_toolkit_theme_v1');
-        if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved);
+        var root = document.documentElement;
+        var raw = localStorage.getItem('dev_toolkit_settings_v1');
+        var s = raw ? JSON.parse(raw) : null;
+        var g = (s && s.general) || {};
+        var theme = g.theme;
+        if (theme !== 'light' && theme !== 'dark') {
+            var old = !s ? localStorage.getItem('dev_toolkit_theme_v1') : null;   // pre-settings versions stored an explicit choice
+            theme = (old === 'light' || old === 'dark') ? old
+                  : (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        }
+        root.setAttribute('data-theme', theme);
+        if (g.contrast === 'high') root.setAttribute('data-hc', '1');
+        if (g.motion === 'reduce' || g.motion === 'full') root.setAttribute('data-motion', g.motion);
+        if (g.splash === false) root.setAttribute('data-splash', 'off');
+        var scale = [90, 100, 110, 125, 150].indexOf(Number(g.uiScale)) >= 0 ? Number(g.uiScale) / 100 : 1;
+        root.style.setProperty('--ui-scale', scale);
+        root.style.fontSize = (16 * scale) + 'px';
     } catch (e) {}
 })();
 </script>
+
 <style>
+  /* Included fonts (SIL Open Font License, see fonts/). A face is only downloaded if it is actually used. */
+  @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: local("JetBrains Mono"), local("JetBrainsMono-Regular"), url("fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: local("JetBrains Mono Bold"), local("JetBrainsMono-Bold"), url("fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Fira Code"; font-style: normal; font-weight: 400; font-display: swap; src: local("Fira Code"), local("FiraCode-Regular"), url("fonts/fira-code-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Fira Code"; font-style: normal; font-weight: 700; font-display: swap; src: local("Fira Code Bold"), local("FiraCode-Bold"), url("fonts/fira-code-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Source Code Pro"; font-style: normal; font-weight: 400; font-display: swap; src: local("Source Code Pro"), local("SourceCodePro-Regular"), url("fonts/source-code-pro-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Source Code Pro"; font-style: normal; font-weight: 700; font-display: swap; src: local("Source Code Pro Bold"), local("SourceCodePro-Bold"), url("fonts/source-code-pro-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: local("IBM Plex Mono"), local("IBMPlexMono"), url("fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 700; font-display: swap; src: local("IBM Plex Mono Bold"), local("IBMPlexMono-Bold"), url("fonts/ibm-plex-mono-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
   :root {
     --bg: #1e1e1e;
     --bar-bg: #252526;
     --bar-border: #3c3c3c;
+    --elev: #2d2d30;
+    --input: #3c3c3c;
+    --text: #cccccc;
+    --text-dim: #9a9a9a;
+    --text-bright: #ffffff;
     --tab-fg: #969696;
     --tab-fg-active: #ffffff;
     --tab-active-bg: #1e1e1e;
     --accent: #007acc;
+    --accent-strong: #0e8fd9;
+    --accent-fg: #ffffff;
+    --focus: #3aa0ff;
+    --hover: rgba(128,128,128,0.18);
+    --shadow: rgba(0,0,0,0.55);
+    --backdrop: rgba(0,0,0,0.5);
     --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    /* Opposite of the current background, not a themed color — dark mode gets a white
-       cursor, light mode gets a black one, so it always pops against the bar. */
+    --font-mono: "Cascadia Code", "SF Mono", Consolas, "Courier New", monospace;
+    /* Opposite of the current background so the brand cursor always pops against the bar. */
     --cursor-color: #ffffff;
+    --ui-scale: 1;
+    --tok-comment: #6a9955; --tok-string: #ce9178; --tok-keyword: #569cd6; --tok-number: #b5cea8;
+    --tok-type: #4ec9b0;    --tok-func: #dcdcaa;   --tok-key: #9cdcfe;
+    --dot-code: #3ba7ff; --dot-json: #e2b93d; --dot-xlsx: #3fae5a;
   }
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    width: 100%;
-    overflow: hidden;
-    background: var(--bg);
-    font-family: var(--font-ui);
-  }
-  #app {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    width: 100vw;
-  }
-  #tabbar {
-    display: flex;
-    align-items: stretch;
-    background: var(--bar-bg);
-    border-bottom: 1px solid var(--bar-border);
-    flex: 0 0 auto;
-    padding-left: 8px;
-  }
-  #tabbar .brand {
-    display: flex;
-    align-items: center;
-    color: #d4d4d4;
-    font-weight: 600;
-    font-size: 13px;
-    padding: 0 14px 0 4px;
-    letter-spacing: 0.2px;
-    white-space: nowrap;
-  }
-  #tabbar .brand::after {
-    content: "_";
-    color: var(--cursor-color);
-    text-shadow: 0 0 6px var(--cursor-color);
-    margin-left: 2px;
-    animation: brandCursorBlink 1.1s steps(1) infinite;
-  }
-  @keyframes brandCursorBlink {
-    0%, 49% { opacity: 1; }
-    50%, 100% { opacity: 0; }
-  }
-  .tab {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 18px;
-    font-size: 13px;
-    color: var(--tab-fg);
-    background: transparent;
-    border: none;
-    border-right: 1px solid var(--bar-border);
-    cursor: pointer;
-    position: relative;
-    top: 1px;
-    font-family: inherit;
-  }
-  .tab:hover {
-    color: #d4d4d4;
-    background: rgba(255,255,255,0.03);
-  }
-  .tab.active {
-    color: var(--tab-fg-active);
-    background: var(--tab-active-bg);
-    border-bottom: 1px solid var(--tab-active-bg);
-  }
-  .tab.active::before {
-    content: "";
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: var(--accent);
-  }
-  .tab .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    flex: 0 0 auto;
-  }
-  .tab[data-tool="code"] .dot { background: #3ba7ff; }
-  .tab[data-tool="json"] .dot { background: #e2b93d; }
-  .tab[data-tool="xlsx"] .dot { background: #3fae5a; }
-
-  #panes {
-    position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
-    background: var(--bg);
-  }
-  .pane {
-    position: absolute;
-    inset: 0;
-    display: none;
-  }
-  .pane.active {
-    display: block;
-  }
-  .pane iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-    display: block;
-    background: #fff;
-  }
-  .placeholder {
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #6a6a6a;
-    font-size: 13px;
-  }
-  #githubLink {
-    margin-left: auto;
-    align-self: center;
-    margin-right: 2px;
-    color: var(--tab-fg);
-    display: flex;
-    align-items: center;
-    padding: 6px;
-    border-radius: 4px;
-    text-decoration: none;
-  }
-  #githubLink:hover {
-    background: rgba(128,128,128,0.18);
-    color: var(--tab-fg-active);
-  }
-  #githubLink:focus-visible,
-  #themeToggleBtn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-  #githubLink svg {
-    width: 16px;
-    height: 16px;
-    display: block;
-  }
-  #themeToggleBtn {
-    align-self: center;
-    margin-right: 10px;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--tab-fg);
-    display: flex;
-    align-items: center;
-    padding: 6px;
-    border-radius: 4px;
-  }
-  #themeToggleBtn:hover {
-    background: rgba(128,128,128,0.18);
-    color: var(--tab-fg-active);
-  }
-  #themeToggleBtn svg {
-    width: 15px;
-    height: 15px;
-    display: block;
-  }
-
-  /* ---------- Light theme ---------- */
   html[data-theme="light"] {
     --bg: #ffffff;
     --bar-bg: #f3f3f3;
     --bar-border: #d4d4d4;
+    --elev: #ececec;
+    --input: #e8e8e8;
+    --text: #1e1e1e;
+    --text-dim: #5f5f5f;
+    --text-bright: #000000;
     --tab-fg: #5f5f5f;
     --tab-fg-active: #000000;
     --tab-active-bg: #ffffff;
     --accent: #086bb3;
+    --accent-strong: #086bb3;
+    --focus: #086bb3;
+    --shadow: rgba(0,0,0,0.2);
+    --backdrop: rgba(0,0,0,0.3);
     --cursor-color: #000000;
+    --tok-comment: #008000; --tok-string: #a31515; --tok-keyword: #0000ff; --tok-number: #098658;
+    --tok-type: #267f99;    --tok-func: #795e26;   --tok-key: #001080;
   }
-  html[data-theme="light"] .placeholder { color: #6b6b6b; }
-  html[data-theme="light"] .brand { color: #3a3a3a; }
-  html[data-theme="light"] .tab:hover { color: #1e1e1e; }
+  /* High contrast: brighter text, firmer borders. */
+  html[data-hc="1"]:not([data-theme="light"]) {
+    --text: #ffffff; --text-dim: #d6d6d6; --tab-fg: #d6d6d6; --bar-border: #9a9a9a;
+    --accent: #3db4ff; --accent-strong: #3db4ff; --focus: #ffd54a; --input: #1e1e1e;
+  }
+  html[data-hc="1"][data-theme="light"] {
+    --text: #000000; --text-dim: #2b2b2b; --tab-fg: #2b2b2b; --bar-border: #4a4a4a;
+    --accent: #0a4f8a; --accent-strong: #0a4f8a; --focus: #7a2e00; --input: #ffffff;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    overflow: hidden; background: var(--bg); color: var(--text);
+    font-family: var(--font-ui);
+  }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+  button { font-family: inherit; }
+
+  #app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+  /* ---------- Tab bar ---------- */
+  #tabbar {
+    display: flex; align-items: stretch;
+    background: var(--bar-bg);
+    border-bottom: 1px solid var(--bar-border);
+    flex: 0 0 auto;
+    padding-left: 0.5rem;
+    min-height: 2.5rem;
+  }
+  #tabbar .brand {
+    display: flex; align-items: center; margin: 0;
+    color: var(--text); font-weight: 600; font-size: 0.8125rem;
+    padding: 0 0.875rem 0 0.25rem; letter-spacing: 0.2px; white-space: nowrap;
+  }
+  #tabbar .brand::after {
+    content: "_"; color: var(--cursor-color);
+    text-shadow: 0 0 6px var(--cursor-color);
+    margin-left: 2px;
+    animation: brandCursorBlink 1.1s steps(1) infinite;
+  }
+  @keyframes brandCursorBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    html:not([data-motion="full"]) #tabbar .brand::after { animation: none; }
+  }
+  html[data-motion="reduce"] #tabbar .brand::after { animation: none; }
+
+  .tabs {
+    display: flex; align-items: stretch; min-width: 0; flex: 0 1 auto;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto;
+    padding: 0.625rem 1.125rem; font-size: 0.8125rem;
+    color: var(--tab-fg); background: transparent; border: none;
+    border-right: 1px solid var(--bar-border);
+    cursor: pointer; position: relative; top: 1px; white-space: nowrap;
+  }
+  .tab:hover { color: var(--text); background: rgba(128,128,128,0.10); }
+  .tab[aria-selected="true"] {
+    color: var(--tab-fg-active); background: var(--tab-active-bg);
+    border-bottom: 1px solid var(--tab-active-bg);
+  }
+  .tab[aria-selected="true"]::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent);
+  }
+  .tab .dot { width: 0.5rem; height: 0.5rem; border-radius: 2px; flex: 0 0 auto; }
+  .tab[data-tool="code"] .dot { background: var(--dot-code); }
+  .tab[data-tool="json"] .dot { background: var(--dot-json); }
+  .tab[data-tool="xlsx"] .dot { background: var(--dot-xlsx); }
+
+  .bar-actions { margin-left: auto; display: flex; align-items: center; gap: 0.125rem; padding: 0 0.625rem 0 0.5rem; flex: 0 0 auto; }
+  .icon-btn {
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none; cursor: pointer; text-decoration: none;
+    color: var(--tab-fg); padding: 0.375rem; border-radius: 4px;
+  }
+  .icon-btn:hover { background: var(--hover); color: var(--tab-fg-active); }
+  .icon-btn svg { width: 1rem; height: 1rem; display: block; }
+
+  /* ---------- Panes ---------- */
+  #panes { position: relative; flex: 1 1 auto; min-height: 0; background: var(--bg); overflow: hidden; }
+  .pane { position: absolute; inset: 0; display: none; overflow: hidden; }
+  .pane.active { display: block; }
+  /* "Interface size" scales each tool like browser zoom: the frame is laid out at 1/scale and scaled back up. */
+  .pane iframe {
+    width: calc(100% / var(--ui-scale)); height: calc(100% / var(--ui-scale));
+    transform: scale(var(--ui-scale)); transform-origin: 0 0;
+    border: none; display: block; background: #fff;
+  }
+  .placeholder { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 0.8125rem; }
+
+  /* ---------- Welcome screen ---------- */
+  #splash {
+    position: absolute; inset: 0; z-index: 50; background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+    padding: 1rem; cursor: pointer; outline: none; transition: opacity 0.18s;
+  }
+  #splash img {
+    display: block; max-width: min(100%, 1200px); max-height: calc(100% - 3.5rem); width: auto; height: auto;
+    border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.55); user-select: none; -webkit-user-drag: none;
+  }
+  #splash .splash-foot { display: flex; gap: 1.5rem; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 0.8125rem; color: var(--text-dim); }
+  #splash .splash-gh { color: var(--accent-strong); text-decoration: none; padding: 0.25rem 0.5rem; border-radius: 4px; }
+  #splash .splash-gh:hover { text-decoration: underline; }
+  #splash:focus-visible .splash-hint { text-decoration: underline; }
+  html[data-theme="light"] #splash img { box-shadow: 0 16px 48px rgba(0,0,0,0.18); border: 1px solid var(--bar-border); }
+  #splash.hide { opacity: 0; pointer-events: none; }
+  #staleNotice {
+    position: fixed; left: 0.75rem; bottom: 0.75rem; z-index: 2000; max-width: min(34rem, calc(100vw - 1.5rem));
+    display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.625rem 0.75rem; border-radius: 6px;
+    background: #5a1e1e; color: #fff; border: 1px solid #c0504d; box-shadow: 0 6px 24px rgba(0,0,0,0.45); font-size: 0.75rem; line-height: 1.45;
+  }
+  #staleNotice b { display: block; margin-bottom: 2px; font-size: 0.8125rem; }
+  #staleNotice .btn { background: rgba(255,255,255,0.14); color: #fff; border-color: rgba(255,255,255,0.35); flex: 0 0 auto; }
+  html[data-splash="off"] #splash { display: none; }
+  html[data-motion="reduce"] #splash { transition: none; }
+  @media (prefers-reduced-motion: reduce) { html:not([data-motion="full"]) #splash { transition: none; } }
+
+  /* ---------- Overlays (palette, settings) ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 1000; background: var(--backdrop);
+    display: flex; justify-content: center; align-items: flex-start; padding: 12vh 1rem 1rem;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay.center { align-items: center; padding: 1rem; }
+  .dialog {
+    background: var(--bar-bg); color: var(--text); border: 1px solid var(--bar-border);
+    border-radius: 8px; box-shadow: 0 12px 40px var(--shadow);
+    max-width: 100%; display: flex; flex-direction: column; min-height: 0;
+  }
+
+  /* Command palette */
+  #palette .dialog { width: 34rem; max-height: 70vh; }
+  .pal-input-wrap { padding: 0.625rem; border-bottom: 1px solid var(--bar-border); }
+  .pal-input {
+    width: 100%; background: var(--input); color: var(--text-bright);
+    border: 1px solid transparent; border-radius: 4px; padding: 0.5rem 0.625rem;
+    font-size: 0.875rem; font-family: inherit; outline: none;
+  }
+  .pal-input:focus { border-color: var(--focus); }
+  .pal-list { list-style: none; margin: 0; padding: 0.25rem; overflow-y: auto; min-height: 0; }
+  .pal-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.4375rem 0.625rem; border-radius: 4px; cursor: pointer; font-size: 0.8125rem;
+  }
+  .pal-item[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); }
+  .pal-item kbd, .kbd {
+    font-family: var(--font-mono); font-size: 0.6875rem; padding: 0.0625rem 0.375rem;
+    border: 1px solid var(--bar-border); border-radius: 3px; background: var(--bg); color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .pal-item[aria-selected="true"] kbd { background: rgba(255,255,255,0.18); color: #fff; border-color: rgba(255,255,255,0.35); }
+  .pal-empty { padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8125rem; }
+  .pal-foot { padding: 0.375rem 0.75rem; border-top: 1px solid var(--bar-border); font-size: 0.6875rem; color: var(--text-dim); display: flex; gap: 1rem; }
+
+  /* Settings */
+  #settings .dialog { width: 58rem; height: min(40rem, calc(100vh - 2rem)); }
+  .dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 0.625rem 0.75rem 0.625rem 1rem; border-bottom: 1px solid var(--bar-border); }
+  .dlg-head h2 { margin: 0; font-size: 0.9375rem; font-weight: 600; color: var(--text-bright); }
+  .dlg-body { display: grid; grid-template-columns: 10.5rem minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+  .set-nav { display: flex; flex-direction: column; gap: 2px; padding: 0.625rem; border-right: 1px solid var(--bar-border); }
+  .set-nav button {
+    display: flex; align-items: center; gap: 0.5rem; text-align: left;
+    background: transparent; border: none; color: var(--text); cursor: pointer;
+    padding: 0.5rem 0.625rem; border-radius: 4px; font-size: 0.8125rem;
+  }
+  .set-nav button:hover { background: var(--hover); }
+  .set-nav button[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); }
+  .set-nav .dot { width: 0.5rem; height: 0.5rem; border-radius: 2px; background: var(--text-dim); flex: 0 0 auto; }
+  .set-nav [data-sec="code"] .dot { background: var(--dot-code); }
+  .set-nav [data-sec="json"] .dot { background: var(--dot-json); }
+  .set-nav [data-sec="xlsx"] .dot { background: var(--dot-xlsx); }
+  .set-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; padding: 1rem; min-height: 0; overflow: hidden; }
+  .set-controls { overflow-y: auto; min-height: 0; padding-right: 0.5rem; }
+  .set-preview-col { min-height: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+  .set-preview-title { font-size: 0.75rem; font-weight: 600; color: var(--text-dim); margin: 0; }
+  .set-preview-note { font-size: 0.6875rem; color: var(--text-dim); margin: 0; }
+  .dlg-foot { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1rem; border-top: 1px solid var(--bar-border); font-size: 0.75rem; color: var(--text-dim); }
+  .dlg-foot .spacer { flex: 1; }
+
+  #storageBox, #shortcutsBox { margin-top: 1rem; }
+  .grp { margin: 0 0 0.25rem; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.4px; color: var(--text-dim); padding: 0.25rem 0 0.375rem; border-bottom: 1px solid var(--bar-border); }
+  .grp:not(:first-child) { margin-top: 1rem; }
+  .ctl { padding: 0.625rem 0 0.125rem; }
+  .ctl > label, .ctl > .lbl { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--text-bright); margin-bottom: 0.375rem; }
+  .ctl .help { font-size: 0.6875rem; color: var(--text-dim); margin: 0.375rem 0 0; line-height: 1.4; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--bar-border); border-radius: 5px; overflow: hidden; }
+  .seg button {
+    background: var(--bg); color: var(--text); border: none; border-right: 1px solid var(--bar-border);
+    padding: 0.3125rem 0.75rem; font-size: 0.75rem; cursor: pointer;
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button:hover { background: var(--hover); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+  .field, select.field {
+    width: 100%; background: var(--input); color: var(--text-bright); border: 1px solid var(--bar-border);
+    border-radius: 4px; padding: 0.375rem 0.5rem; font-size: 0.8125rem; font-family: inherit;
+  }
+  .range-row { display: flex; align-items: center; gap: 0.75rem; }
+  .range-row input[type="range"] { flex: 1; accent-color: var(--accent-strong); }
+  .range-row output { min-width: 3.5rem; text-align: right; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-bright); }
+  .switch, .ctl > label.switch { display: inline-flex; align-items: center; gap: 0.625rem; cursor: pointer; font-size: 0.8125rem; font-weight: 400; color: var(--text); margin-bottom: 0; }
+  .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .switch .track { width: 2.25rem; height: 1.25rem; border-radius: 999px; background: var(--input); border: 1px solid var(--bar-border); position: relative; flex: 0 0 auto; }
+  .switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 0.875rem; height: 0.875rem; border-radius: 50%; background: var(--text-dim); transition: transform 0.12s, background 0.12s; }
+  .switch input:checked + .track { background: var(--accent); border-color: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(1rem); background: #fff; }
+  .switch input:focus-visible + .track { outline: 2px solid var(--focus); outline-offset: 2px; }
+  html[data-motion="reduce"] .switch .track::after { transition: none; }
+
+  .btn {
+    background: var(--input); color: var(--text-bright); border: 1px solid var(--bar-border);
+    border-radius: 4px; padding: 0.3125rem 0.75rem; font-size: 0.75rem; cursor: pointer;
+  }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .btn.primary:hover { filter: brightness(1.1); }
+
+  .meter { height: 0.5rem; border-radius: 999px; background: var(--input); overflow: hidden; border: 1px solid var(--bar-border); }
+  .meter > span { display: block; height: 100%; background: var(--accent-strong); min-width: 2px; }
+  .meter.warn > span { background: #d9822b; }
+  .meter.bad > span { background: #d9534f; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 0.375rem 1rem; font-size: 0.75rem; align-items: center; margin: 0.25rem 0; }
+  .kv dt { color: var(--text); } .kv dd { margin: 0; text-align: right; }
+
+  /* Previews */
+  .pv {
+    flex: 0 1 auto; min-height: 0; overflow: auto;
+    background: var(--bg); border: 1px solid var(--bar-border); border-radius: 6px; color: var(--text);
+  }
+  .pv-code { margin: 0; padding: 0.625rem 0; font-family: var(--pv-font, var(--font-mono)); font-size: var(--pv-size, 12px); line-height: var(--pv-lh, 1.5); tab-size: var(--pv-tab, 4); white-space: pre; }
+  .pv-code.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pv-code .ln { display: inline-block; width: 2.8em; padding-right: 0.8em; text-align: right; color: var(--text-dim); opacity: 0.7; user-select: none; }
+  .k { color: var(--tok-keyword); } .s { color: var(--tok-string); } .c { color: var(--tok-comment); }
+  .n { color: var(--tok-number); } .f { color: var(--tok-func); } .t { color: var(--tok-type); } .p { color: var(--tok-key); }
+  .pv-json { padding: 0.625rem; font-family: var(--pv-font, var(--font-mono)); font-size: var(--pv-size, 11px); line-height: 1.35; }
+  .pv-json .pv-line { white-space: pre; }
+  .pv-json .pv-kids { padding-left: 1.2em; border-left: 1px dotted var(--bar-border); margin-left: 0.35em; }
+  .pv-json .pv-tg { display: inline-block; width: 1.1em; color: var(--text-dim); }
+  .pv-json .pv-key { color: var(--tok-key); } .pv-json .pv-str { color: var(--tok-string); }
+  .pv-json .pv-num { color: var(--tok-number); } .pv-json .pv-bool { color: var(--tok-keyword); }
+  .pv-json .pv-dim { color: var(--text-dim); }
+  .pv-table { border-collapse: collapse; width: 100%; font-family: var(--pv-font, var(--font-mono)); font-size: var(--pv-size, 11.5px); }
+  .pv-table th, .pv-table td { border-right: 1px solid var(--bar-border); border-bottom: 1px solid var(--bar-border); padding: var(--pv-py, 4px) var(--pv-px, 8px); text-align: left; white-space: nowrap; }
+  .pv-table th { background: var(--elev); color: var(--text-bright); font-family: var(--font-ui); font-size: calc(var(--pv-size, 11.5px) - 1px); }
+  .pv-table td.rn, .pv-table th.rn { color: var(--text-dim); text-align: right; background: var(--elev); font-size: calc(var(--pv-size, 11.5px) - 1.5px); }
+  .pv-window { font-size: 0.8125rem; }
+  .pv-bar { display: flex; align-items: stretch; background: var(--bar-bg); border-bottom: 1px solid var(--bar-border); }
+  .pv-bar .b { padding: 0.5rem 0.75rem; font-weight: 600; }
+  .pv-bar .t { padding: 0.5rem 0.75rem; color: var(--tab-fg); border-left: 1px solid var(--bar-border); display: flex; align-items: center; gap: 0.375rem; }
+  .pv-bar .t.on { background: var(--bg); color: var(--tab-fg-active); box-shadow: inset 0 2px 0 var(--accent); }
+  .pv-bar i { width: 0.5rem; height: 0.5rem; border-radius: 2px; display: inline-block; }
+  .pv-body { padding: 0.75rem; display: grid; gap: 0.5rem; }
+  .pv-body p { margin: 0; } .pv-body .dim { color: var(--text-dim); }
+  .pv-body .row { display: flex; gap: 0.5rem; align-items: center; }
+  .pv-badge { font-size: 0.625rem; font-weight: 800; padding: 1px 6px; border-radius: 10px; background: var(--dot-json); color: #111; }
+
+  .tab .short { display: none; }
+  @media (max-width: 760px) {
+    .tab .full { display: none; }
+    .tab .short { display: inline; }
+    .tab { padding: 0.625rem 0.75rem; }
+    .dlg-foot > span:first-child { display: none; }
+    .dlg-foot .btn { white-space: nowrap; }
+  }
+  @media (max-width: 520px) {
+    #tabbar { padding-left: 0; }
+    #tabbar .brand { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+    .bar-actions { padding-right: 0.25rem; }
+    .tab { padding: 0.625rem 0.5rem; gap: 0.375rem; }
+  }
+  @media (max-width: 760px) {
+    #settings .dialog { width: 100%; height: calc(100vh - 2rem); }
+    .dlg-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .set-nav { flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--bar-border); }
+    .set-nav button { white-space: nowrap; }
+    .set-main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 12rem) minmax(0, 1fr); overflow: hidden; }
+    .set-preview-col { order: -1; }
+    .overlay { padding-top: 4vh; }
+  }
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="tabbar">
-    <div class="brand">Dev Toolkit</div>
-    <button class="tab active" data-tool="code"><span class="dot"></span>Code Viewer &amp; Compare</button>
-    <button class="tab" data-tool="json"><span class="dot"></span>JSON / XML Viewer &amp; Compare</button>
-    <button class="tab" data-tool="xlsx"><span class="dot"></span>CSV / XLSX Viewer</button>
-    <a id="githubLink" href="https://github.com/AlonPeleg/devtools" target="_blank" rel="noopener noreferrer" title="GitHub repo" aria-label="GitHub profile">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-    </a>
-    <button id="themeToggleBtn" title="Toggle light / dark theme (applies to all panes)" onclick="toggleTheme()">
-      <span id="themeToggleIcon" style="display:flex"></span>
-    </button>
+  <header id="tabbar">
+    <h1 class="brand">Dev Toolkit</h1>
+    <nav class="tabs" role="tablist" aria-label="Tools">
+      <button class="tab" role="tab" id="tab-code" aria-controls="pane-code" data-tool="code" title="Code Viewer &amp; Compare (Ctrl+1)" aria-label="Code Viewer &amp; Compare"><span class="dot"></span><span class="full">Code Viewer &amp; Compare</span><span class="short">Code</span></button>
+      <button class="tab" role="tab" id="tab-json" aria-controls="pane-json" data-tool="json" title="JSON / XML Viewer &amp; Compare (Ctrl+2)" aria-label="JSON / XML Viewer &amp; Compare"><span class="dot"></span><span class="full">JSON / XML Viewer &amp; Compare</span><span class="short">JSON / XML</span></button>
+      <button class="tab" role="tab" id="tab-xlsx" aria-controls="pane-xlsx" data-tool="xlsx" title="CSV / XLSX Viewer (Ctrl+3)" aria-label="CSV / XLSX Viewer"><span class="dot"></span><span class="full">CSV / XLSX Viewer</span><span class="short">CSV / XLSX</span></button>
+    </nav>
+    <div class="bar-actions">
+      <a id="githubLink" class="icon-btn" href="https://github.com/AlonPeleg/devtools" target="_blank" rel="noopener noreferrer" title="GitHub repo — a star helps a lot" aria-label="Dev Toolkit on GitHub (opens in a new tab)">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+      <button id="settingsBtn" class="icon-btn" type="button" title="Settings (Ctrl+,)" aria-label="Open settings" aria-haspopup="dialog">
+        <svg viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M13.06 6.43 L15.10 6.78 L15.10 9.22 L13.06 9.57 L12.69 10.47 L13.88 12.16 L12.16 13.88 L10.47 12.69 L9.57 13.06 L9.22 15.10 L6.78 15.10 L6.43 13.06 L5.53 12.69 L3.84 13.88 L2.12 12.16 L3.31 10.47 L2.94 9.57 L0.90 9.22 L0.90 6.78 L2.94 6.43 L3.31 5.53 L2.12 3.84 L3.84 2.12 L5.53 3.31 L6.43 2.94 L6.78 0.90 L9.22 0.90 L9.57 2.94 L10.47 3.31 L12.16 2.12 L13.88 3.84 L12.69 5.53Z M5.7 8a2.3 2.3 0 1 0 4.6 0a2.3 2.3 0 1 0 -4.6 0Z"/></svg>
+      </button>
+      <button id="themeToggleBtn" class="icon-btn" type="button" title="Toggle light / dark theme" aria-label="Toggle light or dark theme">
+        <span id="themeToggleIcon" style="display:flex"></span>
+      </button>
+    </div>
+  </header>
+  <main id="panes">
+    <div class="pane" id="pane-code" role="tabpanel" aria-labelledby="tab-code" data-tool="code"><div class="placeholder">Loading Code Viewer…</div></div>
+    <div class="pane" id="pane-json" role="tabpanel" aria-labelledby="tab-json" data-tool="json"><div class="placeholder">Loading JSON Viewer…</div></div>
+    <div class="pane" id="pane-xlsx" role="tabpanel" aria-labelledby="tab-xlsx" data-tool="xlsx"><div class="placeholder">Loading XLSX Viewer…</div></div>
+    <div id="splash" role="button" tabindex="0" aria-label="Welcome to Dev Toolkit. Click, or press any key, to continue.">
+      <img id="splashImg" width="1200" height="630" alt="Dev Toolkit: view and compare code, JSON/XML and CSV/XLSX, free, open source and running in your browser." fetchpriority="high" draggable="false">
+      <div class="splash-foot"><span class="splash-hint">Click anywhere to continue</span><a class="splash-gh" href="https://github.com/AlonPeleg/devtools" target="_blank" rel="noopener noreferrer">GitHub</a></div>
+    </div>
+    <noscript>
+      <div class="placeholder" style="flex-direction:column; gap:.5rem; padding:1rem; text-align:center">
+        <p>Dev Toolkit needs JavaScript. It offers a code viewer &amp; compare, a JSON/XML viewer &amp; compare and a CSV/XLSX viewer, all running locally in your browser.</p>
+        <p><a href="code.html">Code Viewer</a> · <a href="json.html">JSON / XML Viewer</a> · <a href="xlsx.html">CSV / XLSX Viewer</a></p>
+      </div>
+    </noscript>
+  </main>
+</div>
+
+<div id="live" class="sr-only" aria-live="polite" role="status"></div>
+
+<!-- Command palette -->
+<div id="palette" class="overlay" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="pal-input-wrap">
+      <input id="palInput" class="pal-input" type="text" role="combobox" aria-expanded="true" aria-controls="palList" aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Type a command…" aria-label="Search commands">
+    </div>
+    <ul id="palList" class="pal-list" role="listbox" aria-label="Commands"></ul>
+    <div class="pal-foot"><span><span class="kbd">↑</span> <span class="kbd">↓</span> to move</span><span><span class="kbd">Enter</span> to run</span><span><span class="kbd">Esc</span> to close</span></div>
   </div>
-  <div id="panes">
-    <div class="pane active" data-tool="code">
-      <div class="placeholder">Loading Code Viewer…</div>
+</div>
+
+<!-- Settings -->
+<div id="settings" class="overlay center" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="dlg-head">
+      <h2 id="setTitle">Settings</h2>
+      <button id="setClose" class="icon-btn" type="button" aria-label="Close settings" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>
+      </button>
     </div>
-    <div class="pane" data-tool="json">
-      <div class="placeholder">Loading JSON Viewer…</div>
+    <div class="dlg-body">
+      <div class="set-nav" role="tablist" aria-label="Settings sections" id="setNav"></div>
+      <div class="set-main">
+        <div class="set-controls" id="setControls" role="tabpanel"></div>
+        <div class="set-preview-col">
+          <h3 class="set-preview-title">Preview</h3>
+          <div class="pv" id="setPreview" aria-hidden="true"></div>
+          <p class="set-preview-note" id="setPreviewNote"></p>
+        </div>
+      </div>
     </div>
-    <div class="pane" data-tool="xlsx">
-      <div class="placeholder">Loading XLSX Viewer…</div>
+    <div class="dlg-foot">
+      <span>Changes save automatically.</span>
+      <span class="spacer"></span>
+      <button id="resetSection" class="btn" type="button">Reset this section</button>
+      <button id="resetAll" class="btn" type="button">Reset everything</button>
+      <button id="setDone" class="btn primary" type="button">Done</button>
     </div>
   </div>
 </div>
 
 <script>
 (function () {
-    var THEME_KEY = 'dev_toolkit_theme_v1';
-    var moonIcon = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M6.5 1.3a6.7 6.7 0 1 0 8.2 8.2A6.95 6.95 0 0 1 6.5 1.3z"/></svg>';
-    var sunIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="8" cy="8" r="3.2" fill="currentColor" stroke="none"/><path d="M8 0.7v2.1M8 13.2v2.1M0.7 8h2.1M13.2 8h2.1M2.8 2.8l1.5 1.5M11.7 11.7l1.5 1.5M2.8 13.2l1.5-1.5M11.7 4.3l1.5-1.5"/></svg>';
+  'use strict';
 
-    function updateToggleIcon(theme) {
-        var icon = document.getElementById('themeToggleIcon');
-        var btn = document.getElementById('themeToggleBtn');
-        if (icon) icon.innerHTML = theme === 'light' ? sunIcon : moonIcon;
-        if (btn) btn.title = theme === 'light' ? 'Switch all panes to dark theme' : 'Switch all panes to light theme';
+  /* =========================================================================
+     Constants & settings model
+     ========================================================================= */
+  var TOOLS = ['code', 'json', 'xlsx'];
+  var META = {
+    code: { title: 'Code Viewer & Compare', short: 'Code Viewer', file: 'code.html', loading: 'Code Viewer', kw: 'code snippet source diff compare' },
+    json: { title: 'JSON / XML Viewer & Compare', short: 'JSON / XML Viewer', file: 'json.html', loading: 'JSON Viewer', kw: 'json xml tree diff compare' },
+    xlsx: { title: 'CSV / XLSX Viewer', short: 'CSV / XLSX Viewer', file: 'xlsx.html', loading: 'XLSX Viewer', kw: 'csv xlsx excel sheet sheets spreadsheet table' }
+  };
+  var REPO_URL = 'https://github.com/AlonPeleg/devtools';
+  var SETTINGS_KEY = 'dev_toolkit_settings_v1';
+  var LEGACY_THEME_KEY = 'dev_toolkit_theme_v1';
+  var LAST_TAB_KEY = 'dev_toolkit_last_tab_v1';
+  var DEFAULT_STACK = '"Cascadia Code", "SF Mono", Consolas, "Courier New", monospace';
+  var isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+  var MOD = isMac ? '⌘' : 'Ctrl';
+  var SELF_ORIGIN = location.origin;
+  // Pages opened straight from disk (file://) have no usable origin, so origin checks would drop every message.
+  var IS_FILE = location.protocol === 'file:' || SELF_ORIGIN === 'null';
+  var TARGET = IS_FILE ? '*' : SELF_ORIGIN;
+  var BUILD = '2026-09-19.3';   // appended to the tool URLs so a cached older copy is never used with this page
+
+  // 'bundled' fonts ship with Dev Toolkit (fonts/ folder) and work everywhere; 'local' fonts are proprietary or
+  // platform fonts, so they are only offered when they are actually installed on this device.
+  var FONTS = [
+    ['default', 'Default'],
+    ['system', 'System monospace'],
+    ['jetbrains', 'JetBrains Mono', 'JetBrains Mono', 'bundled'],
+    ['fira', 'Fira Code', 'Fira Code', 'bundled'],
+    ['source', 'Source Code Pro', 'Source Code Pro', 'bundled'],
+    ['plex', 'IBM Plex Mono', 'IBM Plex Mono', 'bundled'],
+    ['cascadia', 'Cascadia Code', 'Cascadia Code', 'local'],
+    ['consolas', 'Consolas', 'Consolas', 'local'],
+    ['menlo', 'Menlo', 'Menlo', 'local'],
+    ['sfmono', 'SF Mono', 'SF Mono', 'local'],
+    ['custom', 'Custom…']
+  ];
+  var FONT_IDS = FONTS.map(function (f) { return f[0]; });
+
+  function pick(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt; }
+  function num(v, min, max, dflt) { v = Number(v); return isFinite(v) ? Math.min(max, Math.max(min, v)) : dflt; }
+  function cleanFontText(v) { return String(v == null ? '' : v).replace(/[^\p{L}\p{N} ,._-]/gu, '').slice(0, 80); }
+  function isBundled(id) { for (var i = 0; i < FONTS.length; i++) if (FONTS[i][0] === id) return FONTS[i][3] === 'bundled'; return false; }
+  function familyOf(id) { for (var i = 0; i < FONTS.length; i++) if (FONTS[i][0] === id) return FONTS[i][2] || null; return null; }
+
+  // '' means "keep the tool's own default font".
+  function stackFor(sec) {
+    if (sec.font === 'default') return '';
+    if (sec.font === 'system') return 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
+    var names = [];
+    if (sec.font === 'custom') names = cleanFontText(sec.customFont).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    else { var f = familyOf(sec.font); if (f) names = [f]; }
+    if (!names.length) return '';
+    return names.map(function (n) { return '"' + n + '"'; }).join(', ') + ', ' + DEFAULT_STACK;
+  }
+
+  var DEFAULTS = {
+    general: { theme: 'system', uiScale: 100, motion: 'system', contrast: 'normal', splash: true },
+    code: { font: 'default', customFont: '', size: 12, lineHeight: 1.5, tabSize: 4, wrap: false },
+    json: { font: 'default', customFont: '', size: 11, expand: 'all' },
+    xlsx: { font: 'default', customFont: '', size: 11.5, density: 'normal', header: true }
+  };
+
+  function sanitize(raw) {
+    raw = raw && typeof raw === 'object' ? raw : {};
+    var g = raw.general || {}, c = raw.code || {}, j = raw.json || {}, x = raw.xlsx || {};
+    var out = {
+      v: 1,
+      general: {
+        theme: pick(g.theme, ['system', 'dark', 'light'], 'system'),
+        uiScale: pick(Number(g.uiScale), [90, 100, 110, 125, 150], 100),
+        motion: pick(g.motion, ['system', 'reduce', 'full'], 'system'),
+        contrast: pick(g.contrast, ['normal', 'high'], 'normal'),
+        splash: g.splash !== false
+      },
+      code: {
+        font: pick(c.font, FONT_IDS, 'default'), customFont: cleanFontText(c.customFont),
+        size: num(c.size, 9, 24, 12), lineHeight: pick(Number(c.lineHeight), [1.3, 1.5, 1.7], 1.5),
+        tabSize: pick(Number(c.tabSize), [2, 4, 8], 4), wrap: !!c.wrap
+      },
+      json: {
+        font: pick(j.font, FONT_IDS, 'default'), customFont: cleanFontText(j.customFont),
+        size: num(j.size, 9, 24, 11), expand: pick(String(j.expand), ['all', '1', '2', '3'], 'all')
+      },
+      xlsx: {
+        font: pick(x.font, FONT_IDS, 'default'), customFont: cleanFontText(x.customFont),
+        size: num(x.size, 9, 24, 11.5), density: pick(x.density, ['compact', 'normal', 'relaxed'], 'normal'),
+        header: x.header !== false
+      }
+    };
+    TOOLS.forEach(function (t) { out[t].fontStack = stackFor(out[t]); });   // tools read the resolved stack directly
+    return out;
+  }
+
+  function loadSettings() {
+    var raw = null, had = false;
+    try { var txt = localStorage.getItem(SETTINGS_KEY); if (txt) { raw = JSON.parse(txt); had = true; } } catch (e) {}
+    var s = sanitize(raw);
+    if (!had) {   // carry over an explicit choice made before "System" existed
+      try { var old = localStorage.getItem(LEGACY_THEME_KEY); if (old === 'light' || old === 'dark') s.general.theme = old; } catch (e) {}
     }
+    return s;
+  }
 
-    window.getCurrentTheme = function () {
-        return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-    };
+  var settings = loadSettings();
+  var saveTimer = null;
+  function saveSettings() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
+    }, 120);
+  }
 
-    window.sendThemeToIframe = function (iframe, theme) {
-        try {
-            if (iframe && iframe.contentWindow) {
-                iframe.contentWindow.postMessage({ __devToolkitThemeSet: true, theme: theme }, '*');
-            }
-        } catch (e) {}
-    };
+  /* =========================================================================
+     Helpers
+     ========================================================================= */
+  var root = document.documentElement;
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v == null || v === false) return;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    });
+    (kids || []).forEach(function (c) { if (c != null) el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return el;
+  }
+  function announce(msg) { var l = $('live'); l.textContent = ''; setTimeout(function () { l.textContent = msg; }, 30); }
+  var mm = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
 
-    function applyTheme(theme, broadcast) {
-        document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
-        updateToggleIcon(theme);
-        if (broadcast) {
-            document.querySelectorAll('#panes iframe').forEach(function (iframe) {
-                window.sendThemeToIframe(iframe, theme);
-            });
-        }
-    }
+  /* =========================================================================
+     Theme, scale, accessibility → applied to shell and broadcast to tools
+     ========================================================================= */
+  var moonIcon = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M6.5 1.3a6.7 6.7 0 1 0 8.2 8.2A6.95 6.95 0 0 1 6.5 1.3z"/></svg>';
+  var sunIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3.2" fill="currentColor" stroke="none"/><path d="M8 0.7v2.1M8 13.2v2.1M0.7 8h2.1M13.2 8h2.1M2.8 2.8l1.5 1.5M11.7 11.7l1.5 1.5M2.8 13.2l1.5-1.5M11.7 4.3l1.5-1.5"/></svg>';
 
-    window.toggleTheme = function () {
-        var next = window.getCurrentTheme() === 'light' ? 'dark' : 'light';
-        applyTheme(next, true);
-        try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
-    };
+  function effectiveTheme() {
+    var t = settings.general.theme;
+    if (t === 'light' || t === 'dark') return t;
+    return mm && mm.matches ? 'light' : 'dark';
+  }
 
-    updateToggleIcon(window.getCurrentTheme());
-})();
-</script>
-<script>
-(function () {
-  var files = { code: 'code.html', json: 'json.html', xlsx: 'xlsx.html' };
+  function applyGeneral() {
+    var g = settings.general, theme = effectiveTheme(), scale = g.uiScale / 100;
+    root.setAttribute('data-theme', theme);
+    root.setAttribute('data-hc', g.contrast === 'high' ? '1' : '0');
+    if (g.motion === 'system') root.removeAttribute('data-motion'); else root.setAttribute('data-motion', g.motion);
+    root.style.setProperty('--ui-scale', scale);
+    root.style.fontSize = (16 * scale) + 'px';
+    $('themeToggleIcon').innerHTML = theme === 'light' ? sunIcon : moonIcon;
+    var si = $('splashImg');
+    if (si && settings.general.splash !== false) { var want = theme === 'light' ? 'og-image-light.png' : 'og-image.png'; if (si.getAttribute('src') !== want) si.setAttribute('src', want); }
+    var other = theme === 'light' ? 'dark' : 'light';
+    var label = 'Theme: ' + (g.theme === 'system' ? 'System (' + theme + ')' : theme) + '. Switch to ' + other + '.';
+    $('themeToggleBtn').title = label;
+    $('themeToggleBtn').setAttribute('aria-label', label);
+  }
+
+  function frames() {
+    var out = [];
+    TOOLS.forEach(function (t) { var f = document.querySelector('#pane-' + t + ' iframe'); if (f && f.contentWindow) out.push(f); });
+    return out;
+  }
+  function postTo(iframe, msg) { try { iframe.contentWindow.postMessage(msg, TARGET); } catch (e) {} }
+  function pushStateToFrame(iframe) {
+    postTo(iframe, { __devToolkitThemeSet: true, theme: effectiveTheme() });
+    postTo(iframe, { __devToolkitSettings: true, settings: settings });
+  }
+  function broadcast() { frames().forEach(pushStateToFrame); }
+
+  function commit(opts) {   // call after any settings change
+    applyGeneral();
+    saveSettings();
+    broadcast();
+    if (settingsOpen) { if (!(opts && opts.keepControls)) renderControls(); renderPreview(); }
+  }
+  function setVal(section, key, value, opts) {
+    settings[section][key] = value;
+    settings = sanitize(settings);
+    commit(opts);
+  }
+
+  function toggleTheme() {
+    setVal('general', 'theme', effectiveTheme() === 'dark' ? 'light' : 'dark');
+    announce('Theme: ' + effectiveTheme());
+  }
+  function stepScale(dir) {
+    var steps = [90, 100, 110, 125, 150], i = steps.indexOf(settings.general.uiScale);
+    var next = dir === 0 ? 100 : steps[Math.max(0, Math.min(steps.length - 1, i + dir))];
+    setVal('general', 'uiScale', next);
+    announce('Interface size ' + next + ' percent');
+  }
+  function onSystemThemeChange() { if (settings.general.theme === 'system') { applyGeneral(); broadcast(); if (settingsOpen) renderPreview(); } }
+  if (mm) { if (mm.addEventListener) mm.addEventListener('change', onSystemThemeChange); else if (mm.addListener) mm.addListener(onSystemThemeChange); }
+
+  /* =========================================================================
+     Tabs and lazy-loaded panes
+     ========================================================================= */
   var loaded = { code: false, json: false, xlsx: false };
+  var hello = {};
+  var active = null;
+
+  function lastTool() { try { var t = localStorage.getItem(LAST_TAB_KEY); return TOOLS.indexOf(t) >= 0 ? t : null; } catch (e) { return null; } }
 
   function loadPane(tool) {
     if (loaded[tool]) return;
-    var pane = document.querySelector('.pane[data-tool="' + tool + '"]');
+    var pane = $('pane-' + tool);
     var iframe = document.createElement('iframe');
-    iframe.src = files[tool] + '?theme=' + encodeURIComponent(window.getCurrentTheme());
-    iframe.setAttribute('title', tool + ' tool');
+    iframe.src = META[tool].file + '?theme=' + encodeURIComponent(effectiveTheme()) + '&v=' + BUILD;
+    iframe.setAttribute('title', META[tool].title);
     iframe.addEventListener('load', function () {
-      window.sendThemeToIframe(iframe, window.getCurrentTheme());
+      setTimeout(function () { if (!hello[tool] && loaded[tool] && iframe.isConnected) showStaleNotice(); }, 2500);
+      attachFrameKeys(iframe);
+      pushStateToFrame(iframe);
+      if (active === tool && !overlayOpen() && !splashShown()) { try { iframe.contentWindow.focus(); } catch (e) {} }
     });
     pane.innerHTML = '';
     pane.appendChild(iframe);
     loaded[tool] = true;
   }
 
-  function activate(tool) {
-    document.querySelectorAll('.tab').forEach(function (t) {
-      t.classList.toggle('active', t.getAttribute('data-tool') === tool);
-    });
-    document.querySelectorAll('.pane').forEach(function (p) {
-      p.classList.toggle('active', p.getAttribute('data-tool') === tool);
+  function activate(tool, opts) {
+    if (TOOLS.indexOf(tool) < 0) return;
+    active = tool;
+    TOOLS.forEach(function (t) {
+      var sel = t === tool;
+      var tab = $('tab-' + t);
+      tab.setAttribute('aria-selected', sel ? 'true' : 'false');
+      tab.tabIndex = sel ? 0 : -1;
+      $('pane-' + t).classList.toggle('active', sel);
     });
     loadPane(tool);
+    try { localStorage.setItem(LAST_TAB_KEY, tool); } catch (e) {}
+    document.title = META[tool].short + ' — Dev Toolkit';
+    if (!(opts && opts.silent)) announce(META[tool].title);
+    if (!(opts && opts.noFocus)) focusActivePane();
+  }
+  function goTo(tool) { activate(tool); }
+  var staleShown = false;
+  function showStaleNotice() {
+    if (staleShown) return;
+    staleShown = true;
+    var box = h('div', { id: 'staleNotice', role: 'alert' }, [
+      h('div', {}, [h('b', { text: 'Some Dev Toolkit files are out of date' }),
+        h('span', { text: 'A tool page didn’t respond, so settings, themes and shortcuts can’t reach it. Make sure code.html, json.html and xlsx.html were uploaded together with index.html, then reload with Ctrl+Shift+R (⌘+Shift+R on Mac).' })]),
+      h('button', { type: 'button', class: 'btn', text: 'Dismiss', onclick: function () { box.remove(); } })
+    ]);
+    document.body.appendChild(box);
+  }
+  function focusActivePane() {
+    var f = active && document.querySelector('#pane-' + active + ' iframe');
+    if (f && f.contentWindow && !overlayOpen() && !splashShown()) { try { f.contentWindow.focus(); } catch (e) {} }
+  }
+  function resetPanes() {   // used after a backup import so every tool re-reads storage
+    TOOLS.forEach(function (t) {
+      loaded[t] = false; hello[t] = false;
+      $('pane-' + t).innerHTML = '<div class="placeholder">Loading ' + META[t].loading + '…</div>';
+    });
+    if (active) loadPane(active);
   }
 
-  document.querySelectorAll('.tab').forEach(function (t) {
-    t.addEventListener('click', function () {
-      activate(t.getAttribute('data-tool'));
+  TOOLS.forEach(function (t) {
+    $('tab-' + t).addEventListener('click', function () { goTo(t); });
+    $('tab-' + t).addEventListener('keydown', function (e) {   // arrow-key navigation between tabs
+      var i = TOOLS.indexOf(t), n = null;
+      if (e.key === 'ArrowRight') n = TOOLS[(i + 1) % TOOLS.length];
+      else if (e.key === 'ArrowLeft') n = TOOLS[(i + TOOLS.length - 1) % TOOLS.length];
+      else if (e.key === 'Home') n = TOOLS[0];
+      else if (e.key === 'End') n = TOOLS[TOOLS.length - 1];
+      if (n) { e.preventDefault(); goTo(n); $('tab-' + n).focus(); }
     });
   });
 
-  // Load the first tab immediately.
-  activate('code');
+  /* =========================================================================
+     Overlays: focus handling shared by the palette and settings dialogs
+     ========================================================================= */
+  var paletteOpen = false, settingsOpen = false, returnFocus = null;
+  function overlayOpen() { return paletteOpen || settingsOpen; }
+  function lockBackground(lock) {
+    var app = $('app');
+    if ('inert' in app) app.inert = lock;
+    app.setAttribute('aria-hidden', lock ? 'true' : 'false');
+  }
+  function rememberFocus() { if (!overlayOpen()) returnFocus = document.activeElement; }
+  function restoreFocus() {
+    if (overlayOpen()) return;
+    lockBackground(false);
+    if (returnFocus && returnFocus !== document.body && document.contains(returnFocus) && returnFocus.tagName !== 'IFRAME') {
+      try { returnFocus.focus(); return; } catch (e) {}
+    }
+    focusActivePane();
+  }
+  function trapTab(e, container) {
+    if (e.key !== 'Tab') return;
+    var f = container.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea, [tabindex]:not([tabindex="-1"])');
+    f = Array.prototype.filter.call(f, function (el) { return el.offsetParent !== null; });
+    if (!f.length) return;
+    var first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+
+  /* =========================================================================
+     Command palette
+     ========================================================================= */
+  var palSel = 0, palItems = [];
+  function commandList() {
+    var g = settings.general, list = [];
+    TOOLS.forEach(function (t, i) {
+      list.push({ title: 'Go to ' + META[t].title, kw: t + ' ' + META[t].kw + ' tab switch open', hint: MOD + '+' + (i + 1), run: function () { goTo(t); } });
+    });
+    list.push({ title: 'Open settings', kw: 'preferences options', hint: MOD + '+,', run: function () { openSettings('general'); } });
+    list.push({ title: 'Settings: Code Viewer (font, size, tabs, wrap)', kw: 'code font size line height tab wrap', run: function () { openSettings('code'); } });
+    list.push({ title: 'Settings: JSON / XML Viewer (font, size, expand)', kw: 'json xml font size expand levels', run: function () { openSettings('json'); } });
+    list.push({ title: 'Settings: CSV / XLSX Viewer (font, density, header)', kw: 'csv xlsx sheet font size density header', run: function () { openSettings('xlsx'); } });
+    list.push({ title: 'Toggle light / dark theme', kw: 'appearance color mode', run: toggleTheme });
+    list.push({ title: 'Theme: follow system', kw: 'automatic auto os', run: function () { setVal('general', 'theme', 'system'); announce('Theme follows system'); } });
+    list.push({ title: 'Theme: dark', kw: 'appearance', run: function () { setVal('general', 'theme', 'dark'); } });
+    list.push({ title: 'Theme: light', kw: 'appearance', run: function () { setVal('general', 'theme', 'light'); } });
+    list.push({ title: 'Accessibility: high contrast ' + (g.contrast === 'high' ? 'off' : 'on'), kw: 'contrast a11y', run: function () { setVal('general', 'contrast', g.contrast === 'high' ? 'normal' : 'high'); } });
+    list.push({ title: 'Accessibility: reduce animations ' + (g.motion === 'reduce' ? '(use system setting)' : 'on'), kw: 'motion a11y blink', run: function () { setVal('general', 'motion', g.motion === 'reduce' ? 'system' : 'reduce'); } });
+    list.push({ title: 'Interface size: larger', kw: 'zoom text bigger scale', run: function () { stepScale(1); } });
+    list.push({ title: 'Interface size: smaller', kw: 'zoom text smaller scale', run: function () { stepScale(-1); } });
+    list.push({ title: 'Interface size: reset to 100%', kw: 'zoom text scale default', run: function () { stepScale(0); } });
+    list.push({ title: 'Back up my data (export from ' + META[active || 'code'].short + ')', kw: 'export download save backup', run: function () {
+      var f = document.querySelector('#pane-' + active + ' iframe');
+      if (f) postTo(f, { __devToolkitCmd: 'export' });
+    } });
+    list.push({ title: 'Show keyboard shortcuts', kw: 'keys help hotkeys', run: function () { openSettings('general', 'shortcuts'); } });
+    list.push({ title: 'Star Dev Toolkit on GitHub', kw: 'github repo support', run: function () { window.open(REPO_URL, '_blank', 'noopener'); } });
+    return list;
+  }
+
+  function filterCommands(q) {
+    var all = commandList();
+    q = q.trim().toLowerCase();
+    if (!q) return all;
+    var toks = q.split(/\s+/);
+    var scored = [];
+    all.forEach(function (c, idx) {
+      var hay = (c.title + ' ' + (c.kw || '')).toLowerCase(), score = 0, ok = true;
+      toks.forEach(function (t) { var p = hay.indexOf(t); if (p < 0) ok = false; else score += p; });
+      if (ok) scored.push({ c: c, score: score, idx: idx });
+    });
+    scored.sort(function (a, b) { return a.score - b.score || a.idx - b.idx; });
+    return scored.map(function (s) { return s.c; });
+  }
+
+  function renderPalette() {
+    var list = $('palList');
+    palItems = filterCommands($('palInput').value);
+    palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
+    list.innerHTML = '';
+    if (!palItems.length) {
+      list.appendChild(h('li', { class: 'pal-empty', role: 'presentation', text: 'No matching commands' }));
+      $('palInput').removeAttribute('aria-activedescendant');
+      return;
+    }
+    palItems.forEach(function (c, i) {
+      var li = h('li', { class: 'pal-item', role: 'option', id: 'pal-' + i, 'aria-selected': i === palSel ? 'true' : 'false' }, [
+        h('span', { text: c.title }), c.hint ? h('kbd', { text: c.hint }) : null
+      ]);
+      li.addEventListener('mousemove', function () { if (palSel !== i) { palSel = i; markPalSel(); } });
+      li.addEventListener('click', function () { runPalette(i); });
+      list.appendChild(li);
+    });
+    $('palInput').setAttribute('aria-activedescendant', 'pal-' + palSel);
+  }
+  function markPalSel() {
+    Array.prototype.forEach.call($('palList').children, function (li, i) { li.setAttribute('aria-selected', i === palSel ? 'true' : 'false'); });
+    var el = $('pal-' + palSel);
+    if (el) { $('palInput').setAttribute('aria-activedescendant', el.id); el.scrollIntoView({ block: 'nearest' }); }
+  }
+  function openPalette() {
+    if (paletteOpen) return;
+    rememberFocus();
+    if (settingsOpen) closeSettings(true);
+    paletteOpen = true; palSel = 0;
+    $('palette').hidden = false;
+    lockBackground(true);
+    window.focus();
+    $('palInput').value = '';
+    renderPalette();
+    $('palInput').focus();
+  }
+  function closePalette(silent) {
+    if (!paletteOpen) return;
+    paletteOpen = false;
+    $('palette').hidden = true;
+    if (!silent) restoreFocus(); else lockBackground(settingsOpen);
+  }
+  function runPalette(i) {
+    var c = palItems[i];
+    closePalette();
+    if (c) setTimeout(function () { c.run(); }, 0);
+  }
+  $('palInput').addEventListener('input', function () { palSel = 0; renderPalette(); });
+  $('palInput').addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (palItems.length) { palSel = (palSel + 1) % palItems.length; markPalSel(); } }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (palItems.length) { palSel = (palSel + palItems.length - 1) % palItems.length; markPalSel(); } }
+    else if (e.key === 'Enter') { e.preventDefault(); runPalette(palSel); }
+    else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+    else trapTab(e, $('palette'));
+  });
+  $('palette').addEventListener('mousedown', function (e) { if (e.target === $('palette')) closePalette(); });
+
+  /* =========================================================================
+     Settings dialog
+     ========================================================================= */
+  var SECTIONS = [['general', 'General'], ['code', 'Code Viewer'], ['json', 'JSON / XML'], ['xlsx', 'CSV / XLSX']];
+  var section = 'general';
+  var pendingScroll = null;
+  var fontCache = {};
+
+  function fontInstalled(name) {
+    if (name in fontCache) return fontCache[name];
+    var ok = false;
+    try {
+      var ctx = document.createElement('canvas').getContext('2d'), sample = 'mmmmmmmmmmlli1WWWW@#%0O';
+      ok = ['monospace', 'serif', 'sans-serif'].some(function (b) {
+        ctx.font = '72px ' + b; var w0 = ctx.measureText(sample).width;
+        ctx.font = '72px "' + name + '", ' + b; return ctx.measureText(sample).width !== w0;
+      });
+    } catch (e) {}
+    return (fontCache[name] = ok);
+  }
+
+  var SCHEMA = {
+    general: [
+      { group: 'Appearance' },
+      { key: 'theme', type: 'seg', label: 'Theme', options: [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']], help: 'System follows your device’s light/dark setting.' },
+      { key: 'uiScale', type: 'seg', label: 'Interface size', options: [[90, '90%'], [100, '100%'], [110, '110%'], [125, '125%'], [150, '150%']], help: 'Scales everything, like browser zoom, but only for Dev Toolkit.' },
+      { group: 'Accessibility' },
+      { key: 'contrast', type: 'seg', label: 'Contrast', options: [['normal', 'Normal'], ['high', 'High']], help: 'High contrast brightens text and strengthens borders.' },
+      { key: 'motion', type: 'seg', label: 'Animations', options: [['system', 'System'], ['reduce', 'Reduce'], ['full', 'Full']], help: 'Reduce turns off blinking, transitions and smooth scrolling. System follows your device setting.' },
+      { group: 'Startup' },
+      { key: 'splash', type: 'switch', label: 'Show the welcome screen when Dev Toolkit opens', help: 'Click anywhere (or press a key) to dismiss it. Takes effect the next time you open the page.' },
+      { custom: 'storage' },
+      { custom: 'shortcuts' }
+    ],
+    code: [
+      { group: 'Text' },
+      { key: 'font', type: 'font', label: 'Font' },
+      { key: 'size', type: 'range', label: 'Font size', min: 9, max: 24, step: 0.5, unit: 'px' },
+      { key: 'lineHeight', type: 'seg', label: 'Line spacing', options: [[1.3, 'Tight'], [1.5, 'Normal'], [1.7, 'Relaxed']] },
+      { key: 'tabSize', type: 'seg', label: 'Tab width', options: [[2, '2'], [4, '4'], [8, '8']] },
+      { group: 'Behavior' },
+      { key: 'wrap', type: 'switch', label: 'Wrap long lines by default', help: 'Applies to snippets you add from now on. You can still toggle it per snippet.' }
+    ],
+    json: [
+      { group: 'Text' },
+      { key: 'font', type: 'font', label: 'Font' },
+      { key: 'size', type: 'range', label: 'Font size', min: 9, max: 24, step: 0.5, unit: 'px' },
+      { group: 'Behavior' },
+      { key: 'expand', type: 'seg', label: 'Expanded levels for new files', options: [['all', 'All'], ['1', '1'], ['2', '2'], ['3', '3']], help: 'How deep the tree opens when you load a file. Deeper nodes start collapsed.' }
+    ],
+    xlsx: [
+      { group: 'Text' },
+      { key: 'font', type: 'font', label: 'Font' },
+      { key: 'size', type: 'range', label: 'Font size', min: 9, max: 24, step: 0.5, unit: 'px' },
+      { group: 'Table' },
+      { key: 'density', type: 'seg', label: 'Row density', options: [['compact', 'Compact'], ['normal', 'Normal'], ['relaxed', 'Relaxed']] },
+      { key: 'header', type: 'switch', label: 'Treat the first row as a header', help: 'Default for newly opened CSV/XLSX files. You can still change it per file.' }
+    ]
+  };
+
+  function focusKey(section, key, val) { return 'set:' + section + ':' + key + (val === undefined ? '' : ':' + val); }
+
+  function buildControl(spec, sec) {
+    var wrap = h('div', { class: 'ctl' });
+    var cur = settings[sec][spec.key];
+    var lid = 'lbl-' + sec + '-' + spec.key;
+    if (spec.type === 'seg') {
+      wrap.appendChild(h('div', { class: 'lbl', id: lid, text: spec.label }));
+      var g = h('div', { class: 'seg', role: 'group', 'aria-labelledby': lid });
+      spec.options.forEach(function (o) {
+        var on = String(cur) === String(o[0]);
+        g.appendChild(h('button', {
+          type: 'button', 'aria-pressed': on ? 'true' : 'false', 'data-fk': focusKey(sec, spec.key, o[0]), text: o[1],
+          onclick: function () { setVal(sec, spec.key, typeof o[0] === 'number' ? o[0] : o[0]); }
+        }));
+      });
+      wrap.appendChild(g);
+    } else if (spec.type === 'range') {
+      wrap.appendChild(h('label', { for: lid, text: spec.label }));
+      var out = h('output', { for: lid, text: cur + spec.unit });
+      var inp = h('input', { type: 'range', id: lid, min: spec.min, max: spec.max, step: spec.step, value: cur, 'data-fk': focusKey(sec, spec.key) });
+      inp.addEventListener('input', function () { out.textContent = inp.value + spec.unit; setVal(sec, spec.key, Number(inp.value), { keepControls: true }); });
+      wrap.appendChild(h('div', { class: 'range-row' }, [inp, out]));
+    } else if (spec.type === 'switch') {
+      var cb = h('input', { type: 'checkbox', role: 'switch', id: lid, 'data-fk': focusKey(sec, spec.key) });
+      cb.checked = !!cur;
+      cb.addEventListener('change', function () { setVal(sec, spec.key, cb.checked, { keepControls: true }); });
+      wrap.appendChild(h('label', { class: 'switch', for: lid, style: 'margin-bottom:0' }, [cb, h('span', { class: 'track' }), h('span', { text: spec.label })]));
+    } else if (spec.type === 'font') {
+      wrap.appendChild(h('label', { for: lid, text: spec.label }));
+      var sel = h('select', { class: 'field', id: lid, 'data-fk': focusKey(sec, spec.key) });
+      var gBuilt = h('optgroup', { label: 'Included with Dev Toolkit' }), gLocal = h('optgroup', { label: 'Installed on this device' });
+      FONTS.forEach(function (f) {
+        var o = h('option', { value: f[0], text: f[1] });
+        if (cur === f[0]) o.selected = true;
+        if (f[3] === 'bundled') gBuilt.appendChild(o);
+        else if (f[3] === 'local') { if (cur === f[0] || fontInstalled(f[2])) gLocal.appendChild(o); }
+        else sel.appendChild(o);
+      });
+      var custom = sel.querySelector('option[value="custom"]');
+      sel.insertBefore(gBuilt, custom);
+      if (gLocal.children.length) sel.insertBefore(gLocal, custom);
+      sel.addEventListener('change', function () { setVal(sec, 'font', sel.value); });
+      wrap.appendChild(sel);
+      if (settings[sec].font === 'custom') {
+        var ci = h('input', { class: 'field', type: 'text', style: 'margin-top:0.5rem', placeholder: 'e.g. Iosevka, Hack', 'aria-label': 'Custom font names', value: settings[sec].customFont, 'data-fk': focusKey(sec, 'customFont') });
+        ci.addEventListener('input', function () { setVal(sec, 'customFont', ci.value, { keepControls: true }); });
+        wrap.appendChild(ci);
+      }
+      wrap.appendChild(h('p', { class: 'help', text: 'Included fonts work on any device. Other fonts are listed only if they’re installed here; with Custom, any installed font name works.' }));
+      return wrap;
+    }
+    if (spec.help) wrap.appendChild(h('p', { class: 'help', text: spec.help }));
+    return wrap;
+  }
+
+  function fmtBytes(n) {
+    if (!isFinite(n)) return '—';
+    var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (i === 0 ? n.toFixed(0) : n.toFixed(n >= 100 ? 0 : 1)) + ' ' + u[i];
+  }
+
+  function buildStorage() {
+    var box = h('div', { id: 'storageBox' }, [h('div', { class: 'grp', text: 'Your data' })]);
+    var body = h('div', { class: 'ctl' });
+    box.appendChild(body);
+    body.appendChild(h('p', { class: 'help', style: 'margin-top:0', text: 'Files and snippets you add are saved in this browser only — nothing is uploaded.' }));
+    var status = h('div', { class: 'help', 'aria-live': 'polite', text: 'Checking storage…' });
+    var meter = h('div', { class: 'meter', 'aria-hidden': 'true' }, [h('span')]);
+    var persistRow = h('dl', { class: 'kv' });
+    body.appendChild(meter); body.appendChild(status); body.appendChild(persistRow);
+    var btn = h('button', { class: 'btn', type: 'button', text: 'Protect my data from auto-cleanup', style: 'margin-top:0.5rem', hidden: true });
+    body.appendChild(btn);
+    var note = h('p', { class: 'help' });
+    body.appendChild(note);
+
+    function refresh() {
+      if (!(navigator.storage && navigator.storage.estimate)) {
+        status.textContent = 'Storage information isn’t available in this browser.';
+        meter.hidden = true; return;
+      }
+      navigator.storage.estimate().then(function (est) {
+        var used = est.usage || 0, quota = est.quota || 0, pct = quota ? Math.min(100, used / quota * 100) : 0;
+        meter.firstChild.style.width = Math.max(pct, 0.5) + '%';
+        meter.className = 'meter' + (pct > 90 ? ' bad' : pct > 70 ? ' warn' : '');
+        status.textContent = fmtBytes(used) + ' used of about ' + fmtBytes(quota) + ' available to this site (' + (pct < 0.1 ? '<0.1' : pct.toFixed(1)) + '%). The total includes everything stored under this address.';
+      }).catch(function () { status.textContent = 'Couldn’t read storage usage.'; });
+      if (navigator.storage.persisted) {
+        navigator.storage.persisted().then(function (p) {
+          note.textContent = p ? 'Protected: the browser won’t clear this data automatically.'
+            : 'Not protected: if the device runs low on space, the browser may clear this data. Export a backup from any tool for safety.';
+          btn.hidden = p || !navigator.storage.persist;
+        });
+      }
+    }
+    btn.addEventListener('click', function () {
+      navigator.storage.persist().then(function (granted) {
+        note.textContent = granted ? 'Protected: the browser won’t clear this data automatically.'
+          : 'The browser declined for now (it often grants this once you use the site more, or install it).';
+        btn.hidden = !!granted;
+      });
+    });
+    refresh();
+    return box;
+  }
+
+  function buildShortcuts() {
+    var box = h('div', { id: 'shortcutsBox' }, [h('div', { class: 'grp', text: 'Keyboard shortcuts' })]);
+    var dl = h('dl', { class: 'kv' });
+    [
+      [MOD + '+K', 'Open the command palette'],
+      [MOD + '+Shift+P', 'Command palette while typing in the code editor'],
+      [MOD + '+1 / 2 / 3', 'Switch between the tools'],
+      [MOD + '+,', 'Open settings'],
+      ['Esc', 'Close a dialog']
+    ].forEach(function (r) { dl.appendChild(h('dt', { text: r[1] })); dl.appendChild(h('dd', {}, [h('kbd', { class: 'kbd', text: r[0] })])); });
+    box.appendChild(h('div', { class: 'ctl' }, [dl,
+      h('p', { class: 'help', text: 'Some browsers reserve Ctrl/⌘ + number for their own tabs. If that’s the case, use the command palette or click a tab.' })]));
+    return box;
+  }
+
+  function renderControls() {
+    var box = $('setControls'), focusFk = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-fk');
+    var scrollTop = box.scrollTop;
+    box.innerHTML = '';
+    SCHEMA[section].forEach(function (spec) {
+      if (spec.group) box.appendChild(h('div', { class: 'grp', text: spec.group }));
+      else if (spec.custom === 'storage') box.appendChild(buildStorage());
+      else if (spec.custom === 'shortcuts') box.appendChild(buildShortcuts());
+      else box.appendChild(buildControl(spec, section));
+    });
+    box.setAttribute('aria-labelledby', 'setnav-' + section);
+    box.scrollTop = scrollTop;
+    if (focusFk) { var el = box.querySelector('[data-fk="' + focusFk + '"]'); if (el) el.focus(); }
+    if (pendingScroll) { var t = $(pendingScroll + 'Box'); if (t) t.scrollIntoView({ block: 'start' }); pendingScroll = null; }
+  }
+
+  function renderNav() {
+    var nav = $('setNav');
+    nav.innerHTML = '';
+    SECTIONS.forEach(function (s) {
+      nav.appendChild(h('button', {
+        type: 'button', role: 'tab', id: 'setnav-' + s[0], 'data-sec': s[0], 'aria-selected': s[0] === section ? 'true' : 'false',
+        onclick: function () { section = s[0]; renderNav(); renderControls(); renderPreview(); }
+      }, [h('span', { class: 'dot' }), s[1]]));
+    });
+  }
+
+  /* ---------- Previews ---------- */
+  var SAMPLE_JSON = {
+    name: 'dev-toolkit', version: '1.4.0', private: false,
+    tags: ['json', 'xml', 'csv'],
+    author: { name: 'Alon', links: { github: 'AlonPeleg', site: 'devtools' } },
+    scripts: { build: 'vite build', test: 'vitest run' }
+  };
+  function pvScalar(v) {
+    if (typeof v === 'string') return '<span class="pv-str">"' + esc(v) + '"</span>';
+    if (typeof v === 'number') return '<span class="pv-num">' + v + '</span>';
+    return '<span class="pv-bool">' + v + '</span>';
+  }
+  function pvNode(key, val, depth, levels) {
+    var isObj = val && typeof val === 'object', isArr = Array.isArray(val);
+    var k = key == null ? '' : '<span class="pv-key">"' + esc(key) + '"</span>: ';
+    if (!isObj) return '<div class="pv-line"><span class="pv-tg"></span>' + k + pvScalar(val) + '</div>';
+    var keys = Object.keys(val), lb = isArr ? '[' : '{', rb = isArr ? ']' : '}';
+    var open = depth === 0 || levels === 'all' || depth < Number(levels);
+    if (!open) return '<div class="pv-line"><span class="pv-tg">▸</span>' + k + lb + '<span class="pv-dim"> … ' + keys.length + ' </span>' + rb + '</div>';
+    var out = '<div class="pv-line"><span class="pv-tg">▾</span>' + k + lb + '</div><div class="pv-kids">';
+    keys.forEach(function (kk) { out += pvNode(isArr ? null : kk, val[kk], depth + 1, levels); });
+    return out + '</div><div class="pv-line"><span class="pv-tg"></span>' + rb + '</div>';
+  }
+  var CODE_LINES = [
+    '<span class="c">// Merge sort — try changing the tab width and wrapping</span>',
+    '<span class="k">function</span> <span class="f">mergeSort</span>(items) {',
+    '\t<span class="k">if</span> (items.<span class="p">length</span> &lt; <span class="n">2</span>) <span class="k">return</span> items;',
+    '\t<span class="k">const</span> mid = items.<span class="p">length</span> &gt;&gt; <span class="n">1</span>;',
+    '\t<span class="k">const</span> label = <span class="s">"Sorting " + items.length + " items, split at index " + mid + " (left half first, then right half)"</span>;',
+    '\t<span class="k">return</span> <span class="f">merge</span>(<span class="f">mergeSort</span>(items.<span class="f">slice</span>(<span class="n">0</span>, mid)), <span class="f">mergeSort</span>(items.<span class="f">slice</span>(mid)));',
+    '}'
+  ];
+  var SHEET = [['id', 'name', 'city', 'amount'], [101, 'Noa', 'Haifa', '1,240.50'], [102, 'Amir', 'Tel Aviv', '380.00'], [103, 'Lior', 'Eilat', '2,915.25'], [104, 'Dana', 'Jerusalem', '75.10']];
+
+  function renderPreview() {
+    var pv = $('setPreview'), note = $('setPreviewNote'), s = settings, scale = s.general.uiScale / 100;
+    var sec = s[section] || {};
+    pv.removeAttribute('style');
+    if (section !== 'general') {
+      pv.style.setProperty('--pv-font', sec.fontStack || (section === 'xlsx' || section === 'code' ? DEFAULT_STACK : '"Cascadia Code", Consolas, "Courier New", monospace'));
+      pv.style.setProperty('--pv-size', (sec.size * scale) + 'px');
+    }
+    if (section === 'general') {
+      pv.innerHTML = '<div class="pv-window"><div class="pv-bar"><span class="b">Dev Toolkit</span>' +
+        '<span class="t on"><i style="background:var(--dot-code)"></i>Code</span><span class="t"><i style="background:var(--dot-json)"></i>JSON</span><span class="t"><i style="background:var(--dot-xlsx)"></i>Sheets</span></div>' +
+        '<div class="pv-body"><p>Regular text: the quick brown fox jumps over the lazy dog.</p><p class="dim">Secondary text, hints and timestamps.</p>' +
+        '<div class="row"><button class="btn primary" tabindex="-1">Button</button><button class="btn" tabindex="-1">Secondary</button><span class="pv-badge">JSON</span></div></div></div>';
+      note.textContent = 'Shows the theme, size and contrast you picked. Currently ' + effectiveTheme() + ' theme' + (s.general.contrast === 'high' ? ', high contrast' : '') + '.';
+    } else if (section === 'code') {
+      pv.style.setProperty('--pv-lh', sec.lineHeight);
+      pv.style.setProperty('--pv-tab', sec.tabSize);
+      var html = '<pre class="pv-code' + (sec.wrap ? ' wrap' : '') + '">';
+      CODE_LINES.forEach(function (l, i) { html += '<span class="ln">' + (i + 1) + '</span>' + l + '\n'; });
+      pv.innerHTML = html + '</pre>';
+      note.textContent = 'A sample snippet. Long lines ' + (sec.wrap ? 'wrap' : 'scroll sideways') + '; tabs are ' + sec.tabSize + ' wide.';
+    } else if (section === 'json') {
+      pv.innerHTML = '<div class="pv-json">' + pvNode(null, SAMPLE_JSON, 0, sec.expand) + '</div>';
+      note.textContent = sec.expand === 'all' ? 'Sample tree, fully expanded.' : 'Sample tree opened ' + sec.expand + ' level' + (sec.expand === '1' ? '' : 's') + ' deep.';
+    } else if (section === 'xlsx') {
+      var pad = { compact: [2, 6], normal: [4, 8], relaxed: [7, 10] }[sec.density];
+      pv.style.setProperty('--pv-py', (pad[0] * scale) + 'px');
+      pv.style.setProperty('--pv-px', (pad[1] * scale) + 'px');
+      var t = '<table class="pv-table"><thead><tr><th class="rn"></th>';
+      var hdr = sec.header ? SHEET[0] : ['A', 'B', 'C', 'D'];
+      hdr.forEach(function (c) { t += '<th>' + esc(c) + '</th>'; });
+      t += '</tr></thead><tbody>';
+      SHEET.slice(sec.header ? 1 : 0).forEach(function (r, i) {
+        t += '<tr><td class="rn">' + (i + 1) + '</td>';
+        r.forEach(function (c) { t += '<td>' + esc(c) + '</td>'; });
+        t += '</tr>';
+      });
+      pv.innerHTML = t + '</tbody></table>';
+      note.textContent = sec.header ? 'First row is shown as the header.' : 'Columns are lettered; the first row is regular data.';
+    }
+    if (section !== 'general' && sec.font !== 'default' && sec.font !== 'system' && !isBundled(sec.font)) {
+      var fam = sec.font === 'custom' ? cleanFontText(sec.customFont).split(',')[0].trim() : familyOf(sec.font);
+      if (fam && !fontInstalled(fam)) note.textContent += ' “' + fam + '” isn’t installed here, so the default font is shown.';
+    }
+  }
+
+  function openSettings(sec, scrollTo) {
+    if (sec) section = sec;
+    pendingScroll = scrollTo || null;
+    rememberFocus();
+    if (paletteOpen) closePalette(true);
+    settingsOpen = true;
+    $('settings').hidden = false;
+    lockBackground(true);
+    window.focus();
+    renderNav(); renderControls(); renderPreview();
+    var btn = $('setnav-' + section); if (btn) btn.focus();
+  }
+  function closeSettings(silent) {
+    if (!settingsOpen) return;
+    settingsOpen = false;
+    $('settings').hidden = true;
+    if (!silent) restoreFocus(); else lockBackground(paletteOpen);
+  }
+  $('settingsBtn').addEventListener('click', function () { openSettings(); });
+  $('themeToggleBtn').addEventListener('click', toggleTheme);
+  $('setClose').addEventListener('click', function () { closeSettings(); });
+  $('setDone').addEventListener('click', function () { closeSettings(); });
+  $('settings').addEventListener('mousedown', function (e) { if (e.target === $('settings')) closeSettings(); });
+  $('settings').addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
+    else trapTab(e, $('settings'));
+  });
+  $('resetSection').addEventListener('click', function () {
+    if (!confirm('Reset the “' + SECTIONS.filter(function (s) { return s[0] === section; })[0][1] + '” settings to their defaults?')) return;
+    settings[section] = JSON.parse(JSON.stringify(DEFAULTS[section]));
+    settings = sanitize(settings); commit();
+  });
+  $('resetAll').addEventListener('click', function () {
+    if (!confirm('Reset all Dev Toolkit settings to their defaults? Your saved files and snippets are not affected.')) return;
+    settings = sanitize(JSON.parse(JSON.stringify(DEFAULTS))); commit();
+  });
+
+  /* =========================================================================
+     Keyboard shortcuts (also forwarded from inside the tool frames)
+     ========================================================================= */
+  function shortcutFor(e, inMonaco) {
+    var primary = isMac ? e.metaKey : e.ctrlKey;
+    if (!primary || e.altKey) return null;
+    var k = (e.key || '').toLowerCase(), c = e.code || '';   // e.code keeps shortcuts working on non-Latin keyboard layouts
+    if (c === 'KeyK' || k === 'k') return inMonaco ? null : 'palette';   // Monaco uses Ctrl+K as a chord prefix (Ctrl+Shift+K deletes a line)
+    if (e.shiftKey && (c === 'KeyP' || k === 'p')) return 'palette';
+    if (!e.shiftKey && (k === ',' || c === 'Comma')) return 'settings';
+    if (!e.shiftKey) { var i = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(c); if (i >= 0) return 'tab:' + TOOLS[i % 3]; }
+    return null;
+  }
+  function runShortcut(name) {
+    if (name === 'palette') { paletteOpen ? closePalette() : openPalette(); }
+    else if (name === 'settings') { settingsOpen ? closeSettings() : openSettings(); }
+    else if (name.indexOf('tab:') === 0) { closePalette(); closeSettings(true); goTo(name.slice(4)); }
+  }
+  document.addEventListener('keydown', function (e) {
+    var s = shortcutFor(e);
+    if (!s) return;
+    e.preventDefault();
+    runShortcut(s);
+  }, true);
+
+  // Keys pressed while a tool has focus never reach this document, so listen inside the tool frame too.
+  // (Same origin only; the tools also forward these keys themselves, which covers any other case.)
+  function attachFrameKeys(iframe) {
+    try {
+      var w = iframe.contentWindow;
+      if (!w || w.__devToolkitKeys) return;
+      w.__devToolkitKeys = true;
+      w.addEventListener('keydown', function (e) {
+        if (e.defaultPrevented) return;   // the tool's own forwarder already handled this key
+        var inMonaco = !!(e.target && e.target.closest && e.target.closest('.monaco-editor'));
+        var s = shortcutFor(e, inMonaco);
+        if (!s) return;
+        e.preventDefault(); e.stopPropagation();
+        runShortcut(s);
+      }, true);
+    } catch (err) { /* cross-origin (e.g. opened from disk): the forwarded messages are used instead */ }
+  }
+
+  /* =========================================================================
+     Messages from the tool frames
+     ========================================================================= */
+  window.addEventListener('message', function (e) {
+    var known = frames().some(function (f) { return f.contentWindow === e.source; });
+    if (!known || (!IS_FILE && e.origin !== SELF_ORIGIN)) return;
+    var d = e.data;
+    if (!d || typeof d !== 'object') return;
+    if (d.__devToolkit === 'hello') { hello[d.tool] = true; }
+    else if (d.__devToolkit === 'key') {
+      var s = shortcutFor({ metaKey: !!d.meta, ctrlKey: !!d.ctrl, altKey: !!d.alt, shiftKey: !!d.shift, key: d.key, code: d.code });
+      if (s) runShortcut(s);
+    } else if (d.__devToolkit === 'themeToggle') toggleTheme();
+    else if (d.__devToolkit === 'reloadAll') resetPanes();
+  });
+
+  /* =========================================================================
+     Welcome screen: shown on every open until you click / press a key.
+     The GitHub links are the exception: they open GitHub and leave the screen up.
+     ========================================================================= */
+  var splash = $('splash');
+  function splashShown() { return !!(splash && splash.isConnected && !splash.classList.contains('hide')); }
+  function dismissSplash() {
+    if (!splashShown()) return;
+    splash.classList.add('hide');
+    var el = splash;
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 260);
+    if (!overlayOpen()) focusActivePane();
+  }
+  if (splash && settings.general.splash === false) { splash.parentNode.removeChild(splash); splash = null; }
+  if (splash) {
+    document.addEventListener('pointerdown', function (e) {
+      if (!splashShown()) return;
+      if (e.target.closest && e.target.closest('#githubLink, .splash-gh')) return;
+      dismissSplash();
+    }, true);
+    document.addEventListener('keydown', function (e) {
+      if (!splashShown()) return;
+      if (['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'ContextMenu'].indexOf(e.key) >= 0) return;
+      dismissSplash();
+    }, true);
+    window.addEventListener('DOMContentLoaded', function () { try { splash.focus({ preventScroll: true }); } catch (e) {} });
+    try { splash.focus({ preventScroll: true }); } catch (e) {}
+  }
+
+  /* =========================================================================
+     Boot
+     ========================================================================= */
+  applyGeneral();
+  var start = lastTool() || 'code';
+  activate(start, { silent: true, noFocus: true });
+  function cleanUrl() { if (location.hash) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } }   // keep the address bar clean
+  cleanUrl();
+  window.addEventListener('hashchange', cleanUrl);
 })();
 </script>
 </body>
