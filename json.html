@@ -1745,12 +1745,97 @@
             ta.focus();
         }
 
-        // Enter just starts a new line; Ctrl+Enter (or Cmd+Enter) adds what is in the box.
+        /* ---------- Smart indent while typing in the paste box ----------
+           Enter keeps the current line's indentation and adds one level after an opening { [ or XML tag.
+           Enter between a pair ({|} or <a>|</a>) opens a blank indented line and keeps the closer below.
+           Typing a closing } ] or </tag> alone on a line steps it back one level. Pasting is untouched. */
+        function jsonIndentUnit(value, baseIndent) {
+            if (baseIndent.indexOf('\t') >= 0) return '\t';
+            if (value.length > 2000000) return '    ';
+            let tabs = 0, spaces = 0, min = 0;
+            value.split('\n').forEach(line => {
+                const m = /^([ \t]+)\S/.exec(line);
+                if (!m) return;
+                if (m[1].charAt(0) === '\t') { tabs++; return; }
+                spaces++;
+                if (m[1].length >= 2 && m[1].length <= 8 && (!min || m[1].length < min)) min = m[1].length;
+            });
+            if (tabs > spaces) return '\t';
+            return min ? ' '.repeat(min) : '    ';   // 4 spaces matches what this tool's own formatter produces
+        }
+
+        function jsonOpensBlock(trimmedLineStart) {
+            const last = trimmedLineStart.charAt(trimmedLineStart.length - 1);
+            if (last === '{' || last === '[') return true;
+            if (last === '>') {
+                const m = /<([^<>]*)>$/.exec(trimmedLineStart);
+                if (!m) return false;
+                const tag = m[1];
+                if (/^[\/?!]/.test(tag) || /\/\s*$/.test(tag)) return false;   // </close>, <?pi?>, <!-- -->, <self-closing/>
+                return /^[A-Za-z_:]/.test(tag);
+            }
+            return false;
+        }
+
+        function jsonInsertText(ta, from, to, text) {
+            ta.setSelectionRange(from, to);
+            let ok = false;
+            try { ok = document.execCommand('insertText', false, text); } catch (err) {}   // keeps Ctrl+Z working
+            if (!ok) { ta.setRangeText(text, from, to, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true })); }
+        }
+
+        function jsonSmartEnter(e) {
+            const ta = e.target;
+            const v = ta.value, s = ta.selectionStart, en = ta.selectionEnd;
+            const lineStart = v.lastIndexOf('\n', s - 1) + 1;
+            const before = v.slice(lineStart, s);
+            const base = /^[ \t]*/.exec(before)[0];
+            const trimmed = before.replace(/\s+$/, '');
+            const opens = jsonOpensBlock(trimmed);
+            const unit = opens ? jsonIndentUnit(v, base) : '';
+            const after = v.slice(en);
+            const last = trimmed.charAt(trimmed.length - 1);
+            const pair = opens && ((last === '{' && after.charAt(0) === '}') || (last === '[' && after.charAt(0) === ']') ||
+                                   (last === '>' && after.slice(0, 2) === '</'));
+            e.preventDefault();
+            if (pair) {
+                jsonInsertText(ta, s, en, '\n' + base + unit + '\n' + base);
+                const pos = s + 1 + base.length + unit.length;
+                ta.setSelectionRange(pos, pos);
+            } else {
+                jsonInsertText(ta, s, en, '\n' + base + unit);
+            }
+        }
+
+        // Enter = new line with smart indent; Ctrl+Enter (or Cmd+Enter) adds what is in the box.
         document.getElementById('jsonInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            if (e.key !== 'Enter' || e.altKey || e.isComposing) return;
+            if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
                 addFromPasteBox();
+            } else {
+                jsonSmartEnter(e);
             }
+        });
+
+        document.getElementById('jsonInput').addEventListener('input', (e) => {
+            if (e.inputType !== 'insertText' || !e.data || e.data.length !== 1 || '}]>'.indexOf(e.data) < 0) return;
+            const ta = e.target, pos = ta.selectionStart;
+            if (ta.selectionEnd !== pos) return;
+            const v = ta.value, lineStart = v.lastIndexOf('\n', pos - 1) + 1;
+            const m = /^([ \t]+)(\}|\]|<\/[^<>\s]*\s*>)$/.exec(v.slice(lineStart, pos));
+            if (!m) return;
+            const indent = m[1], unit = jsonIndentUnit(v, indent);
+            let cut = 0;
+            if (indent.length >= unit.length && indent.slice(-unit.length) === unit) cut = unit.length;
+            else if (indent.slice(-1) === '\t') cut = 1;
+            if (!cut) return;
+            const from = lineStart + indent.length - cut;
+            ta.setSelectionRange(from, from + cut);
+            let ok = false;
+            try { ok = document.execCommand('delete'); } catch (err) {}
+            if (!ok) { ta.setRangeText('', from, from + cut, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true })); }
+            ta.setSelectionRange(pos - cut, pos - cut);   // put the caret back after the closer
         });
 
         function handleJsonFileUpload(fileList) {
