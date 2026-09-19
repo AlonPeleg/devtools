@@ -375,10 +375,15 @@
             var link = document.querySelector('.tab-link[onclick*="' + want + '"]');
             if (link) link.click();
         }
-        else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults'].indexOf(d.fn) >= 0 && typeof window[d.fn] === 'function') {
+        else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults',
+             'toggleLayout', 'toggleViewerLayout', 'toggleCompareDiffMode', 'toggleEditorDiffMode'].indexOf(d.fn) >= 0 && typeof window[d.fn] === 'function') {
             window[d.fn]();
         }
         else if (d.__devToolkitCmd === 'addSample' && typeof d.text === 'string') DT.addSample(d.text, d.name || 'Sample');
+        else if (d.__devToolkitCmd === 'uploadFiles' && d.files && d.files.length) {
+            var upload = TOOL === 'json' ? window.handleJsonFileUpload : window.handleFileUpload;
+            if (typeof upload === 'function') upload(d.files);
+        }
     });
 
     /* ---------- Tab inserts a tab in text boxes (instead of jumping to the next control) ----------
@@ -456,6 +461,7 @@
             else if ((c === 'KeyP' || k === 'p') && e.shiftKey) hit = inMonaco;   // palette fallback while typing in Monaco
             else if (!e.shiftKey && (c === 'Comma' || k === ',')) hit = true;
             else if (!e.shiftKey && /^(Digit|Numpad)[123]$/.test(c)) hit = true;
+            else if (!e.shiftKey && (c === 'KeyO' || k === 'o')) hit = true;   // upload files
             if (!hit) return;
             e.preventDefault(); e.stopPropagation();
             DT.post({ __devToolkit: 'key', key: e.key, code: c, ctrl: e.ctrlKey, meta: e.metaKey, alt: e.altKey, shift: e.shiftKey });

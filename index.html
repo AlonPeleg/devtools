@@ -813,6 +813,39 @@ window.addEventListener('beforeinstallprompt', function (e) {
     postTo(f, { __devToolkitCmd: 'call', fn: fn });
   }
 
+  /* ---------- Upload file(s): the shell shows the picker, the tool's own loader reads the files ---------- */
+  var UPLOAD = {
+    code: { fn: 'handleFileUpload', accept: '', hint: 'code files' },
+    json: { fn: 'handleJsonFileUpload', accept: '.json,.xml,application/json,text/xml', hint: '.json  .xml' },
+    xlsx: { fn: 'handleFileUpload', accept: '.csv,.tsv,.txt,.json,.xlsx,.xls', hint: '.csv  .xlsx  .json' }
+  };
+  var uploadInput = null;
+  function pickFiles(tool) {
+    if (!uploadInput) {
+      uploadInput = document.createElement('input');
+      uploadInput.type = 'file'; uploadInput.multiple = true; uploadInput.style.display = 'none';
+      document.body.appendChild(uploadInput);
+      uploadInput.addEventListener('change', function () {
+        var files = Array.prototype.slice.call(uploadInput.files || []), t = uploadInput.getAttribute('data-tool');
+        uploadInput.value = '';
+        if (files.length) sendFiles(t, files);
+      });
+    }
+    uploadInput.setAttribute('data-tool', tool);
+    if (UPLOAD[tool].accept) uploadInput.setAttribute('accept', UPLOAD[tool].accept); else uploadInput.removeAttribute('accept');
+    uploadInput.value = '';
+    uploadInput.click();
+  }
+  function sendFiles(tool, files) {
+    var f = toolFrame(tool);
+    if (!f || !frameLoaded[tool]) return;
+    try {
+      var w = f.contentWindow, fn = w[UPLOAD[tool].fn];
+      if (typeof fn === 'function') { fn.call(w, files); return; }
+    } catch (err) { /* cross-origin: send them by message instead (File objects can be posted) */ }
+    postTo(f, { __devToolkitCmd: 'uploadFiles', files: files });
+  }
+
   /* =========================================================================
      Sample data for the palette's "Add sample" commands.
      Generated from fixed seeds, so every run produces exactly the same text.
@@ -1139,12 +1172,28 @@ window.addEventListener('beforeinstallprompt', function (e) {
     function fmtSize(n) { return (Math.round(n * 10) / 10) + 'px'; }
     list.push({ title: pane === 'viewer' ? 'Show the Compare tab (' + cm.short + ')' : 'Show the Viewer tab (' + cm.short + ')', kw: 'compare viewer tab diff switch inner',
       run: function () { var to = pane === 'viewer' ? 'compare' : 'viewer'; setInnerTab(ct, to); if (to === 'viewer') focusToolInput(ct); } });
+    var TOGGLE_VIEWER = { code: 'toggleLayout', json: 'toggleViewerLayout', xlsx: 'toggleLayout' };
+    var TOGGLE_COMPARE = { code: 'toggleCompareDiffMode', json: 'toggleEditorDiffMode', xlsx: 'toggleCompareDiffMode' };
+    var tdoc = toolDoc(ct);   // (only readable when the tool is same-origin; then the hint shows the current view)
+    if (pane === 'viewer') {
+      var cont = tdoc && tdoc.getElementById('container'), isGrid = cont ? cont.classList.contains('grid-view') : null;
+      list.push({ title: 'Toggle view: list / grid (' + cm.short + ')', kw: 'layout stack line grid switch cards columns',
+        hint: isGrid === null ? '' : (isGrid ? 'grid → list' : 'list → grid'),
+        run: function () { callTool(ct, TOGGLE_VIEWER[ct]); announce('View toggled'); } });
+    } else {
+      var sideEl = tdoc && tdoc.getElementById(ct === 'json' ? 'editorViewHalfSide' : 'compareViewHalfSide'), isSide = sideEl ? sideEl.classList.contains('active') : null;
+      list.push({ title: 'Toggle view: compare results, list / side-by-side (' + cm.short + ')', kw: 'layout diff results side by side split switch',
+        hint: isSide === null ? '' : (isSide ? 'side-by-side → list' : 'list → side-by-side'),
+        run: function () { callTool(ct, TOGGLE_COMPARE[ct]); announce('Compare view toggled'); } });
+    }
     if (csz < 24) list.push({ title: 'Font size: larger (' + cm.short + ')', kw: 'text bigger increase zoom', hint: fmtSize(csz) + ' → ' + fmtSize(csz + 1),
       run: function () { setVal(ct, 'size', Math.min(24, csz + 1)); announce('Font size ' + fmtSize(settings[ct].size)); } });
     if (csz > 9) list.push({ title: 'Font size: smaller (' + cm.short + ')', kw: 'text decrease shrink zoom', hint: fmtSize(csz) + ' → ' + fmtSize(csz - 1),
       run: function () { setVal(ct, 'size', Math.max(9, csz - 1)); announce('Font size ' + fmtSize(settings[ct].size)); } });
     if (csz !== dsz) list.push({ title: 'Font size: reset (' + cm.short + ')', kw: 'text default', hint: fmtSize(dsz),
       run: function () { setVal(ct, 'size', dsz); announce('Font size ' + fmtSize(dsz)); } });
+    list.push({ title: 'Upload file(s) to ' + cm.short + ' (' + UPLOAD[ct].hint.replace(/\s+/g, ' ') + ')', kw: 'open import load browse file picker add', hint: MOD + '+O',
+      run: function () { pickFiles(ct); } });
     if (pane === 'viewer') {
       list.push({ title: 'Add sample to ' + cm.short, kw: 'example demo test data try dummy', hint: SAMPLE_INFO[ct][0],
         run: function () { addSample(ct, false); announce('Added a sample to ' + cm.short); } });
@@ -1431,6 +1480,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       [MOD + '+K', 'Open the command palette'],
       [MOD + '+Shift+P', 'Command palette while typing in the code editor'],
       [MOD + '+1 / 2 / 3', 'Switch between the tools'],
+      [MOD + '+O', 'Upload files to the current tool'],
       [MOD + '+,', 'Open settings'],
       ['Esc', 'Close a dialog']
     ].forEach(function (r) { dl.appendChild(h('dt', { text: r[1] })); dl.appendChild(h('dd', {}, [h('kbd', { class: 'kbd', text: r[0] })])); });
@@ -1602,12 +1652,14 @@ window.addEventListener('beforeinstallprompt', function (e) {
     if (c === 'KeyK' || k === 'k') return inMonaco ? null : 'palette';   // Monaco uses Ctrl+K as a chord prefix (Ctrl+Shift+K deletes a line)
     if (e.shiftKey && (c === 'KeyP' || k === 'p')) return 'palette';
     if (!e.shiftKey && (k === ',' || c === 'Comma')) return 'settings';
+    if (!e.shiftKey && (c === 'KeyO' || k === 'o')) return 'upload';
     if (!e.shiftKey) { var i = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(c); if (i >= 0) return 'tab:' + TOOLS[i % 3]; }
     return null;
   }
   function runShortcut(name) {
     if (name === 'palette') { paletteOpen ? closePalette() : openPalette(); }
     else if (name === 'settings') { settingsOpen ? closeSettings() : openSettings(); }
+    else if (name === 'upload') { closePalette(); closeSettings(true); var ut = active || 'code'; if (frameLoaded[ut]) { pickFiles(ut); announce('Choose files to upload to ' + META[ut].short); } }
     else if (name.indexOf('tab:') === 0) { var t = name.slice(4);
       closePalette(); closeSettings(true);
       if (t === active && frameLoaded[t]) {   // already in this tool: flip between its Viewer and Compare tabs
