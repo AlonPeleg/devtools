@@ -720,6 +720,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
      ========================================================================= */
   var loaded = { code: false, json: false, xlsx: false };
   var hello = {};
+  var frameLoaded = {}, wantInput = {};   // wantInput: put the cursor in the paste box as soon as that tool finishes loading
   var active = null;
 
   function lastTool() { try { var t = localStorage.getItem(LAST_TAB_KEY); return TOOLS.indexOf(t) >= 0 ? t : null; } catch (e) { return null; } }
@@ -731,10 +732,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
     iframe.src = META[tool].file + '?theme=' + encodeURIComponent(effectiveTheme()) + '&v=' + BUILD;
     iframe.setAttribute('title', META[tool].title);
     iframe.addEventListener('load', function () {
+      frameLoaded[tool] = true;
       setTimeout(function () { if (!hello[tool] && loaded[tool] && iframe.isConnected) showStaleNotice(); }, 2500);
       attachFrameKeys(iframe);
       pushStateToFrame(iframe);
       if (active === tool && !overlayOpen() && !splashShown()) { try { iframe.contentWindow.focus(); } catch (e) {} }
+      if (wantInput[tool] && active === tool && !overlayOpen()) focusToolInput(tool);
     });
     pane.innerHTML = '';
     pane.appendChild(iframe);
@@ -756,8 +759,27 @@ window.addEventListener('beforeinstallprompt', function (e) {
     document.title = META[tool].short + ' — Dev Toolkit';
     if (!(opts && opts.silent)) announce(META[tool].title);
     if (!(opts && opts.noFocus)) focusActivePane();
+    if (opts && opts.focusInput) focusToolInput(tool);
   }
-  function goTo(tool) { activate(tool); }
+  function goTo(tool, opts) { activate(tool, opts); }
+
+  // Puts the cursor in the tool's paste box (Viewer tab), so you can start typing right after a shortcut.
+  // Same-origin pages are reached directly; otherwise (e.g. opened from disk) the tool is asked to do it.
+  function focusToolInput(tool) {
+    var f = document.querySelector('#pane-' + tool + ' iframe');
+    if (!f || !frameLoaded[tool]) { wantInput[tool] = true; return; }   // not loaded yet: done when it is
+    wantInput[tool] = false;
+    var done = false;
+    try {
+      var doc = f.contentDocument;
+      if (doc) {
+        var ta = doc.querySelector('#viewer-pane.active textarea');
+        if (ta && ta.offsetParent !== null) { f.contentWindow.focus(); ta.focus(); }
+        done = true;   // (if the tool is showing its Compare tab there is no paste box to focus)
+      }
+    } catch (err) {}
+    if (!done) postTo(f, { __devToolkitCmd: 'focusInput' });
+  }
   var staleShown = false;
   function showStaleNotice() {
     if (staleShown) return;
@@ -775,7 +797,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   function resetPanes() {   // used after a backup import so every tool re-reads storage
     TOOLS.forEach(function (t) {
-      loaded[t] = false; hello[t] = false;
+      loaded[t] = false; hello[t] = false; frameLoaded[t] = false; wantInput[t] = false;
       $('pane-' + t).innerHTML = '<div class="placeholder">Loading ' + META[t].loading + '…</div>';
     });
     if (active) loadPane(active);
@@ -829,7 +851,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function commandList() {
     var g = settings.general, list = [];
     TOOLS.forEach(function (t, i) {
-      list.push({ title: 'Go to ' + META[t].title, kw: t + ' ' + META[t].kw + ' tab switch open', hint: MOD + '+' + (i + 1), run: function () { goTo(t); } });
+      list.push({ title: 'Go to ' + META[t].title, kw: t + ' ' + META[t].kw + ' tab switch open', hint: MOD + '+' + (i + 1), run: function () { goTo(t, { focusInput: true }); } });
     });
     list.push({ title: 'Open settings', kw: 'preferences options', hint: MOD + '+,', run: function () { openSettings('general'); } });
     list.push({ title: 'Settings: Code Viewer (font, size, tabs, wrap)', kw: 'code font size line height tab wrap', run: function () { openSettings('code'); } });
@@ -1279,7 +1301,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function runShortcut(name) {
     if (name === 'palette') { paletteOpen ? closePalette() : openPalette(); }
     else if (name === 'settings') { settingsOpen ? closeSettings() : openSettings(); }
-    else if (name.indexOf('tab:') === 0) { closePalette(); closeSettings(true); goTo(name.slice(4)); }
+    else if (name.indexOf('tab:') === 0) { closePalette(); closeSettings(true); goTo(name.slice(4), { focusInput: true }); }
   }
   document.addEventListener('keydown', function (e) {
     var s = shortcutFor(e);
