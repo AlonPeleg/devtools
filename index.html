@@ -820,7 +820,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     xlsx: { fn: 'handleFileUpload', accept: '.csv,.tsv,.txt,.json,.xlsx,.xls', hint: '.csv  .xlsx  .json' }
   };
   var uploadInput = null;
-  function pickFiles(tool) {
+  function pickFiles(tool, acceptOverride) {
     if (!uploadInput) {
       uploadInput = document.createElement('input');
       uploadInput.type = 'file'; uploadInput.multiple = true; uploadInput.style.display = 'none';
@@ -832,7 +832,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       });
     }
     uploadInput.setAttribute('data-tool', tool);
-    if (UPLOAD[tool].accept) uploadInput.setAttribute('accept', UPLOAD[tool].accept); else uploadInput.removeAttribute('accept');
+    var acc = acceptOverride !== undefined ? acceptOverride : UPLOAD[tool].accept;
+    if (acc) uploadInput.setAttribute('accept', acc); else uploadInput.removeAttribute('accept');
     uploadInput.value = '';
     uploadInput.click();
   }
@@ -1194,6 +1195,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       run: function () { setVal(ct, 'size', dsz); announce('Font size ' + fmtSize(dsz)); } });
     list.push({ title: 'Upload file(s) to ' + cm.short + ' (' + UPLOAD[ct].hint.replace(/\s+/g, ' ') + ')', kw: 'open import load browse file picker add', hint: MOD + '+O',
       run: function () { pickFiles(ct); } });
+    if (ct === 'code') list.push({ title: 'Add code from a screenshot (OCR)', kw: 'ocr image picture screenshot read text scan photo', hint: 'image → text',
+      run: function () { pickFiles('code', 'image/*'); } });
     if (pane === 'viewer') {
       list.push({ title: 'Add sample to ' + cm.short, kw: 'example demo test data try dummy', hint: SAMPLE_INFO[ct][0],
         run: function () { addSample(ct, false); announce('Added a sample to ' + cm.short); } });

@@ -921,6 +921,52 @@
         --accent: #0a4f8a; --accent-hover: #083b66; --focus: #7a2e00;
     }
     html[data-hc="1"] :focus-visible { outline: 2px solid var(--focus) !important; outline-offset: 1px; }
+
+    /* ---------- Read code from a screenshot (OCR) ---------- */
+    .ocr-overlay { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .ocr-dialog { background: var(--bg-panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 40px var(--shadow); width: min(1100px, 100%); height: min(720px, 100%); display: flex; flex-direction: column; outline: none; font-family: var(--font-ui); }
+    .ocr-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--border); }
+    .ocr-head h3 { margin: 0; font-size: 14px; color: var(--text-bright); }
+    .ocr-spacer { flex: 1; }
+    .ocr-queue { font-size: 11px; color: var(--text-dim); }
+    .ocr-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px; }
+    .ocr-col { display: flex; flex-direction: column; gap: 6px; min-height: 0; min-width: 0; }
+    .ocr-label { font-size: 11px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.3px; }
+    .ocr-imgwrap { flex: 1; min-height: 0; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+    .ocr-labelrow { display: flex; align-items: center; gap: 6px; }
+    .ocr-zbtn { padding: 2px 9px; min-width: 28px; justify-content: center; }
+    .ocr-zoomlabel { min-width: 42px; text-align: center; font-size: 11px; color: var(--text-dim); }
+    .ocr-imgwrap { cursor: grab; }
+    .ocr-imgwrap.ocr-grabbing { cursor: grabbing; }
+    .ocr-imgwrap:focus { outline: 1px solid var(--focus); }
+    .ocr-stage { position: relative; }
+    .ocr-img { display: block; width: 100%; height: 100%; user-select: none; -webkit-user-drag: none; }
+    .ocr-boxes { position: absolute; inset: 0; pointer-events: none; }
+    .ocr-box { position: absolute; box-sizing: border-box; border: 1.5px solid rgba(240, 150, 0, 0.9); background: rgba(255, 190, 0, 0.16); border-radius: 2px; pointer-events: auto; cursor: pointer; }
+    .ocr-box.ok { border-color: rgba(50, 170, 90, 0.9); background: rgba(50, 170, 90, 0.14); }
+    .ocr-box.cur { border-color: #0e8fd9; background: rgba(14, 143, 217, 0.10); box-shadow: 0 0 0 3px rgba(14, 143, 217, 0.4); }
+    .ocr-back mark.ok { background: rgba(50, 170, 90, 0.32); }
+    .ocr-legend mark.ok { background: rgba(50, 170, 90, 0.32); }
+    .ocr-meta { font-size: 11px; color: var(--text-dim); min-height: 1.4em; }
+    .ocr-editor { position: relative; flex: 1; min-height: 0; }
+    .ocr-back, .ocr-text { position: absolute; inset: 0; margin: 0; box-sizing: border-box; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre; tab-size: 4; letter-spacing: normal; }
+    .ocr-back { background: var(--bg); color: transparent; overflow: hidden; pointer-events: none; }
+    .ocr-back mark { background: rgba(255, 190, 0, 0.42); color: transparent; border-radius: 2px; }
+    .ocr-text { background: transparent; color: var(--text); overflow: auto; resize: none; outline: none; z-index: 1; }
+    .ocr-text:focus { border-color: var(--focus); }
+    .ocr-checkrow { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-dim); }
+    .ocr-legend mark { background: rgba(255, 190, 0, 0.42); color: var(--text); border-radius: 2px; padding: 0 3px; }
+    .ocr-flaginfo { font-weight: 600; color: var(--text); }
+    .ocr-options { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 0 16px 8px; font-size: 12px; }
+    .ocr-options select { background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 12px; }
+    .ocr-check { display: inline-flex; align-items: center; gap: 6px; }
+    .ocr-foot { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
+    .ocr-progress { flex: 1; min-width: 0; }
+    .ocr-bar { height: 6px; border-radius: 999px; background: var(--input-bg); overflow: hidden; }
+    .ocr-bar > span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.15s; }
+    .ocr-status { margin-top: 5px; font-size: 11px; color: var(--text-dim); }
+    .ocr-busy .ocr-text { opacity: 0.6; }
+    @media (max-width: 760px) { .ocr-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 40%) minmax(0, 1fr); } }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js" onerror="window.__monacoShowFailure && window.__monacoShowFailure()"></script>
 <script>
@@ -1017,7 +1063,7 @@
             <div class="drop-zone" id="pasteZone">
                 <textarea id="pasteInput" rows="3" placeholder="Paste any code here (TypeScript, JavaScript, Java, Python, ObjectScript, C#, C/C++, Go, Rust, PHP, Ruby, Kotlin, Swift, SQL, Shell, JSON, XML/HTML, CSS, YAML...) or drop a file. Unrecognized code falls back to Plain Text. Ctrl+Enter to add."></textarea>
                 <div class="drop-zone-footer">
-                    <span class="drop-zone-hint">Drop file(s) anywhere in this box, or paste code and click Add — the language is detected automatically and can be overridden.</span>
+                    <span class="drop-zone-hint">Drop file(s) anywhere in this box, or paste code and click Add — the language is detected automatically and can be overridden. Paste or drop a screenshot to read its code with OCR.</span>
                     <button class="btn" onclick="addFromPasteBox()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>Add Snippet</button>
                 </div>
             </div>
@@ -3285,7 +3331,10 @@ function downloadEntry(id) {
 }
 
 function handleFileUpload(files) {
-    Array.from(files).forEach(file => {
+    const all = Array.from(files);
+    const isImage = f => window.DTOcr ? DTOcr.isImage(f) : /^image\//.test(f.type || '');
+    all.filter(isImage).forEach(f => DTOcr.enqueue(f));   // screenshots are read with OCR
+    all.filter(f => !isImage(f)).forEach(file => {
         const reader = new FileReader();
         reader.onload = e => {
             addEntryAndRender(e.target.result, { name: file.name.replace(/\.[^.]+$/, ''), filename: file.name });
@@ -4482,6 +4531,757 @@ init();
             try { if (window.monaco && monaco.editor.remeasureFonts) monaco.editor.remeasureFonts(); } catch (e) {}
         });
     }
+})();
+</script>
+<script>
+/* ===== Read code from a screenshot (OCR) =====
+   Runs entirely in the browser with Tesseract.js. Nothing is downloaded until someone actually uses it
+   (about 7 MB the first time: the engine plus the English model; the browser keeps it afterwards).
+   Pipeline: decode → grayscale (invert dark themes) → estimate how small the text is → enlarge → cut a tall
+   image into bands at the gaps between lines → read every band → rebuild blank lines and indentation → review. */
+(function () {
+    'use strict';
+    var VERSION = { js: '7.0.0', core: '7.0.0', data: '1.0.0' };
+    var TARGET_INK = 33;          // ink height (px) of one text line that Tesseract reads best
+    var MAX_SCALE = 4;
+    var BAND_PX = 1500;           // approximate height of one band after enlarging
+    var MAX_WIDTH = 8192;         // widest canvas we will build
+    var MAX_PIXELS = 36e6;        // very large screenshots are reduced to this many pixels first
+    var FLAG_CONF = 85;           // words the engine is less sure about than this are highlighted for review
+
+    // Where the engine comes from. Self-hosting: set localStorage 'dev_toolkit_ocr_base' to a folder holding
+    // tesseract.min.js, worker.min.js, core/ (tesseract-core*.js) and lang/eng.traineddata.gz.
+    function urls() {
+        var base = null;
+        try { base = localStorage.getItem('dev_toolkit_ocr_base'); } catch (e) {}
+        if (base) {
+            base = new URL(base, location.href).href;   // the engine's worker needs absolute addresses
+            if (!/\/$/.test(base)) base += '/';
+            return { lib: base + 'tesseract.esm.min.js', worker: base + 'worker.min.js', core: base + 'core', lang: base + 'lang' };
+        }
+        var cdn = 'https://cdn.jsdelivr.net/npm/';
+        return {
+            lib: cdn + 'tesseract.js@' + VERSION.js + '/dist/tesseract.esm.min.js',
+            worker: cdn + 'tesseract.js@' + VERSION.js + '/dist/worker.min.js',
+            core: cdn + 'tesseract.js-core@' + VERSION.core,
+            lang: cdn + '@tesseract.js-data/eng@' + VERSION.data + '/4.0.0_best_int'
+        };
+    }
+
+    /* ---------------------------------------------------------------- engine */
+    var worker = null, workerPromise = null, workerGen = 0, logHandler = null, idleTimer = null;
+    // Loaded as an ES module: the Monaco editor's AMD loader on this page would swallow a classic UMD script.
+    var lib = null;
+    function loadLib() {
+        if (lib) return Promise.resolve(lib);
+        return import(urls().lib).then(function (m) {
+            lib = m.createWorker ? m : (m.default || m);
+            return lib;
+        }, function () { throw new Error('Couldn’t download the OCR engine. Check your internet connection and try again.'); });
+    }
+    function getWorker() {
+        clearTimeout(idleTimer);
+        if (worker) return Promise.resolve(worker);
+        if (!workerPromise) {
+            var gen = ++workerGen;
+            workerPromise = loadLib().then(function (T) {
+                var u = urls();
+                return T.createWorker('eng', 1, {
+                    workerPath: u.worker, corePath: u.core, langPath: u.lang,
+                    logger: function (m) { if (logHandler) logHandler(m); }
+                });
+            }).then(function (w) {
+                return w.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1', user_defined_dpi: '300' }).then(function () {
+                    if (gen !== workerGen) { try { w.terminate(); } catch (e) {} throw new Error('cancelled'); }   // stopped while it was starting
+                    worker = w; return w;
+                });
+            }).catch(function (err) { if (gen === workerGen) workerPromise = null; throw err; });
+        }
+        return workerPromise;
+    }
+    function dropWorker() {
+        var w = worker; worker = null; workerPromise = null; workerGen++;
+        if (w) { try { w.terminate(); } catch (e) {} }
+    }
+    var activeRuns = 0;
+    function scheduleIdleStop() {   // free the memory a minute after the last use
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(function () { if (activeRuns) scheduleIdleStop(); else dropWorker(); }, 60000);
+    }
+
+    /* ---------------------------------------------------------------- image preparation */
+    function loadBitmap(file) {
+        if (window.createImageBitmap) return createImageBitmap(file);
+        return new Promise(function (resolve, reject) {
+            var img = new Image(), url = URL.createObjectURL(file);
+            img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+            img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('That file isn’t an image the browser can read.')); };
+            img.src = url;
+        });
+    }
+
+    // Grayscale, invert light-on-dark, stretch contrast, and measure the text.
+    function prepare(bmp) {
+        var w = bmp.width, h = bmp.height;
+        var d = w * h > MAX_PIXELS ? Math.sqrt(MAX_PIXELS / (w * h)) : 1;
+        w = Math.max(1, Math.round(w * d)); h = Math.max(1, Math.round(h * d));
+        var c = document.createElement('canvas'); c.width = w; c.height = h;
+        var ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(bmp, 0, 0, w, h);
+        var px = ctx.getImageData(0, 0, w, h), data = px.data, n = w * h;
+        var gray = new Uint8ClampedArray(n), hist = new Uint32Array(256), i, v;
+        for (i = 0; i < n; i++) { v = (data[i * 4] * 299 + data[i * 4 + 1] * 587 + data[i * 4 + 2] * 114) / 1000 | 0; gray[i] = v; hist[v]++; }
+        var bg = 0, best = -1;
+        for (v = 0; v < 256; v++) if (hist[v] > best) { best = hist[v]; bg = v; }
+        var dark = bg < 128;
+        if (dark) { for (i = 0; i < n; i++) gray[i] = 255 - gray[i]; bg = 255 - bg; hist.reverse(); }
+        // contrast: 1st-percentile dark value -> 0, background -> 255
+        var acc = 0, low = 0, target = n * 0.01;
+        for (v = 0; v < 256; v++) { acc += hist[v]; if (acc >= target) { low = v; break; } }
+        if (bg - low >= 30) {
+            var lut = new Uint8ClampedArray(256);
+            for (v = 0; v < 256; v++) lut[v] = Math.max(0, Math.min(255, (v - low) * 255 / (bg - low)));
+            for (i = 0; i < n; i++) gray[i] = lut[gray[i]];
+        } else { for (i = 0; i < n; i++) if (gray[i] > bg) gray[i] = 255; }
+        // rows that contain text
+        var rowText = new Uint8Array(h), min = Math.max(2, Math.round(w * 0.0015)), x, y, cnt;
+        for (y = 0; y < h; y++) {
+            cnt = 0;
+            for (x = 0, i = y * w; x < w; x++, i++) if (gray[i] < 190) cnt++;
+            rowText[y] = cnt > min ? 1 : 0;
+        }
+        var runs = [], start = -1, gap = 0;
+        for (y = 0; y < h; y++) {
+            if (rowText[y]) { if (start < 0) start = y; gap = 0; }
+            else if (start >= 0) { gap++; if (gap > 1) { runs.push([start, y - gap + 1]); start = -1; gap = 0; } }
+        }
+        if (start >= 0) runs.push([start, h]);
+        runs = runs.filter(function (r) { return r[1] - r[0] >= 3; });
+        // horizontal extent of the text, so wide empty margins are not enlarged along with it
+        var colInk = new Uint16Array(w), cx0 = 0, cx1 = w;
+        for (y = 0; y < h; y++) { if (!rowText[y]) continue; for (x = 0, i = y * w; x < w; x++, i++) if (gray[i] < 190) colInk[x]++; }
+        for (x = 0; x < w && colInk[x] < 2; x++) cx0 = x + 1;
+        for (x = w - 1; x >= 0 && colInk[x] < 2; x--) cx1 = x;
+        cx0 = Math.max(0, cx0 - 12); cx1 = Math.min(w, cx1 + 12);
+        if (cx1 - cx0 < 20) { cx0 = 0; cx1 = w; }
+        // typical height of one line of text: ignore the short lines that hold only braces or comment markers
+        var heights = runs.map(function (r) { return r[1] - r[0]; }).filter(function (hh) { return hh <= h * 0.25; }).sort(function (a, b) { return a - b; });
+        var lineH = 14;
+        if (heights.length) {
+            var p75 = heights[Math.floor((heights.length - 1) * 0.75)];
+            var tall = heights.filter(function (hh) { return hh >= p75 * 0.6; });
+            lineH = tall[tall.length >> 1];
+        }
+        // A line that touches the top or bottom edge and is clearly shorter than the others is cut off: reading it only produces garbage.
+        var y0 = 0, y1 = h, trimmed = [];
+        if (runs.length > 2) {
+            var first = runs[0], last = runs[runs.length - 1];
+            if (first[0] <= 1 && first[1] - first[0] < lineH * 0.8) { y0 = first[1]; trimmed.push('top'); runs.shift(); }
+            if (last[1] >= h - 1 && last[1] - last[0] < lineH * 0.8) { y1 = last[0]; trimmed.push('bottom'); runs.pop(); }
+        }
+        // grayscale image ready for scaling
+        var out = document.createElement('canvas'); out.width = w; out.height = h;
+        var octx = out.getContext('2d'), img = octx.createImageData(w, h);
+        for (i = 0; i < n; i++) { v = gray[i]; img.data[i * 4] = v; img.data[i * 4 + 1] = v; img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255; }
+        octx.putImageData(img, 0, 0);
+        return { canvas: out, w: w, h: h, d: d, cx: cx0, cw: cx1 - cx0, y0: y0, y1: y1, trimmed: trimmed, dark: dark, lineH: lineH, runs: runs };
+    }
+
+    function chooseScale(p, forced) {
+        var s = forced ? forced : TARGET_INK / Math.max(4, p.lineH);
+        s = Math.min(MAX_SCALE, s);
+        if (!forced && s < 1.2) s = 1;
+        s = Math.min(s, MAX_WIDTH / p.cw);
+        return Math.max(1, s);
+    }
+
+    // Cut a tall image into bands, only ever between two lines of text.
+    function planBands(p, scale) {
+        var bandSrc = BAND_PX / scale;
+        if ((p.y1 - p.y0) * scale <= BAND_PX * 1.5) return [[p.y0, p.y1]];
+        var cuts = [];
+        for (var i = 1; i < p.runs.length; i++) { if (p.runs[i][0] - p.runs[i - 1][1] >= 2) cuts.push((p.runs[i][0] + p.runs[i - 1][1]) / 2 | 0); }
+        var bands = [], start = p.y0;
+        while (p.y1 - start > bandSrc * 1.35) {
+            var target = start + bandSrc, best = null, bd = 1e9;
+            for (var k = 0; k < cuts.length; k++) {
+                var c = cuts[k];
+                if (c < start + bandSrc * 0.5 || c > target + bandSrc * 0.3) continue;
+                var dist = Math.abs(c - target);
+                if (dist < bd) { bd = dist; best = c; }
+            }
+            var cut = best === null ? Math.round(target) : best;
+            bands.push([start, cut]); start = cut;
+        }
+        bands.push([start, p.y1]);
+        return bands;
+    }
+
+    function renderBand(p, y0, y1, scale) {
+        var pad = 24, bw = Math.ceil(p.cw * scale), bh = Math.max(1, Math.ceil((y1 - y0) * scale));
+        var c = document.createElement('canvas'); c.width = bw + pad * 2; c.height = bh + pad * 2;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(p.canvas, p.cx, y0, p.cw, y1 - y0, pad, pad, bw, bh);
+        return { canvas: c, pad: pad };
+    }
+    function toBlob(canvas) {
+        return new Promise(function (resolve, reject) { canvas.toBlob(function (b) { b ? resolve(b) : reject(new Error('Couldn’t prepare the image.')); }, 'image/png'); });
+    }
+
+    /* ---------------------------------------------------------------- text reconstruction */
+    function median(a) { if (!a.length) return 0; a = a.slice().sort(function (x, y) { return x - y; }); return a[a.length >> 1]; }
+
+    function charWidthOf(lines) {
+        var widths = [];
+        lines.forEach(function (l) { l.words.forEach(function (w) { if (w.t.length >= 4) widths.push((w.x1 - w.x0) / w.t.length); }); });
+        return median(widths);
+    }
+    // Text of a line from its words, with the spaces between them worked out from their positions (the font is monospace).
+    function textFromWords(words, cw) {
+        var out = '', prev = null;
+        words.forEach(function (w) { if (prev) out += new Array(Math.max(1, Math.round((w.x0 - prev.x1) / cw)) + 1).join(' '); out += w.t; prev = w; });
+        return out;
+    }
+    function rebuild(lines, opts) {
+        // lines: [{ text, x0, y0, y1, words: [{t, x0, x1}] }] with y in source pixels, x in enlarged pixels
+        lines = lines.filter(function (l) { return l.text.trim(); });
+        var numRe = /^\d{1,5}[|:.)]?$/, gluedRe = /^(\d{1,5})(?=[^\d\s\w])/;
+        var stripped = false;
+        if (opts.numbers !== 'keep' && lines.length >= 3) {
+            var withNum = lines.filter(function (l) { return l.words.length && (l.words.length > 1 && numRe.test(l.words[0].t) || gluedRe.test(l.words[0].t)); }).length;
+            if (opts.numbers === 'remove' || withNum >= lines.length * 0.6) {
+                // where the number column ends: the right edge of the numbers that were read correctly (a wide one sets the limit)
+                var nx = [], cxs = [];
+                lines.forEach(function (l) {
+                    var w0 = l.words[0];
+                    if (w0 && numRe.test(w0.t)) { nx.push(w0.x1); if (l.words.length > 1) cxs.push(l.words[1].x0); }
+                });
+                nx.sort(function (a, b) { return a - b; }); cxs.sort(function (a, b) { return a - b; });
+                var gutterRight = nx.length ? nx[Math.min(nx.length - 1, Math.floor(nx.length * 0.9))] : null;
+                var codeX0 = cxs.length ? cxs[Math.floor(cxs.length * 0.1)] : null;     // where the code starts (its left edge)
+                var cwg = charWidthOf(lines) || 8;
+                // a line holding only its number is an empty line of code; blank lines are restored from the spacing below
+                lines = lines.filter(function (l) { return !(l.words.length === 1 && numRe.test(l.words[0].t)); });
+                lines.forEach(function (l) {
+                    var w0 = l.words[0], g, removed = [], cut = 0;
+                    if (l.words.length > 1 && numRe.test(w0.t)) {
+                        removed.push(l.words.shift());
+                    } else if (w0 && (g = gluedRe.exec(w0.t))) {   // the number and the first word were read as one word
+                        var pc = (w0.x1 - w0.x0) / w0.t.length;
+                        cut = g[1].length;
+                        l.words[0] = { t: w0.t.slice(cut), x0: w0.x1 - (w0.t.length - cut) * pc, x1: w0.x1, c: w0.c, box: w0.box };
+                    }
+                    // Anything else lying inside the number column is gutter too: a number read as letters ("g", "eg"), fold arrows, ...
+                    if (gutterRight !== null) {
+                        while (l.words.length && (l.words[0].x1 <= gutterRight + cwg * 0.6 || (l.words[0].t.length <= 2 && l.words[0].x0 < gutterRight - cwg * 0.2 && l.words[0].x1 <= gutterRight + cwg * 1.5))) removed.push(l.words.shift());
+                        var w = l.words[0];
+                        if (w && w.t.length > 1 && w.x0 < gutterRight - cwg * 0.4 && w.x1 > gutterRight + cwg * 0.6) {   // glued to the first word of the code
+                            var keep = Math.round((w.x1 - (codeX0 !== null ? codeX0 : gutterRight + cwg)) / cwg);
+                            keep = Math.max(1, Math.min(w.t.length - 1, keep));
+                            cut += w.t.length - keep;
+                            l.words[0] = { t: w.t.slice(w.t.length - keep), x0: w.x1 - keep * cwg, x1: w.x1, c: w.c, box: w.box };
+                        }
+                    }
+                    if (removed.length || cut) {
+                        var t = l.text;
+                        for (var r = 0; r < removed.length && t !== null; r++) { t = t.replace(/^\s+/, ''); t = t.indexOf(removed[r].t) === 0 ? t.slice(removed[r].t.length) : null; }
+                        l.text = t === null ? textFromWords(l.words, cwg) : t.replace(/^\s+/, '').slice(cut);
+                        l.x0 = l.words.length ? l.words[0].x0 : l.x0;
+                    }
+                });
+                lines = lines.filter(function (l) { return l.words.length && l.text.trim(); });
+                stripped = true;
+            }
+        }
+
+        var out = [], flags = [];
+        var flag = function (l) { l.words.forEach(function (w) { if (w.c < FLAG_CONF && /\S/.test(w.t)) flags.push({ line: out.length - 1, text: w.t, conf: Math.round(w.c), box: w.box || null }); }); };
+        if (!opts.indent) {
+            lines.forEach(function (l) { out.push(l.text.replace(/^\s+/, '').replace(/\s+$/, '')); flag(l); });
+            return { text: out.join('\n'), numbersRemoved: stripped, flags: flags };
+        }
+        // one character is this wide in a monospace screenshot
+        var widths = [];
+        lines.forEach(function (l) { l.words.forEach(function (w) { if (w.t.length >= 4) widths.push((w.x1 - w.x0) / w.t.length); }); });
+        var cw = median(widths) || 10;
+        // column zero = the left edge shared by at least two lines (ignores one stray artefact)
+        var xs = lines.map(function (l) { return l.x0; }).sort(function (a, b) { return a - b; });
+        var baseX = xs[0];
+        if (xs.length >= 4) { for (var i = 0; i < xs.length; i++) { var near = xs.filter(function (x) { return Math.abs(x - xs[i]) < cw * 0.6; }).length; if (near >= 2) { baseX = xs[i]; break; } } }
+        var cols = lines.map(function (l) { return Math.max(0, Math.round((l.x0 - baseX) / cw)); });
+        // snap to the indent unit in use (largest of 8/4/2 that fits every line)
+        var nz = cols.filter(function (c) { return c > 0; }), unit = 1;
+        if (nz.length) {
+            [8, 4, 2].some(function (u) {
+                var err = 0; nz.forEach(function (c) { err += Math.abs(c - Math.round(c / u) * u); });
+                if (err <= nz.length * 0.15) { unit = u; return true; }
+                return false;
+            });
+        }
+        if (unit > 1) cols = cols.map(function (c) { return Math.round(c / unit) * unit; });
+        // blank lines: a bigger vertical gap than the normal line pitch
+        var gaps = []; for (var j = 1; j < lines.length; j++) gaps.push(lines[j].y0 - lines[j - 1].y0);
+        var pitch = median(gaps.filter(function (g) { return g > 0; })) || 1;
+        lines.forEach(function (l, idx) {
+            if (idx > 0) {
+                var blanks = Math.round((l.y0 - lines[idx - 1].y0) / pitch) - 1;
+                for (var b = 0; b < Math.min(3, blanks); b++) out.push('');
+            }
+            out.push(new Array(cols[idx] + 1).join(' ') + l.text.replace(/^\s+/, '').replace(/\s+$/, ''));
+            flag(l);
+        });
+        return { text: out.join('\n'), numbersRemoved: stripped, unit: unit, charWidth: cw, flags: flags };
+    }
+
+    // ---------------------------------------------------------------- fixing typical mistakes
+    // OCR engines are not built for code. These rules only touch patterns that are almost never real code:
+    // comment delimiters (italic text turns the opening slash-star-star into "[#=" and the closing star-slash into "=/"),
+    // the zero with a slash or dot (read as a copyright sign) and, in JavaScript-like code, the arrow ligature (read as a lone "=").
+    // A template string's backticks are often read as * ' " or dropped: ( *Saved ${x} items') -> (`Saved ${x} items`)
+    var Q = "*'\"\u2018\u2019\u201a\u201b\u201c\u201d\u201e\u201f\u2032\u2033\u2035\u00b4\u02bb\u02bc\u02bd\u02c8\u02ca\u02cb";
+    var RE_HEAD = new RegExp('^\\s*[' + Q + ']?[^(),;=]*$'), RE_OPEN = new RegExp('^\\s*[' + Q + ']?'), RE_TAIL = new RegExp('^([^`' + Q + ')\\];,]*)([' + Q + '])?(?=[)\\];,\\s]|$)');
+    function fixTemplate(n) {
+        var p = n.indexOf('${');
+        if (p < 1 || n.indexOf('`') >= 0) return n;
+        var q = Math.max(n.lastIndexOf('(', p), n.lastIndexOf('=', p), n.lastIndexOf(',', p), n.lastIndexOf(':', p), n.lastIndexOf('[', p));
+        if (q < 0) return n;
+        var head = n.slice(q + 1, p);
+        if (!RE_HEAD.test(head)) return n;
+        var e = n.lastIndexOf('}');
+        if (e < p) return n;
+        var tail = n.slice(e + 1), m = RE_TAIL.exec(tail);
+        if (!m) return n;
+        return n.slice(0, q + 1) + '`' + head.replace(RE_OPEN, '') + n.slice(p, e + 1) + m[1] + '`' + tail.slice(m[0].length);
+    }
+    function cleanup(text) {
+        var lines = text.split('\n'), fixes = 0;
+        var isMarker = function (t) { return /^[#=+xX*\u2022\u00a5]{1,2}$/.test(t); };
+        var contRe = /^(\s*)([#=+xX*\u2022\u00a5]{1,2})(\s+)(?=[A-Za-z@(])/;
+        for (var i = 0; i < lines.length; i++) {
+            var t = lines[i].trim();
+            // an opener: a very short line of symbols, followed by a line that looks like a comment continuation
+            var nextIdx = i + 1; while (nextIdx < lines.length && !lines[nextIdx].trim()) nextIdx++;
+            if (nextIdx >= lines.length || t.length < 2 || t.length > 5 || /\s/.test(t)) continue;
+            var nxt = lines[nextIdx];
+            if (!contRe.test(nxt)) continue;
+            if (!/^[\[\(\{\/|]/.test(t) || (t.replace(/[^A-Za-z0-9]/g, '').length > 2) || /[,;:.)\]}]/.test(t)) continue;
+            var indent = lines[i].match(/^\s*/)[0];
+            if (t !== '/**' && t !== '/*') { lines[i] = indent + '/**'; fixes++; }
+            // continuation lines up to the closer
+            for (var j = i + 1; j < lines.length; j++) {
+                var tj = lines[j].trim();
+                if (!tj) break;
+                if (/^[=#x*~+\-]{0,3}\/$/.test(tj)) { if (lines[j] !== indent + ' */') { lines[j] = indent + ' */'; fixes++; } break; }
+                var m = lines[j].match(contRe);
+                if (m) { var fixed = indent + ' * ' + lines[j].slice(m[0].length); if (fixed !== lines[j]) { lines[j] = fixed; if (m[2] !== '*') fixes++; } }
+                else if (isMarker(tj)) { lines[j] = indent + ' *'; }
+                else break;
+            }
+        }
+        for (var c = 0; c < lines.length; c++) {
+            var ct = lines[c].trim();
+            if (!/^[#=x~+\-*]{1,3}\/$/.test(ct)) continue;
+            var top = c - 1, conts = [];
+            while (top >= 0 && contRe.test(lines[top] + ' x')) { conts.push(top); top--; }   // (a bare marker line counts too)
+            if (!conts.length) continue;
+            var ot = top >= 0 ? lines[top].trim() : '', opener = top >= 0 && ot.length >= 1 && ot.length <= 6 && !/\s/.test(ot) && /^[\[\(\{\/|]/.test(ot) && !/[,;:.)\]}]/.test(ot);
+            var ind = opener ? lines[top].match(/^\s*/)[0] : (lines[conts[conts.length - 1]].match(/^\s*/)[0].slice(1));
+            if (opener && ot !== '/**' && ot !== '/*') { lines[top] = ind + '/**'; fixes++; }
+            conts.forEach(function (k) {
+                var mm = lines[k].match(contRe), fixedLine = ind + ' * ' + (mm ? lines[k].slice(mm[0].length) : '');
+                if (fixedLine.trim() !== '*' || mm) { if (fixedLine !== lines[k]) { lines[k] = fixedLine; if (!mm || mm[2] !== '*') fixes++; } }
+            });
+            if (lines[c] !== ind + ' */') { lines[c] = ind + ' */'; fixes++; }
+        }
+        var jsLike = /\b(const|let|function|export|import)\b|=>/.test(text) && !/\b(fun|def|func)\b/.test(text);
+        // How does this code write calls: "foo(x)" or "foo (x)"? Spaces the engine adds are only removed when the code is clearly written tightly.
+        var KEYWORDS = /^(if|for|while|switch|catch|return|function|typeof|await|yield|new|else|in|of|void|delete|throw|do|and|or|not|elif|def|class|import|from|with|print|case|when|match|as|is|using|lock|foreach|until|unless|select|where|then|async|export|default|extends|instanceof)$/;
+        var tight = 0, spaced = 0;
+        lines.forEach(function (l) {
+            if (/^\s*(\*|\/\/|#|\/\*)/.test(l)) return;
+            var re = /\b([A-Za-z_$][\w$]*)([ \t]*)\(/g, m;
+            while ((m = re.exec(l))) { if (KEYWORDS.test(m[1])) continue; if (m[2]) spaced++; else tight++; }
+        });
+        var tightStyle = tight >= 3 && tight >= spaced * 3;
+        var out = lines.map(function (l) {
+            var isComment = /^\s*(\*|\/\/|#|\/\*)/.test(l), n = l;
+            if (!/copyright|licen[cs]e/i.test(l)) n = n.replace(/(^|[^A-Za-z])[\u00a9\u00ae](?![A-Za-z])/g, function (m0, pre) { return pre + '0'; });
+            if (!isComment) {
+                n = n.replace(/(\d)[ \t]+x[ \t]+(?=\d)/g, '$1 * ');
+                if (jsLike && !/^\s*[\w.$]+\([^()'"]*\)\s*=\s/.test(n)) n = n.replace(/\)[ \t]+=[ \t]+(?=[\w(\[{'"`!])/g, ') => ');
+                n = n.replace(/\u21d2/g, '=>').replace(/\u2261/g, '===').replace(/\u2262/g, '!==').replace(/\u2260/g, '!=').replace(/\u2264/g, '<=').replace(/\u2265/g, '>=').replace(/\u2192/g, '->').replace(/\u2026/g, '...');   // ligature glyphs and the ellipsis
+                n = n.replace(/\([ \t]+(?=\.\.\.)/g, '(');
+                n = n.replace(/(['"`)\]]),(\d)[ \t]+(?=[A-Za-z_$(])/g, '$1, ');                                       // "'draft',6 text" -> "'draft', text"
+                if (!/['"`]/.test(n)) n = n.replace(/([\w)\]])\.[ \t]+(?=[a-z_$])/g, '$1.');                    // "numbers. reduce(" -> "numbers.reduce("
+                if (tightStyle) n = n.replace(/\b([A-Za-z_$][\w$]*)[ \t]+\(/g, function (m0, id) { return KEYWORDS.test(id) ? m0 : id + '('; });   // "clearTimeout (x)" -> "clearTimeout(x)"
+                n = fixTemplate(n);
+            }
+            if (n !== l) fixes++;
+            return n;
+        });
+        return { text: out.join('\n'), fixes: fixes };
+    }
+
+    /* ---------------------------------------------------------------- the whole run */
+    function run(file, opts, onProgress, isCancelled) {
+        var info = { scale: 1, bands: 1, lineH: 0, dark: false, lines: 0, confidence: 0, ms: 0, w: 0, h: 0 };
+        var t0 = Date.now(), prepared, bands;
+        onProgress('Preparing the image…', 0.02);
+        activeRuns++;
+        return loadBitmap(file).then(function (bmp) {
+            prepared = prepare(bmp);
+            if (bmp.close) bmp.close();
+            info.w = prepared.w; info.h = prepared.h; info.lineH = prepared.lineH; info.dark = prepared.dark; info.trimmed = prepared.trimmed;
+            info.scale = chooseScale(prepared, opts.scale);
+            bands = planBands(prepared, info.scale);
+            info.bands = bands.length;
+            onProgress('Starting the OCR engine…', 0.05);
+            var downloading = false;
+            logHandler = function (m) {
+                if (isCancelled()) return;
+                if (/loading tesseract core|loading language traineddata/.test(m.status)) { downloading = true; onProgress('Downloading the OCR engine (first use only, about 7 MB)…', 0.05 + 0.15 * (m.progress || 0)); }
+                else if (/initializ/.test(m.status)) onProgress('Starting the OCR engine…', 0.2);
+            };
+            return getWorker();
+        }).then(function (w) {
+            var lines = [], sumConf = 0, sumChars = 0, chain = Promise.resolve();
+            bands.forEach(function (band, bi) {
+                chain = chain.then(function () {
+                    if (isCancelled()) throw new Error('cancelled');
+                    logHandler = function (m) {
+                        if (isCancelled() || m.status !== 'recognizing text') return;
+                        onProgress('Reading the text (part ' + (bi + 1) + ' of ' + bands.length + ')…', 0.2 + 0.78 * ((bi + (m.progress || 0)) / bands.length));
+                    };
+                    var r = renderBand(prepared, band[0], band[1], info.scale);
+                    return toBlob(r.canvas).then(function (blob) { return w.recognize(blob, {}, { blocks: true, text: true }); }).then(function (res) {
+                        var data = res.data;
+                        var toX = function (x) { return (prepared.cx + (x - r.pad) / info.scale) / prepared.d; }, toY = function (y) { return (band[0] + (y - r.pad) / info.scale) / prepared.d; };
+                        (data.blocks || []).forEach(function (b) { (b.paragraphs || []).forEach(function (p) { (p.lines || []).forEach(function (l) {
+                            lines.push({
+                                text: l.text.replace(/\n$/, ''), x0: l.bbox.x0, y0: band[0] + (l.bbox.y0 - r.pad) / info.scale, y1: band[0] + (l.bbox.y1 - r.pad) / info.scale,
+                                words: (l.words || []).map(function (wd) { return { t: wd.text, x0: wd.bbox.x0, x1: wd.bbox.x1, c: wd.confidence, box: { x0: toX(wd.bbox.x0), x1: toX(wd.bbox.x1), y0: toY(wd.bbox.y0), y1: toY(wd.bbox.y1) } }; })
+                            });
+                        }); }); });
+                        var chars = (data.text || '').length; sumConf += (data.confidence || 0) * chars; sumChars += chars;
+                    });
+                });
+            });
+            return chain.then(function () {
+                logHandler = null;
+                lines.sort(function (a, b) { return a.y0 - b.y0; });
+                var rb = rebuild(lines, opts);
+                info.fixes = 0;
+                if (opts.fix !== false && rb.text) { var cl = cleanup(rb.text); rb.text = cl.text; info.fixes = cl.fixes; }
+                info.flags = rb.flags || [];
+                info.lines = rb.text ? rb.text.split('\n').length : 0;
+                info.confidence = sumChars ? Math.round(sumConf / sumChars) : 0;
+                info.ms = Date.now() - t0; info.numbersRemoved = rb.numbersRemoved; info.unit = rb.unit;
+                DTOcr.last = info;
+                onProgress('Done', 1);
+                return { text: rb.text, info: info };
+            });
+        }).then(function (v) { activeRuns--; scheduleIdleStop(); return v; }, function (err) { activeRuns--; logHandler = null; scheduleIdleStop(); throw err; });
+    }
+
+    /* ---------------------------------------------------------------- the review dialog */
+    var queue = [], current = null, queueLabel = null;
+    function updateQueueLabel() { if (queueLabel) queueLabel.textContent = queue.length ? queue.length + ' more image' + (queue.length === 1 ? '' : 's') + ' waiting' : ''; }
+    function el(tag, attrs, kids) {
+        var e = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+            var v = attrs[k];
+            if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v;
+            else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v); else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+        });
+        (kids || []).forEach(function (c) { if (c) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+        return e;
+    }
+    function baseName(file) {
+        var n = (file.name || '').replace(/\.[^.]+$/, '');
+        return !n || /^(image|screenshot|clipboard|pasted|unnamed)/i.test(n) ? 'Screenshot' : n;
+    }
+
+    function openDialog(file) {
+        var url = URL.createObjectURL(file), token = 0, running = false, cancelled = false, lastText = '';
+        var img = el('img', { class: 'ocr-img', alt: 'The screenshot', src: url, draggable: 'false' });
+        var boxLayer = el('div', { class: 'ocr-boxes' });
+        var stage = el('div', { class: 'ocr-stage' }, [img, boxLayer]);
+        var wrap = el('div', { class: 'ocr-imgwrap', tabindex: '0', title: 'Ctrl + mouse wheel to zoom, drag to move around' }, [stage]);
+        var meta = el('div', { class: 'ocr-meta' });
+        var bar = el('div', { class: 'ocr-bar' }, [el('span')]);
+        var status = el('div', { class: 'ocr-status', role: 'status', 'aria-live': 'polite' });
+        var ta = el('textarea', { class: 'ocr-text', spellcheck: 'false', placeholder: 'The recognized text appears here. You can edit it before adding it.' });
+        var back = el('div', { class: 'ocr-back', 'aria-hidden': 'true' });
+        var editor = el('div', { class: 'ocr-editor' }, [back, ta]);
+        var flagInfo = el('span', { class: 'ocr-flaginfo' });
+        var btnNext = el('button', { class: 'btn btn-secondary', type: 'button', text: 'Next word to check', title: 'Jump to the next uncertain word and zoom the screenshot to it (F8)' });
+        var btnOk = el('button', { class: 'btn btn-secondary', type: 'button', text: '✓ Looks right', title: 'This word is correct: mark it as checked and go to the next one (F9)' });
+        var checkRow = el('div', { class: 'ocr-checkrow' }, [
+            el('span', { class: 'ocr-legend' }, [el('mark', { text: 'Unsure' }), ' ', el('mark', { class: 'ok', text: 'Checked' })]),
+            el('span', { class: 'ocr-spacer' }), flagInfo, btnOk, btnNext]);
+        var baseLines = null, marks = {}, curMark = null;   // marks[line] = [{ s, e, box, checked }]
+        var zOut = el('button', { class: 'btn btn-secondary ocr-zbtn', type: 'button', text: '−', title: 'Zoom out', 'aria-label': 'Zoom out' });
+        var zIn = el('button', { class: 'btn btn-secondary ocr-zbtn', type: 'button', text: '+', title: 'Zoom in', 'aria-label': 'Zoom in' });
+        var zFit = el('button', { class: 'btn btn-secondary ocr-zbtn', type: 'button', text: 'Fit', title: 'Show the whole screenshot' });
+        var zoomLabel = el('span', { class: 'ocr-zoomlabel' });
+        var selScale = el('select', { 'aria-label': 'Enlarge' }, [['auto', 'Auto'], ['1', '1×'], ['2', '2×'], ['3', '3×'], ['4', '4×']].map(function (o) { return el('option', { value: o[0], text: o[1] }); }));
+        var selNum = el('select', { 'aria-label': 'Line numbers' }, [['auto', 'Auto-detect'], ['remove', 'Remove'], ['keep', 'Keep']].map(function (o) { return el('option', { value: o[0], text: o[1] }); }));
+        var cbIndent = el('input', { type: 'checkbox', id: 'ocrIndent' }); cbIndent.checked = true;
+        var cbFix = el('input', { type: 'checkbox', id: 'ocrFix' }); cbFix.checked = true;
+        var btnAgain = el('button', { class: 'btn btn-secondary', type: 'button', text: 'Read again' });
+        var btnAdd = el('button', { class: 'btn', type: 'button', text: 'Add as snippet' });
+        var btnCopy = el('button', { class: 'btn btn-secondary', type: 'button', text: 'Copy text' });
+        var btnClose = el('button', { class: 'btn btn-secondary', type: 'button', text: 'Close' });
+        var more = el('span', { class: 'ocr-queue' });
+        queueLabel = more; updateQueueLabel();
+
+        var box = el('div', { class: 'ocr-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'ocrTitle', tabindex: '-1' }, [
+            el('div', { class: 'ocr-head' }, [el('h3', { id: 'ocrTitle', text: 'Read code from a screenshot' }), more, el('span', { class: 'ocr-spacer' }), el('button', { class: 'btn btn-secondary btn-iconbtn', type: 'button', title: 'Close (Esc)', 'aria-label': 'Close', onclick: close, text: '✕' })]),
+            el('div', { class: 'ocr-body' }, [
+                el('div', { class: 'ocr-col' }, [
+                    el('div', { class: 'ocr-labelrow' }, [el('div', { class: 'ocr-label', text: 'Screenshot' }), el('span', { class: 'ocr-spacer' }), zOut, zoomLabel, zIn, zFit]),
+                    wrap, meta]),
+                el('div', { class: 'ocr-col' }, [el('div', { class: 'ocr-label', text: 'Recognized text (edit before adding)' }), editor, checkRow])
+            ]),
+            el('div', { class: 'ocr-options' }, [
+                el('label', {}, ['Enlarge ', selScale]), el('label', {}, ['Line numbers ', selNum]),
+                el('label', { class: 'ocr-check' }, [cbIndent, ' Rebuild indentation']), el('label', { class: 'ocr-check', title: 'Repairs comment markers (/** and */), the 0 and => symbols that OCR often misreads' }, [cbFix, ' Fix common mistakes']), btnAgain
+            ]),
+            el('div', { class: 'ocr-foot' }, [el('div', { class: 'ocr-progress' }, [bar, status]), btnCopy, btnAdd, btnClose])
+        ]);
+        var overlay = el('div', { class: 'ocr-overlay' }, [box]);
+        document.body.appendChild(overlay);
+        current = { file: file, close: close };
+        box.focus();
+
+        /* ---------- the screenshot: zoom and move ---------- */
+        var natW = 0, natH = 0, zoom = 1, fitZoom = 1, isFit = true, ZMAX = 16;
+        function applyZoom() {
+            if (!natW) return;
+            stage.style.width = natW * zoom + 'px'; stage.style.height = natH * zoom + 'px';
+            zoomLabel.textContent = isFit ? 'Fit' : Math.round(zoom * 100) + '%';
+        }
+        function computeFit() { fitZoom = natW ? Math.max(0.05, (wrap.clientWidth - 2) / natW) : 1; }
+        function setZoom(z, ax, ay) {   // (ax, ay): the point of the pane that stays put
+            if (!natW) return;
+            z = Math.max(Math.min(fitZoom, 0.25), Math.min(ZMAX, z));
+            var cx = ax == null ? wrap.clientWidth / 2 : ax, cy = ay == null ? wrap.clientHeight / 2 : ay;
+            var px = (wrap.scrollLeft + cx) / zoom, py = (wrap.scrollTop + cy) / zoom;
+            zoom = z; isFit = Math.abs(zoom - fitZoom) < 0.002;
+            applyZoom();
+            wrap.scrollLeft = px * zoom - cx; wrap.scrollTop = py * zoom - cy;
+        }
+        function initImage() {
+            natW = img.naturalWidth; natH = img.naturalHeight;
+            computeFit(); zoom = fitZoom; isFit = true; applyZoom(); renderBoxes(collect());
+        }
+        if (img.complete && img.naturalWidth) initImage(); else img.addEventListener('load', initImage);
+        zIn.addEventListener('click', function () { setZoom(zoom * 1.3); });
+        zOut.addEventListener('click', function () { setZoom(zoom / 1.3); });
+        zFit.addEventListener('click', function () { computeFit(); setZoom(fitZoom); wrap.scrollLeft = 0; wrap.scrollTop = 0; });
+        wrap.addEventListener('wheel', function (e) {
+            if (!(e.ctrlKey || e.metaKey)) return;
+            e.preventDefault();
+            var r = wrap.getBoundingClientRect();
+            setZoom(zoom * (e.deltaY < 0 ? 1.18 : 1 / 1.18), e.clientX - r.left, e.clientY - r.top);
+        }, { passive: false });
+        var drag = null;
+        wrap.addEventListener('mousedown', function (e) {
+            if (e.button !== 0 || (e.target.closest && e.target.closest('.ocr-box'))) return;
+            drag = { x: e.clientX, y: e.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop };
+            wrap.classList.add('ocr-grabbing'); e.preventDefault();
+        });
+        function onMove(e) { if (drag) { wrap.scrollLeft = drag.sl - (e.clientX - drag.x); wrap.scrollTop = drag.st - (e.clientY - drag.y); } }
+        function onUp() { if (drag) { drag = null; wrap.classList.remove('ocr-grabbing'); } }
+        function onResize() { if (isFit) { computeFit(); zoom = fitZoom; applyZoom(); } }
+        window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp); window.addEventListener('resize', onResize);
+
+        // Zoom the screenshot to a word: big enough to read it, centred, and never further out than the user already is.
+        function showBox(b) {
+            if (!b || !natW) return;
+            var h = Math.max(6, b.y1 - b.y0), w = Math.max(6, b.x1 - b.x0);
+            var z = Math.max(zoom, Math.min(ZMAX, Math.max(2, 34 / h)));
+            z = Math.min(z, (wrap.clientWidth * 0.9) / w);   // a long word must fit the pane
+            isFit = false; zoom = Math.max(Math.min(fitZoom, 0.25), z); applyZoom();
+            wrap.scrollLeft = ((b.x0 + b.x1) / 2) * zoom - wrap.clientWidth / 2;
+            wrap.scrollTop = ((b.y0 + b.y1) / 2) * zoom - wrap.clientHeight / 2;
+        }
+        function renderBoxes(valid) {
+            boxLayer.textContent = '';
+            if (!natW) return;
+            valid.forEach(function (v) {
+                var b = v.m.box; if (!b) return;
+                var d = el('div', { class: 'ocr-box' + (v.m.checked ? ' ok' : '') + (v.m === curMark ? ' cur' : '') });
+                var pad = 2;
+                d.style.left = ((b.x0 - pad) / natW * 100) + '%'; d.style.top = ((b.y0 - pad) / natH * 100) + '%';
+                d.style.width = ((b.x1 - b.x0 + pad * 2) / natW * 100) + '%'; d.style.height = ((b.y1 - b.y0 + pad * 2) / natH * 100) + '%';
+                d.addEventListener('click', function () { selectMark(v.m); });
+                boxLayer.appendChild(d);
+            });
+        }
+
+        /* ---------- words the engine was unsure about ---------- */
+        function computeMarks(text, flags) {
+            var lines = text.split('\n'), out = {};
+            flags.forEach(function (f) {
+                var line = lines[f.line]; if (line == null || !f.text) return;
+                var pos = -1, list = out[f.line] || (out[f.line] = []);
+                while ((pos = line.indexOf(f.text, pos + 1)) >= 0) {
+                    if (!list.some(function (m) { return m.s === pos; })) { list.push({ s: pos, e: pos + f.text.length, box: f.box || null, checked: false }); return; }
+                }
+            });
+            return out;
+        }
+        // The marks that are still trustworthy: a line that was edited, or a changed number of lines, drops them.
+        function collect() {
+            var lines = ta.value.split('\n'), intact = baseLines && lines.length === baseLines.length, all = [], off = 0;
+            for (var i = 0; i < lines.length; i++) {
+                if (intact && baseLines[i] === lines[i] && marks[i]) marks[i].forEach(function (m) { all.push({ m: m, s: off + m.s, e: off + m.e, line: i, col: m.s }); });
+                off += lines[i].length + 1;
+            }
+            all.sort(function (a, b) { return a.s - b.s; });
+            return all;
+        }
+        function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+        function renderBack() {
+            var lines = ta.value.split('\n'), html = '', valid = collect(), byLine = {};
+            valid.forEach(function (v) { (byLine[v.line] = byLine[v.line] || []).push(v.m); });
+            if (curMark && !valid.some(function (v) { return v.m === curMark; })) curMark = null;
+            for (var i = 0; i < lines.length; i++) {
+                var m = byLine[i];
+                if (!m) { html += esc(lines[i]) + '\n'; continue; }
+                var cur = 0;
+                m.forEach(function (r) { html += esc(lines[i].slice(cur, r.s)) + '<mark' + (r.checked ? ' class="ok"' : '') + '>' + esc(lines[i].slice(r.s, r.e)) + '</mark>'; cur = r.e; });
+                html += esc(lines[i].slice(cur)) + '\n';
+            }
+            back.innerHTML = html;
+            back.scrollTop = ta.scrollTop; back.scrollLeft = ta.scrollLeft;
+            var todo = valid.filter(function (v) { return !v.m.checked; }).length, done = valid.length - todo;
+            flagInfo.textContent = todo ? todo + ' to check' + (done ? ' · ' + done + ' checked' : '') : (valid.length ? 'all checked ✓' : (baseLines ? 'nothing to check' : ''));
+            btnNext.disabled = btnOk.disabled = !todo;
+            renderBoxes(valid);
+        }
+        function scrollTextTo(v) {
+            var lh = parseFloat(getComputedStyle(ta).lineHeight) || 18, cw = (function () { var c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(ta).font; return c.measureText('m').width || 7; })();
+            ta.scrollTop = Math.max(0, v.line * lh - ta.clientHeight / 2);
+            ta.scrollLeft = Math.max(0, v.col * cw - ta.clientWidth / 2);
+            back.scrollTop = ta.scrollTop; back.scrollLeft = ta.scrollLeft;
+        }
+        function selectMark(m) {
+            var v = collect().filter(function (x) { return x.m === m; })[0];
+            if (!v) return;
+            curMark = m;
+            ta.focus(); ta.setSelectionRange(v.s, v.e);
+            renderBack(); scrollTextTo(v); showBox(m.box);
+        }
+        function nextFlag() {
+            var todo = collect().filter(function (v) { return !v.m.checked; });
+            if (!todo.length) return;
+            var from = ta.selectionEnd, pick = todo.filter(function (v) { return v.s >= from && v.m !== curMark; })[0] || todo[0];
+            selectMark(pick.m);
+        }
+        function looksRight() {
+            var valid = collect(), m = curMark && valid.some(function (v) { return v.m === curMark; }) ? curMark : null;
+            if (!m) { var hit = valid.filter(function (v) { return ta.selectionStart >= v.s && ta.selectionEnd <= v.e && !v.m.checked; })[0]; m = hit ? hit.m : null; }
+            if (m) m.checked = true;
+            renderBack(); nextFlag();
+        }
+        function syncCaret() {   // moving the caret onto an uncertain word shows it in the screenshot
+            var pos = ta.selectionStart, hit = collect().filter(function (v) { return pos >= v.s && pos <= v.e; })[0];
+            if (hit) { curMark = hit.m; renderBack(); showBox(hit.m.box); }
+        }
+        ta.addEventListener('scroll', function () { back.scrollTop = ta.scrollTop; back.scrollLeft = ta.scrollLeft; });
+        ta.addEventListener('input', renderBack);
+        ta.addEventListener('click', syncCaret);
+        ta.addEventListener('keyup', function (e) { if (/^(Arrow|Home|End|Page)/.test(e.key)) syncCaret(); });
+        btnNext.addEventListener('click', nextFlag);
+        btnOk.addEventListener('click', looksRight);
+
+        function setProgress(text, f) { status.textContent = text; bar.firstChild.style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; }
+        function setBusy(b) { running = b; btnAdd.disabled = b; btnCopy.disabled = b; btnAgain.disabled = b; ta.readOnly = b; overlay.classList.toggle('ocr-busy', b); }
+        function start() {
+            var my = ++token; cancelled = false; setBusy(true); meta.textContent = ''; ta.value = ''; baseLines = null; marks = {}; curMark = null; renderBack();
+            var opts = { scale: selScale.value === 'auto' ? 0 : Number(selScale.value), numbers: selNum.value, indent: cbIndent.checked, fix: cbFix.checked };
+            run(file, opts, function (t, f) { if (my === token) setProgress(t, f); }, function () { return cancelled || my !== token; }).then(function (res) {
+                if (my !== token) return;
+                setBusy(false); lastText = res.text; ta.value = res.text;
+                var i = res.info;
+                baseLines = res.text.split('\n'); marks = computeMarks(res.text, i.flags || []); renderBack();
+                meta.textContent = i.w + '×' + i.h + ' px · text about ' + i.lineH + ' px tall → enlarged ' + (Math.round(i.scale * 10) / 10) + '× · ' + i.bands + ' part' + (i.bands === 1 ? '' : 's') +
+                    ' · ' + i.lines + ' line' + (i.lines === 1 ? '' : 's') + ' · confidence ' + i.confidence + '%' + (i.dark ? ' · dark theme inverted' : '') + (i.numbersRemoved ? ' · line numbers removed' : '') +
+                    (i.trimmed && i.trimmed.length ? ' · ignored a cut-off line at the ' + i.trimmed.join(' and ') : '') + (i.fixes ? ' · fixed ' + i.fixes + ' common mistake' + (i.fixes === 1 ? '' : 's') : '');
+                if (!res.text.trim()) setProgress('No text found. Try a different enlarge setting, or a sharper screenshot.', 0);
+                else setProgress('Done in ' + (Math.round(i.ms / 100) / 10) + ' s. Check the highlighted words, then add it.', 1);
+                scheduleIdleStop();
+                if (res.text.trim()) { ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0; ta.scrollLeft = 0; back.scrollTop = 0; back.scrollLeft = 0; }
+            }).catch(function (err) {
+                if (my !== token || (err && err.message === 'cancelled')) return;
+                setBusy(false); setProgress(err && err.message ? err.message : 'Something went wrong while reading the image.', 0);
+                meta.textContent = '';
+            });
+        }
+        function close() {
+            cancelled = true; token++;
+            URL.revokeObjectURL(url);
+            window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); window.removeEventListener('resize', onResize);
+            overlay.remove(); current = null;
+            document.removeEventListener('keydown', onKey, true);
+            queueLabel = null;
+            if (queue.length) openDialog(queue.shift());
+        }
+        function onKey(e) {
+            if (!overlay.isConnected) return;
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+            else if (e.key === 'F8') { e.preventDefault(); e.stopPropagation(); nextFlag(); }
+            else if (e.key === 'F9') { e.preventDefault(); e.stopPropagation(); looksRight(); }
+            else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !btnAdd.disabled) { e.preventDefault(); e.stopPropagation(); btnAdd.click(); }
+            else if (e.key === 'Tab') {   // keep focus inside the dialog
+                var f = Array.prototype.filter.call(box.querySelectorAll('button, select, input, textarea'), function (x) { return !x.disabled && x.offsetParent !== null; });
+                if (!f.length) return;
+                var first = f[0], last = f[f.length - 1];
+                if (e.shiftKey && (document.activeElement === first || document.activeElement === box)) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+        }
+        document.addEventListener('keydown', onKey, true);
+        btnAgain.addEventListener('click', start);
+        btnClose.addEventListener('click', close);
+        btnAdd.addEventListener('click', function () {
+            var text = ta.value.replace(/\s+$/, '');
+            if (!text.trim()) return;
+            addEntryAndRender(text, { name: baseName(file) });
+            close();
+        });
+        btnCopy.addEventListener('click', function () {
+            var done = function () { btnCopy.textContent = 'Copied'; setTimeout(function () { btnCopy.textContent = 'Copy text'; }, 1200); };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); document.execCommand('copy'); done(); });
+            else { ta.select(); document.execCommand('copy'); done(); }
+        });
+        overlay.addEventListener('mousedown', function (e) { if (e.target === overlay && !running) close(); });
+        start();
+    }
+
+    var DTOcr = window.DTOcr = {
+        last: null,
+        run: run,   // (exposed for testing)
+        _cleanup: cleanup,
+        _rebuild: rebuild,
+        enqueue: function (file) { queue.push(file); if (!current) openDialog(queue.shift()); else updateQueueLabel(); },
+        isImage: function (f) { return /^image\//.test(f.type || '') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(f.name || ''); }
+    };
+
+    // Pasting a screenshot (Ctrl+V) anywhere on the Viewer, except inside another text box
+    document.addEventListener('paste', function (e) {
+        var files = e.clipboardData && e.clipboardData.files ? Array.prototype.filter.call(e.clipboardData.files, DTOcr.isImage) : [];
+        if (!files.length) return;
+        var t = e.target, editable = t && t.closest && t.closest('input, textarea, [contenteditable="true"], .monaco-editor');
+        if (editable && t.id !== 'pasteInput') return;
+        e.preventDefault();
+        files.forEach(function (f) { DTOcr.enqueue(f); });
+    });
 })();
 </script>
 </body>

@@ -46,6 +46,7 @@
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Command palette (Ctrl+K)](#command-palette-ctrlk)
 - [Settings](#settings)
+- [Reading code from screenshots](#reading-code-from-screenshots)
 - [Your data: privacy, storage and backups](#your-data-privacy-storage-and-backups)
 - [Install it as an app](#install-it-as-an-app)
 - [Run it yourself](#run-it-yourself)
@@ -87,6 +88,7 @@ Open it, press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type `add sample`, and press Enter 
 - Paste code, drop files, or upload several at once. The **language is detected automatically** (TypeScript, JavaScript, Java, Python, ObjectScript, C#, C/C++, Go, Rust, PHP, Ruby, Kotlin, Swift, SQL, Shell, JSON, XML/HTML, CSS, YAML and more) and you can override it. Anything unrecognized falls back to plain text.
 - Syntax-highlighted snippets you can **fold**, **search** (with a match counter), **wrap**, view with a **minimap**, and open in a **focus view**.
 - **Edit in place** with the Monaco editor (the editor that powers VS Code).
+- **Read code from a screenshot (OCR).** Paste a screenshot (<kbd>Ctrl</kbd>+<kbd>V</kbd>), drop an image on the paste box, upload one, or run **Add code from a screenshot (OCR)** from the palette. Dev Toolkit enlarges small text automatically, splits a tall screenshot into parts, reads it in your browser, rebuilds the indentation and blank lines, and shows the result next to the image so you can fix it before adding it as a snippet. See [Reading code from screenshots](#reading-code-from-screenshots).
 - Copy as raw text or as a Markdown code fence, or download the snippet as a file.
 - **Stack or grid layout**, plus collapse or expand everything at once.
 - **Compare** two snippets in two Monaco editors, with sync scroll, swap and reset:
@@ -142,7 +144,8 @@ Open it, press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type `add sample`, and press Enter 
     <td><b>Settings with live preview</b><br><img src="docs/settings.png" alt="The settings dialog showing the code viewer options and a preview"></td>
   </tr>
   <tr>
-    <td colspan="2"><b>Light theme</b><br><img src="docs/json-viewer-light.png" alt="JSON viewer in the light theme"></td>
+    <td><b>Reading code from a screenshot (OCR)</b><br><img src="docs/ocr.png" alt="The OCR dialog with a screenshot on the left and the recognized code on the right"></td>
+    <td><b>Light theme</b><br><img src="docs/json-viewer-light.png" alt="JSON viewer in the light theme"></td>
   </tr>
 </table>
 
@@ -158,6 +161,7 @@ On macOS, use <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd>.
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> | Open the palette while typing in the code editor (there, <kbd>Ctrl</kbd>+<kbd>K</kbd> belongs to Monaco) |
 | <kbd>Ctrl</kbd>+<kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> | Go to Code, JSON/XML or CSV/XLSX. The first press lands on that tool's **Viewer** with the cursor in the paste box. Press it **again** to flip to the **Compare** tab, and again to flip back |
 | <kbd>Ctrl</kbd>+<kbd>O</kbd> | Upload files to the current tool |
+| <kbd>Ctrl</kbd>+<kbd>V</kbd> | On the Code tab, pasting a screenshot from the clipboard starts OCR |
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | Open settings |
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Add what is in the paste box |
 | <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> | Indent or outdent in the paste boxes (multi-line selections work as a block). Press <kbd>Esc</kbd> then <kbd>Tab</kbd> to move on to the next control |
@@ -183,6 +187,7 @@ Type to filter, use the arrow keys to move, and press Enter to run. The list cha
 - Show keyboard shortcuts
 - Install Dev Toolkit as an app (Chrome and Edge, when the browser offers it)
 - Star Dev Toolkit on GitHub
+- **Code tab only:** Add code from a screenshot (OCR)
 
 **On a Viewer tab**
 
@@ -217,11 +222,49 @@ Open them with the gear icon, <kbd>Ctrl</kbd>+<kbd>,</kbd>, or the palette. Chan
 
 ---
 
+## Reading code from screenshots
+
+The Code tab can turn a screenshot of code into text, entirely in your browser. The image is never uploaded.
+
+**How to use it**
+
+1. Take a screenshot of just the code (on Windows, <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> lets you select the area).
+2. On the **Code Viewer** tab, paste it (<kbd>Ctrl</kbd>+<kbd>V</kbd>), drop it on the paste box, or press <kbd>Ctrl</kbd>+<kbd>K</kbd> and run **Add code from a screenshot (OCR)**. Choosing an image with <kbd>Ctrl</kbd>+<kbd>O</kbd> also works.
+3. Check the text on the right, fix anything wrong, and press **Add as snippet** (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>). The language is detected as usual.
+
+**What it does for you**
+
+- **Enlarges small text.** It measures how tall the text is and enlarges the image (up to 4x) to the size the engine reads best.
+- **Splits big screenshots.** A tall image is cut into parts only in the gaps between lines, each part is read on its own, and the results are joined.
+- **Handles dark themes** by inverting them, and removes an IDE's **line-number column** (by its position, so numbers the engine misread as letters are removed too).
+- **Ignores cut-off lines.** A line that is sliced through at the top or bottom edge of the screenshot is skipped instead of being read as garbage (the dialog tells you when it does this).
+- **Fixes common mistakes** (you can turn this off). OCR engines are not built for code and reliably stumble on the same few things, so Dev Toolkit repairs those patterns: comment markers (`/**` and `*/` read as `[#=` or `=/`), the slashed or dotted zero read as `©`, template-string backticks, stray spaces (`numbers. reduce(`, `clearTimeout (x)`), ligature symbols such as `⇒` and `≡` (turned back into `=>` and `===`), and, in JavaScript-like code, the `=>` arrow read as `=`. Each rule only fires on a pattern that is almost never real code.
+- **Highlights the words it is unsure about**, so you know where to look. In my tests the highlighted words were about 11% of the text but contained about 93% of the mistakes. Each one is also outlined on the screenshot.
+- **Zoomable screenshot.** Zoom with the **+** / **-** buttons or <kbd>Ctrl</kbd> + mouse wheel, drag to move around, and **Fit** to see it all. **Next word to check** (<kbd>F8</kbd>) jumps to the next uncertain word and zooms the screenshot to it, so you can compare the two at a glance. Clicking a word in the text, or its box on the screenshot, does the same.
+- **Mark words as checked.** If a highlighted word is right, press **Looks right** (<kbd>F9</kbd>). It turns green, the counter goes down ("7 to check, 3 checked"), and you move on to the next one. Fixing a word (editing its line) removes its highlight.
+- **Rebuilds indentation and blank lines** from where each line sits in the image.
+- The dialog shows what it did (text size, enlargement, number of parts, confidence) and lets you change the enlargement, line-number handling and indentation, then **Read again**.
+- Several images queue up, and you can cancel at any time.
+
+**The first use downloads about 7 MB** (the OCR engine and its English model) from the jsDelivr CDN. The browser keeps it, so later uses are instant, and nothing is downloaded at all unless you use this feature.
+
+**How good is it?** On clean, computer-made screenshots it gets roughly 98-99% of characters right, even for text only 9 px tall, for full-HD and 4K screenshots, and with line numbers. Blurry or heavily compressed images do worse (about 97% in testing). That is still an occasional wrong character, so **read through the result, starting with the highlighted words**. Typical remaining mistakes are `0` read as `8` or `6`, a dropped `;` at the end of a line, and `===` read as `==`.
+
+**Limits**
+
+- **Crop to the code first.** Sidebars, tab bars and status bars in the screenshot are read as text too, and there is no crop tool yet.
+- **Ligature fonts** (which draw `=>` as a single arrow and `===` as three bars) and **italic comments** are harder to read. If you can, turn ligatures off in your editor before taking the screenshot.
+- English text only, and one column of **monospace** code (indentation is rebuilt from character widths).
+- Photos of a screen, handwriting and tables are not what it is built for.
+- It runs on your device, so a large screenshot can take a few seconds.
+
+---
+
 ## Your data: privacy, storage and backups
 
 **Your files never leave your browser.** Dev Toolkit has no server, no account, no analytics and no tracking. Parsing, diffing and rendering all happen on your device.
 
-Two libraries are loaded from public CDNs when the page opens, so those two hosts can see your IP address like any website you visit: the Monaco editor (jsDelivr) and the Excel reader SheetJS (cdnjs). Your data is never sent to them.
+Two libraries are loaded from public CDNs when the page opens, so those two hosts can see your IP address like any website you visit: the Monaco editor (jsDelivr) and the Excel reader SheetJS (cdnjs). Your data is never sent to them. The OCR engine (about 7 MB) is only fetched from jsDelivr the first time you use OCR, and the screenshot itself never leaves your device.
 
 **Saved automatically.** Snippets, JSON entries and tables you add are stored in your browser's **IndexedDB** (database `dev_toolkit_v1`), one record per item, so saving is fast and large files are fine. Settings and a few small preferences are in `localStorage` (`dev_toolkit_settings_v1`, `dev_toolkit_last_tab_v1`, and layout choices).
 
@@ -323,6 +366,7 @@ devtools/
 - **Best in Chrome and Edge** (desktop): that is what it is developed and tested in. Firefox and Safari work as normal websites but have had less testing.
 - **Needs an internet connection to load.** Nothing is cached for offline use, and Monaco and SheetJS come from CDNs. Once the page has loaded, it keeps working until you reload.
 - **Very large inputs are slow.** The table viewer draws every row, so sheets with tens of thousands of rows take a while and use a lot of memory (about 2 seconds for 20,000 rows in testing). Very large code files render at roughly a second per megabyte.
+- **OCR is not perfect** and is limited to English, monospace code in a screenshot cropped to the code (see [above](#reading-code-from-screenshots)).
 - <kbd>Ctrl</kbd>+number may be reserved by some browsers. Use the palette or the tabs in that case.
 - <kbd>Ctrl</kbd>+<kbd>O</kbd> is taken over for uploading on this page, replacing the browser's own "open file".
 
@@ -361,9 +405,15 @@ Saved data is tied to the browser profile and the site address. Check that you a
 </details>
 
 <details>
+<summary><b>The OCR result has mistakes.</b></summary>
+
+That is expected: OCR engines are not built for code, so `0`/`8`, `l`/`1` and punctuation get mixed up now and then. Use a sharper or larger screenshot, crop to just the code, try a different **Enlarge** setting and press **Read again**, and always review the text before adding it.
+</details>
+
+<details>
 <summary><b>Does it work offline?</b></summary>
 
-Not yet. The page needs a connection to load (and Monaco and SheetJS come from CDNs). After it has loaded, it keeps working until you reload. Bundling everything for full offline use is on the [ideas](#ideas) list.
+Not yet. The page needs a connection to load (and Monaco and SheetJS come from CDNs, and OCR downloads its engine on first use). After it has loaded, it keeps working until you reload. Bundling everything for full offline use is on the [ideas](#ideas) list.
 </details>
 
 ---
@@ -372,7 +422,7 @@ Not yet. The page needs a connection to load (and Monaco and SheetJS come from C
 
 Not promises, just things that would fit:
 
-- Paste or drop a **screenshot of code** and turn it into text (OCR, in the browser)
+- OCR for the JSON/XML tab, a crop tool for screenshots, and more languages
 - Bundle Monaco and SheetJS so the app works fully **offline**
 - JSONPath queries, JSON ↔ YAML/CSV conversion, and TypeScript type generation
 - Shareable links for small snippets
@@ -396,6 +446,7 @@ Issues and pull requests are welcome, whether it is a bug report, a small fix or
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) 0.45.0 | Code editing (loaded from jsDelivr) | MIT |
 | [SheetJS Community Edition](https://sheetjs.com/) 0.18.5 | Reading Excel files (loaded from cdnjs) | Apache-2.0 |
 | [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), [Fira Code](https://github.com/tonsky/FiraCode), [Source Code Pro](https://github.com/adobe-fonts/source-code-pro), [IBM Plex Mono](https://github.com/IBM/plex) | Included fonts, in [`fonts/`](fonts) | SIL Open Font License 1.1 (see the license files there) |
+| [Tesseract.js](https://github.com/naptha/tesseract.js) 7.0.0, tesseract.js-core and the English language data | Reading text from screenshots (loaded from jsDelivr only when OCR is used) | Apache-2.0 |
 | [Octicons](https://github.com/primer/octicons) | The GitHub mark in the top bar | MIT |
 
 ## License
