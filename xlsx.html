@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CSV/XLSX Viewer</title>
+<meta name="description" content="View, filter, edit and compare CSV, TSV, JSON and XLSX files as tables. Runs locally in your browser.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script>
 (function () {
     try {
@@ -17,9 +21,407 @@
             var saved = localStorage.getItem('sheet_viewer_theme_v1');
             if (saved === 'light' || saved === 'dark') theme = saved;
         }
-        if (theme) document.documentElement.setAttribute('data-theme', theme);
+        if (!theme) theme = (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
     } catch (e) {}
 })();
+</script>
+<script>
+/* ===== Dev Toolkit storage: IndexedDB, with automatic migration from localStorage =====
+   - One record per snippet/file, so saving one edit never rewrites everything.
+   - Writes are debounced and asynchronous, and only changed records are written.
+   - Failures are shown to the user instead of only being logged to the console. */
+(function () {
+    'use strict';
+    var DB_NAME = 'dev_toolkit_v1', DB_VERSION = 1, TOOLS = ['code', 'json', 'xlsx'];
+    var dbPromise = null, suspended = false, trackers = [], toastEl = null;
+
+    function openDB() {
+        if (dbPromise) return dbPromise;
+        dbPromise = new Promise(function (resolve) {
+            if (!window.indexedDB) { resolve(null); return; }
+            var req;
+            try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch (e) { resolve(null); return; }
+            req.onupgradeneeded = function () {
+                var db = req.result;
+                TOOLS.forEach(function (t) {
+                    if (!db.objectStoreNames.contains('entries_' + t)) db.createObjectStore('entries_' + t, { keyPath: 'id' });
+                });
+                if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+            };
+            req.onsuccess = function () {
+                var db = req.result;
+                db.onversionchange = function () { db.close(); dbPromise = null; };
+                resolve(db);
+            };
+            req.onerror = function () { resolve(null); };
+        });
+        return dbPromise;
+    }
+    function reqP(req) {
+        return new Promise(function (res, rej) { req.onsuccess = function () { res(req.result); }; req.onerror = function () { rej(req.error); }; });
+    }
+    function txDone(tx) {
+        return new Promise(function (res, rej) {
+            tx.oncomplete = function () { res(); };
+            tx.onerror = function () { rej(tx.error); };
+            tx.onabort = function () { rej(tx.error || new Error('Transaction aborted')); };
+        });
+    }
+
+    // Cheap change detection: identical references (unchanged strings/arrays) short-circuit, so a
+    // 20 MB snippet that wasn't edited costs nothing to "compare". Extra keys in `a` are ignored.
+    function eq(a, b, depth) {
+        if (a === b) return true;
+        if (depth <= 0 || a == null || b == null || typeof a !== 'object' || typeof b !== 'object') return false;
+        if (Array.isArray(a) !== Array.isArray(b)) return false;
+        if (Array.isArray(a)) {
+            if (a.length !== b.length) return false;
+            for (var i = 0; i < a.length; i++) if (!eq(a[i], b[i], depth - 1)) return false;
+            return true;
+        }
+        for (var k in b) if (Object.prototype.hasOwnProperty.call(b, k) && !eq(a[k], b[k], depth - 1)) return false;
+        return true;
+    }
+
+    // Restores entries a few at a time and yields between batches, so a page with several big files stays
+    // responsive while they appear (rendering a large file can take a while, as it always did).
+    function eachProgressive(items, fn) {
+        return new Promise(function (resolve) {
+            var i = 0;
+            (function step() {
+                var t0 = performance.now();
+                while (i < items.length) {
+                    try { fn(items[i]); } catch (e) { console.error('[Dev Toolkit] could not restore an entry:', e); }
+                    i++;
+                    if (performance.now() - t0 > 12) break;
+                }
+                if (i < items.length) setTimeout(step, 0); else resolve();
+            })();
+        });
+    }
+
+    /* ---------- Visible save-failure notice ---------- */
+    function injectToastStyle() {
+        if (document.getElementById('dt-toast-style')) return;
+        var st = document.createElement('style');
+        st.id = 'dt-toast-style';
+        st.textContent =
+            '#dt-toast{position:fixed;left:12px;bottom:12px;max-width:min(520px,calc(100vw - 24px));z-index:100000;display:flex;gap:12px;align-items:flex-start;' +
+            'padding:10px 12px;border-radius:6px;background:#5a1e1e;color:#fff;border:1px solid #c0504d;box-shadow:0 6px 24px rgba(0,0,0,.45);' +
+            'font:12px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}' +
+            '#dt-toast b{display:block;margin-bottom:2px;font-size:12.5px}' +
+            '#dt-toast .dt-toast-actions{display:flex;flex-direction:column;gap:6px;flex:0 0 auto}' +
+            '#dt-toast button{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:4px;padding:3px 10px;font:inherit;cursor:pointer;white-space:nowrap}' +
+            '#dt-toast button:hover{background:rgba(255,255,255,.26)}';
+        (document.head || document.documentElement).appendChild(st);
+    }
+    function toastButton(label, fn) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = label; b.addEventListener('click', fn);
+        return b;
+    }
+    function hideToast() { if (toastEl && toastEl.parentNode) toastEl.parentNode.removeChild(toastEl); }
+    function showToast(title, msg, allowExport) {
+        if (!document.body) return;
+        injectToastStyle();
+        if (!toastEl) { toastEl = document.createElement('div'); toastEl.id = 'dt-toast'; toastEl.setAttribute('role', 'alert'); }
+        toastEl.innerHTML = '';
+        var box = document.createElement('div'), b = document.createElement('b'), p = document.createElement('span');
+        b.textContent = title; p.textContent = msg;
+        box.appendChild(b); box.appendChild(p);
+        var actions = document.createElement('div');
+        actions.className = 'dt-toast-actions';
+        if (allowExport && typeof window.exportLocalStorageBackup === 'function') {
+            actions.appendChild(toastButton('Export backup', function () { window.exportLocalStorageBackup(); }));
+        }
+        actions.appendChild(toastButton('Dismiss', hideToast));
+        toastEl.appendChild(box); toastEl.appendChild(actions);
+        if (!toastEl.parentNode) document.body.appendChild(toastEl);
+    }
+    function describe(err, kind) {
+        var name = (err && err.name) || '', text = (err && err.message) || '';
+        if (kind === 'open') return { title: 'Saving isn’t available', msg: 'This browser is blocking site storage (private mode or a privacy setting), so your work won’t be kept after you close this tab.', exp: false };
+        if (name === 'QuotaExceededError' || /quota/i.test(text)) return { title: 'Browser storage is full', msg: 'Your latest changes aren’t saved. Remove some large files or export a backup, then try again.', exp: true };
+        return { title: 'Couldn’t save your changes', msg: 'Your work is still on screen but may be lost if you close this tab. Export a backup to be safe (' + (name || 'error') + ').', exp: true };
+    }
+
+    /* ---------- Per-tool tracker ---------- */
+    function tool(name, cfg) {
+        var store = 'entries_' + name, orderKey = 'order:' + name;
+        var persisted = new Map(), persistedOrder = null;
+        var ready = false, timer = null, chain = Promise.resolve(), pendingBeforeReady = false, failing = false;
+
+        function fail(err, kind) {
+            console.warn('[Dev Toolkit] storage ' + (kind || 'error') + ':', err);
+            var d = describe(err, kind);
+            failing = true;
+            showToast(d.title, d.msg, d.exp);
+        }
+        function ok() { if (failing) { failing = false; hideToast(); } }
+        function markReady() {
+            // Saves are held back until every stored entry is back in memory; otherwise a save that runs
+            // half-way through loading would look like "the user deleted the rest".
+            ready = true;
+            if (pendingBeforeReady) { pendingBeforeReady = false; schedule(250); }
+        }
+
+        function migrateLegacy(db) {
+            var raw = null;
+            try { raw = localStorage.getItem(cfg.legacyKey); } catch (e) {}
+            if (!raw) return Promise.resolve();
+            var items;
+            try { items = JSON.parse(raw); } catch (e) { return Promise.resolve(); }
+            if (!Array.isArray(items)) return Promise.resolve();
+            items = items.filter(function (it) { return it && it.id != null; });
+            var tx = db.transaction([store, 'meta'], 'readwrite');
+            var os = tx.objectStore(store);
+            os.clear();   // a legacy key present at load time is either the old data or a freshly imported old backup: it wins
+            items.forEach(function (it) { os.put(it); });
+            tx.objectStore('meta').put({ key: orderKey, ids: items.map(function (it) { return it.id; }) });
+            return txDone(tx).then(function () {
+                try { localStorage.removeItem(cfg.legacyKey); } catch (e) {}
+            });
+        }
+
+        // load(addItem): restores every stored entry by calling addItem(record); resolves once all are back.
+        // Without a callback it just resolves with the records.
+        function load(addItem) {
+            return openDB().then(function (db) {
+                if (!db) { fail(new Error('IndexedDB unavailable'), 'open'); markReady(); return []; }
+                return migrateLegacy(db).catch(function (e) { console.warn('[Dev Toolkit] legacy migration failed:', e); }).then(function () {
+                    var tx = db.transaction([store, 'meta'], 'readonly');
+                    return Promise.all([reqP(tx.objectStore(store).getAll()), reqP(tx.objectStore('meta').get(orderKey))]);
+                }).then(function (res) {
+                    var all = res[0] || [], meta = res[1], byId = new Map(), out = [];
+                    var ids = (meta && Array.isArray(meta.ids)) ? meta.ids : [];
+                    all.forEach(function (r) { byId.set(r.id, r); });
+                    ids.forEach(function (id) { if (byId.has(id)) { out.push(byId.get(id)); byId.delete(id); } });
+                    byId.forEach(function (r) { out.push(r); });   // records written by another tab and not yet in the order list
+                    out.forEach(function (r) { persisted.set(r.id, r); });
+                    persistedOrder = ids.slice();
+                    if (typeof addItem !== 'function') { markReady(); return out; }
+                    return eachProgressive(out, addItem).then(function () { markReady(); return out; });
+                });
+            }).catch(function (err) { fail(err, 'load'); markReady(); return []; });
+        }
+
+        function flushNow() {
+            if (suspended) return;
+            return openDB().then(function (db) {
+                if (!db) { fail(new Error('IndexedDB unavailable'), 'open'); return; }
+                var recs = cfg.getEntries().map(cfg.toRecord), order = [], puts = [], next = new Map(), dels = [];
+                recs.forEach(function (r) {
+                    order.push(r.id);
+                    var prev = persisted.get(r.id);
+                    if (!prev || !eq(prev, r, 3)) puts.push(r);
+                    next.set(r.id, r);
+                });
+                persisted.forEach(function (_, id) { if (!next.has(id)) dels.push(id); });
+                var orderChanged = !persistedOrder || persistedOrder.length !== order.length ||
+                    order.some(function (id, i) { return id !== persistedOrder[i]; });
+                if (!puts.length && !dels.length && !orderChanged) { ok(); return; }
+                var tx = db.transaction([store, 'meta'], 'readwrite');
+                try {
+                    var os = tx.objectStore(store);
+                    puts.forEach(function (r) { os.put(r); });
+                    dels.forEach(function (id) { os.delete(id); });
+                    if (orderChanged) tx.objectStore('meta').put({ key: orderKey, ids: order });
+                } catch (e) { try { tx.abort(); } catch (e2) {} throw e; }
+                return txDone(tx).then(function () { persisted = next; persistedOrder = order; ok(); });
+            });
+        }
+        function run() { timer = null; chain = chain.then(flushNow).catch(function (err) { fail(err, 'write'); }); return chain; }
+        function schedule(ms) { clearTimeout(timer); timer = setTimeout(run, ms); }
+        function save() {
+            if (suspended) return;
+            if (!ready) { pendingBeforeReady = true; return; }
+            schedule(250);
+        }
+        function flush() { clearTimeout(timer); timer = null; return ready ? run() : Promise.resolve(); }
+
+        var api = { name: name, load: load, save: save, flush: flush };
+        trackers.push(api);
+        return api;
+    }
+
+    /* ---------- Backup helpers (used by each tool's export / import buttons) ---------- */
+    function flushAll() { return Promise.all(trackers.map(function (t) { return t.flush(); })); }
+    function exportAll() {
+        return openDB().then(function (db) {
+            var out = {};
+            if (!db) return out;
+            var tx = db.transaction(TOOLS.map(function (t) { return 'entries_' + t; }).concat('meta'), 'readonly');
+            var reqs = TOOLS.map(function (t) { return reqP(tx.objectStore('entries_' + t).getAll()); })
+                .concat(TOOLS.map(function (t) { return reqP(tx.objectStore('meta').get('order:' + t)); }));
+            return Promise.all(reqs).then(function (res) {
+                TOOLS.forEach(function (t, i) {
+                    var entries = res[i] || [], meta = res[TOOLS.length + i], byId = {}, ordered = [];
+                    entries.forEach(function (e) { byId[e.id] = e; });
+                    ((meta && meta.ids) || []).forEach(function (id) { if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
+                    Object.keys(byId).forEach(function (id) { ordered.push(byId[id]); });
+                    out[t] = ordered;
+                });
+                return out;
+            });
+        });
+    }
+    function importAll(data) {
+        suspended = true;   // stop this page from writing over the imported data before it reloads
+        return openDB().then(function (db) {
+            if (!db) throw new Error('Browser storage is unavailable.');
+            var names = TOOLS.filter(function (t) { return data && Array.isArray(data[t]); });
+            if (!names.length) return;
+            var tx = db.transaction(names.map(function (t) { return 'entries_' + t; }).concat('meta'), 'readwrite');
+            names.forEach(function (t) {
+                var os = tx.objectStore('entries_' + t), ids = [];
+                os.clear();
+                data[t].forEach(function (rec) { if (rec && rec.id != null) { os.put(rec); ids.push(rec.id); } });
+                tx.objectStore('meta').put({ key: 'order:' + t, ids: ids });
+            });
+            return txDone(tx);
+        }).catch(function (err) { suspended = false; throw err; });
+    }
+
+    // Push pending edits out when the tab is hidden or closed.
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') trackers.forEach(function (t) { t.flush(); }); });
+    window.addEventListener('pagehide', function () { trackers.forEach(function (t) { t.flush(); }); });
+
+    window.DevStore = { tool: tool, flushAll: flushAll, exportAll: exportAll, importAll: importAll };
+})();
+
+</script>
+<script>
+/* ===== Dev Toolkit runtime: settings from the shell, shortcut forwarding ===== */
+(function () {
+    'use strict';
+    var TOOL = 'xlsx';
+    var KEY = 'dev_toolkit_settings_v1';
+    var root = document.documentElement;
+    var embedded = window.parent !== window;
+    // Pages opened straight from disk (file://) have no usable origin, so origin checks would drop every message.
+    var IS_FILE = location.protocol === 'file:' || location.origin === 'null';
+    var TARGET = IS_FILE ? '*' : location.origin;
+    var isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+    var DT = window.DT = { tool: TOOL, embedded: embedded, settings: {}, _l: [] };
+
+    function setVar(name, val) {
+        if (val === undefined || val === null || val === '') root.style.removeProperty(name);
+        else root.style.setProperty(name, String(val));
+    }
+    DT.sec = function () { return (DT.settings && DT.settings[TOOL]) || {}; };
+    DT.motionOk = function () {
+        var m = DT.settings && DT.settings.general && DT.settings.general.motion;
+        if (m === 'reduce') return false;
+        if (m === 'full') return true;
+        return !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    };
+    DT.post = function (msg) { if (!embedded) return; try { window.parent.postMessage(msg, TARGET); } catch (e) {} };
+    DT.onChange = function (fn) { DT._l.push(fn); };
+    // After importing a backup every tool has to re-read storage.
+    DT.reloadAll = function () {
+        if (embedded) { DT.post({ __devToolkit: 'reloadAll' }); setTimeout(function () { location.reload(); }, 600); }
+        else location.reload();
+    };
+
+    
+
+    function apply(s) {
+        DT.settings = (s && typeof s === 'object') ? s : {};
+        var g = DT.settings.general || {}, t = DT.sec();
+        root.setAttribute('data-hc', g.contrast === 'high' ? '1' : '0');
+        if (g.motion === 'reduce' || g.motion === 'full') root.setAttribute('data-motion', g.motion);
+        else root.removeAttribute('data-motion');
+        setVar('--font-mono', t.fontStack);
+        setVar('--dt-fs', t.size ? t.size + 'px' : '');
+        var pads = { compact: ['2px', '6px'], normal: ['4px', '8px'], relaxed: ['7px', '10px'] }[t.density];
+        setVar('--dt-pad-y', pads ? pads[0] : '');
+        setVar('--dt-pad-x', pads ? pads[1] : '');
+        DT._l.forEach(function (fn) { try { fn(DT.settings); } catch (e) { console.error(e); } });
+    }
+
+    var initial = null;
+    try { initial = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+    apply(initial);
+
+    window.addEventListener('message', function (e) {
+        if (e.source !== window.parent) return;
+        if (!IS_FILE && e.origin !== location.origin) return;
+        var d = e.data;
+        if (!d || typeof d !== 'object') return;
+        if (d.__devToolkitSettings) apply(d.settings);
+        else if (d.__devToolkitCmd === 'export' && typeof window.exportLocalStorageBackup === 'function') window.exportLocalStorageBackup();
+    });
+
+    /* ---------- Tab inserts a tab in text boxes (instead of jumping to the next control) ----------
+       Esc then Tab still moves focus on, so keyboard users are never trapped. Multi-line selections are
+       indented / outdented as a block, and Shift+Tab outdents. Monaco handles its own Tab key. */
+    var tabEscape = false;
+    function replaceRange(ta, from, to, text) {
+        ta.setSelectionRange(from, to);
+        var ok = false;
+        try { ok = document.execCommand('insertText', false, text); } catch (err) {}   // keeps the undo stack intact
+        if (!ok) { ta.setRangeText(text, from, to, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
+    function reindent(ta, outdent) {
+        var v = ta.value, s = ta.selectionStart, en = ta.selectionEnd;
+        var ls = v.lastIndexOf('\n', s - 1) + 1;
+        var end = en;
+        if (end > s && v.charAt(end - 1) === '\n') end--;   // a selection that ends right after a newline doesn't include the next line
+        var first = 0, total = 0, changed = false;
+        var out = v.slice(ls, end).split('\n').map(function (ln, i) {
+            if (!outdent) { if (i === 0) first = 1; total += 1; changed = true; return '\t' + ln; }
+            var m = ln.match(/^(\t| {1,4})/);
+            if (!m) return ln;
+            if (i === 0) first = -m[0].length;
+            total -= m[0].length; changed = true;
+            return ln.slice(m[0].length);
+        });
+        if (!changed) return false;
+        replaceRange(ta, ls, end, out.join('\n'));
+        ta.setSelectionRange(Math.max(ls, s + first), Math.max(ls, en + total));
+        return true;
+    }
+    document.addEventListener('keydown', function (e) {
+        var ta = e.target;
+        if (!ta || ta.tagName !== 'TEXTAREA' || ta.readOnly || ta.disabled) return;
+        if (ta.closest && ta.closest('.monaco-editor')) return;
+        if (e.key === 'Escape') { tabEscape = true; return; }
+        if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) { if (e.key !== 'Shift') tabEscape = false; return; }
+        if (tabEscape) { tabEscape = false; return; }
+        var multi = ta.value.slice(ta.selectionStart, ta.selectionEnd).indexOf('\n') >= 0;
+        if (e.shiftKey) {
+            if (reindent(ta, true)) e.preventDefault();   // nothing to outdent → Shift+Tab keeps its normal "previous control" job
+        } else if (multi) {
+            e.preventDefault(); reindent(ta, false);
+        } else {
+            e.preventDefault(); replaceRange(ta, ta.selectionStart, ta.selectionEnd, '\t');
+        }
+    }, true);
+    document.addEventListener('focusout', function () { tabEscape = false; }, true);
+
+    // Tell the shell this page understands its messages (it warns if an old, cached copy is being used).
+    DT.post({ __devToolkit: 'hello', tool: TOOL, version: 2 });
+
+    // Keys pressed while a tool has focus never reach the shell, so shortcut keys are forwarded to it.
+    if (embedded) {
+        window.addEventListener('keydown', function (e) {
+            var primary = isMac ? e.metaKey : e.ctrlKey;
+            if (!primary || e.altKey) return;
+            var c = e.code || '', k = (e.key || '').toLowerCase();
+            var inMonaco = !!(e.target && e.target.closest && e.target.closest('.monaco-editor'));
+            var hit = false;
+            if (c === 'KeyK' || k === 'k') hit = !inMonaco;                 // Monaco uses Ctrl+K as a chord prefix
+            else if ((c === 'KeyP' || k === 'p') && e.shiftKey) hit = inMonaco;   // palette fallback while typing in Monaco
+            else if (!e.shiftKey && (c === 'Comma' || k === ',')) hit = true;
+            else if (!e.shiftKey && /^(Digit|Numpad)[123]$/.test(c)) hit = true;
+            if (!hit) return;
+            e.preventDefault(); e.stopPropagation();
+            DT.post({ __devToolkit: 'key', key: e.key, code: c, ctrl: e.ctrlKey, meta: e.metaKey, alt: e.altKey, shift: e.shiftKey });
+        }, true);
+    }
+})();
+
 </script>
 <style>
     :root {
@@ -173,12 +575,12 @@
     .sheet-tab:hover { color: var(--text-bright); }
 
     .content { flex-grow: 1; overflow: auto; background: var(--bg); }
-    .data-table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 11.5px; }
-    .data-table th, .data-table td { border-right: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); padding: 4px 8px; text-align: left; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; unicode-bidi: plaintext; }
-    .data-table thead th { position: sticky; top: 0; background: var(--bg-elevated); color: var(--text-bright); font-weight: 700; cursor: pointer; user-select: none; z-index: 2; font-family: var(--font-ui); font-size: 10.5px; letter-spacing: 0.2px; }
+    .data-table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: var(--dt-fs, 11.5px); }
+    .data-table th, .data-table td { border-right: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); padding: var(--dt-pad-y, 4px) var(--dt-pad-x, 8px); text-align: left; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; unicode-bidi: plaintext; }
+    .data-table thead th { position: sticky; top: 0; background: var(--bg-elevated); color: var(--text-bright); font-weight: 700; cursor: pointer; user-select: none; z-index: 2; font-family: var(--font-ui); font-size: calc(var(--dt-fs, 11.5px) - 1px); letter-spacing: 0.2px; }
     .data-table thead th:hover { background: #38383c; }
     .data-table thead th .sort-arrow { opacity: 0.6; margin-left: 4px; font-size: 9px; }
-    .data-table .rownum-header, .data-table td.rownum { position: sticky; left: 0; background: var(--bg-elevated); color: var(--text-dim); text-align: right; font-size: 10px; z-index: 1; user-select: none; }
+    .data-table .rownum-header, .data-table td.rownum { position: sticky; left: 0; background: var(--bg-elevated); color: var(--text-dim); text-align: right; font-size: calc(var(--dt-fs, 11.5px) - 1.5px); z-index: 1; user-select: none; }
     .data-table .rownum-header { z-index: 3; }
     .data-table tbody tr:hover td { background: var(--hover-bg); }
     .data-table tbody tr:hover td.rownum { background: #34383a; }
@@ -320,6 +722,42 @@
     }
     html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c1c1c1; }
     html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+
+    /* Included fonts (SIL Open Font License, see fonts/). A face is only downloaded if it is actually used. */
+    @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: local("JetBrains Mono"), local("JetBrainsMono-Regular"), url("fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+    @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: local("JetBrains Mono Bold"), local("JetBrainsMono-Bold"), url("fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+    @font-face { font-family: "Fira Code"; font-style: normal; font-weight: 400; font-display: swap; src: local("Fira Code"), local("FiraCode-Regular"), url("fonts/fira-code-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+    @font-face { font-family: "Fira Code"; font-style: normal; font-weight: 700; font-display: swap; src: local("Fira Code Bold"), local("FiraCode-Bold"), url("fonts/fira-code-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+    @font-face { font-family: "Source Code Pro"; font-style: normal; font-weight: 400; font-display: swap; src: local("Source Code Pro"), local("SourceCodePro-Regular"), url("fonts/source-code-pro-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+    @font-face { font-family: "Source Code Pro"; font-style: normal; font-weight: 700; font-display: swap; src: local("Source Code Pro Bold"), local("SourceCodePro-Bold"), url("fonts/source-code-pro-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+    @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: local("IBM Plex Mono"), local("IBMPlexMono"), url("fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+    @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 700; font-display: swap; src: local("IBM Plex Mono Bold"), local("IBMPlexMono-Bold"), url("fonts/ibm-plex-mono-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
+    /* Tab characters typed into text boxes use the configured width. */
+    textarea { tab-size: var(--dt-tab, 4); -moz-tab-size: var(--dt-tab, 4); }
+
+    /* ---------- Accessibility (driven by Dev Toolkit settings) ---------- */
+    @media (prefers-reduced-motion: reduce) {
+        html:not([data-motion="full"]) *, html:not([data-motion="full"]) *::before, html:not([data-motion="full"]) *::after {
+            animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+            transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+        }
+    }
+    html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-motion="reduce"] *::after {
+        animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+    }
+    html[data-hc="1"]:not([data-theme="light"]) {
+        --text: #ffffff; --text-dim: #d6d6d6; --text-bright: #ffffff;
+        --border: #9a9a9a; --border-soft: rgba(200,200,200,0.55);
+        --accent: #3db4ff; --accent-hover: #6cc6ff; --focus: #ffd54a;
+    }
+    html[data-hc="1"][data-theme="light"] {
+        --text: #000000; --text-dim: #2b2b2b; --text-bright: #000000;
+        --border: #4a4a4a; --border-soft: rgba(0,0,0,0.6);
+        --accent: #0a4f8a; --accent-hover: #083b66; --focus: #7a2e00;
+    }
+    html[data-hc="1"] :focus-visible { outline: 2px solid var(--focus) !important; outline-offset: 1px; }
 </style>
 </head>
 <body>
@@ -332,9 +770,6 @@
             </button>
             <button class="btn-global-icon" id="storageImportBtn" title="Import local storage from a file" onclick="document.getElementById('storageImportInput').click()">                
                 <svg viewBox="0 0 16 16"><path d="M8.75 1v6.63l1.94-1.94 1.06 1.06L8 10.5 4.25 6.75l1.06-1.06L7.25 7.63V1h1.5zM2 12h12v2.5H2V12z"/></svg>
-            </button>
-            <button class="btn-global-icon" id="themeToggleBtn" title="Toggle light / dark theme" onclick="toggleTheme()">
-                <span id="themeToggleIcon" style="display:flex"></span>
             </button>
             <input type="file" id="storageImportInput" accept=".json,application/json" style="display:none" onchange="importLocalStorageBackup(this)">
         </div>
@@ -492,68 +927,83 @@
     }
 
     function exportLocalStorageBackup() {
-        try {
-            const data = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                data[key] = localStorage.getItem(key);
-            }
-            const payload = {
-                __source: document.title || 'sheet-viewer',
-                __exportedAt: new Date().toISOString(),
-                localStorage: data
-            };
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const d = new Date();
-            const pad = n => String(n).padStart(2, '0');
-            const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `sheet-viewer-backup-${stamp}.json`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-            flashStorageIoButton('storageExportBtn');
-        } catch (err) {
-            alert('Failed to export local storage: ' + err.message);
+    const data = {};
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            data[key] = localStorage.getItem(key);
         }
-    }
+    } catch (e) {}
+    DevStore.flushAll().then(() => DevStore.exportAll()).then(idb => {
+        const payload = {
+            __source: document.title || 'sheet-viewer',
+            __exportedAt: new Date().toISOString(),
+            __format: 2,
+            localStorage: data,
+            indexedDB: idb
+        };
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sheet-viewer-backup-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        flashStorageIoButton('storageExportBtn');
+    }).catch(err => alert('Failed to export backup: ' + err.message));
+}
 
     function importLocalStorageBackup(fileInput) {
-        const file = fileInput.files && fileInput.files[0];
-        fileInput.value = '';
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const parsed = JSON.parse(reader.result);
-                const data = (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.localStorage && typeof parsed.localStorage === 'object')
-                    ? parsed.localStorage
-                    : parsed;
-                if (!data || typeof data !== 'object' || Array.isArray(data)) {
-                    throw new Error('That file does not look like a local storage backup.');
-                }
-                const keys = Object.keys(data);
-                if (keys.length === 0) {
-                    alert('That backup file has no saved data.');
-                    return;
-                }
-                const ok = confirm(`Import ${keys.length} saved item(s) from this backup?\n\nThis will overwrite any matching data already stored here, and the page will reload.`);
-                if (!ok) return;
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            const parsed = JSON.parse(reader.result);
+            const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+            if (!isObj(parsed)) throw new Error('That file does not look like a backup.');
+            const idb = isObj(parsed.indexedDB) ? Object.assign({}, parsed.indexedDB) : {};
+            const data = isObj(parsed.localStorage) ? Object.assign({}, parsed.localStorage) : (parsed.indexedDB ? {} : Object.assign({}, parsed));
+            // Backups made before the move to IndexedDB keep entries as JSON text under these keys.
+            const LEGACY = { code: 'code_viewer_entries_v1', json: 'json_viewer_entries_v1', xlsx: 'sheet_viewer_entries_v1' };
+            Object.keys(LEGACY).forEach(t => {
+                const raw = data[LEGACY[t]];
+                if (raw == null) return;
+                delete data[LEGACY[t]];
+                try {
+                    const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (Array.isArray(arr) && !Array.isArray(idb[t])) idb[t] = arr;
+                } catch (e) {}
+            });
+            const tools = ['code', 'json', 'xlsx'];
+            const keys = Object.keys(data);
+            const idbCount = tools.reduce((n, t) => n + (Array.isArray(idb[t]) ? idb[t].length : 0), 0);
+            if (keys.length === 0 && !tools.some(t => Array.isArray(idb[t]))) {
+                alert('That backup file has no saved data.');
+                return;
+            }
+            const ok = confirm(`Import ${keys.length + idbCount} saved item(s) from this backup?\n\nThis will overwrite any matching data already stored here, and the page will reload.`);
+            if (!ok) return;
+            DevStore.importAll(idb).then(() => {
                 keys.forEach(key => {
                     const value = data[key];
                     localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
                 });
-                location.reload();
-            } catch (err) {
-                alert('Failed to import backup: ' + err.message);
-            }
-        };
-        reader.onerror = () => alert('Failed to read the selected file.');
-        reader.readAsText(file);
-    }
+                DT.reloadAll();
+            }).catch(err => alert('Failed to import backup: ' + err.message));
+        } catch (err) {
+            alert('Failed to import backup: ' + err.message);
+        }
+    };
+    reader.onerror = () => alert('Failed to read the selected file.');
+    reader.readAsText(file);
+}
 
     /* =========================================================================
        State & constants
@@ -1125,6 +1575,8 @@
         return rows;
     }
 
+    function dtHeaderDefault() { return !(window.DT && DT.sec().header === false); }
+
     function makeSheet(name, allRows, hasHeader = true) {
         return { name, allRows, hasHeader, sortCol: null, sortDir: 1, filterQuery: '' };
     }
@@ -1132,39 +1584,27 @@
     /* =========================================================================
        Persistence
        ========================================================================= */
-    function saveEntriesToStorage() {
-        try {
-            const serializable = postedEntries.map(e => ({
-                id: e.id, name: e.name || '', type: e.type, timeStr: e.timeStr,
-                activeSheet: e.activeSheet,
-                sheets: e.sheets.map(s => ({ name: s.name, allRows: s.allRows, hasHeader: s.hasHeader }))
-            }));
-            const payload = JSON.stringify(serializable);
-            if (payload.length > 4_000_000) { localStorage.removeItem(STORAGE_KEY); return; } // too big to persist safely
-            localStorage.setItem(STORAGE_KEY, payload);
-        } catch (err) {
-            console.warn('Could not persist entries (storage full or unavailable):', err);
-        }
-    }
+    const dtStore = DevStore.tool('xlsx', {
+        legacyKey: STORAGE_KEY,
+        getEntries: () => postedEntries,
+        // activeSheet is deliberately not stored: it was never restored on load.
+        toRecord: e => ({
+            id: e.id, name: e.name || '', type: e.type, timeStr: e.timeStr,
+            sheets: e.sheets.map(s => ({ name: s.name, allRows: s.allRows, hasHeader: s.hasHeader }))
+        })
+    });
+    function saveEntriesToStorage() { dtStore.save(); }
 
     function loadEntriesFromStorage() {
-        try {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            if (!saved) return;
-            const items = JSON.parse(saved);
-            if (!Array.isArray(items)) return;
-            items.forEach(item => {
-                const sheets = item.sheets.map(s => makeSheet(s.name, s.allRows, s.hasHeader));
-                addEntry(item.name, item.type, sheets, item.timeStr, item.id, false);
-            });
-        } catch (err) {
-            console.warn('Failed to load entries from storage:', err);
-        }
+        return dtStore.load(item => {
+            const sheets = (item.sheets || []).map(s => makeSheet(s.name, s.allRows, s.hasHeader));
+            addEntry(item.name, item.type, sheets, item.timeStr, item.id, false);
+        }).catch(err => { console.warn('Failed to load entries from storage:', err); });
     }
 
     function clearAllEntries() {
         postedEntries = [];
-        localStorage.removeItem(STORAGE_KEY);
+        saveEntriesToStorage();
         renderAllEntries();
         renderCompareChips();
     }
@@ -1224,7 +1664,7 @@
                         const wb = XLSX.read(data, { type: 'array', cellDates: true });
                         const sheets = wb.SheetNames.map(sn => {
                             const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '', raw: true, blankrows: false });
-                            return makeSheet(sn, aoa.length ? aoa : [['']], true);
+                            return makeSheet(sn, aoa.length ? aoa : [['']], dtHeaderDefault());
                         });
                         addEntry(name, 'xlsx', sheets);
                     } catch (err) {
@@ -1251,7 +1691,7 @@
                     }
                     const delim = ext === 'tsv' ? '\t' : detectDelimiter(raw);
                     const rows = parseDelimited(raw, delim);
-                    addEntry(name, delim === '\t' ? 'tsv' : 'csv', [makeSheet('Sheet1', rows, true)]);
+                    addEntry(name, delim === '\t' ? 'tsv' : 'csv', [makeSheet('Sheet1', rows, dtHeaderDefault())]);
                 };
                 reader.onerror = () => alert('Failed to read file: ' + file.name);
                 reader.readAsText(file);
@@ -1285,7 +1725,7 @@
         const delim = detectDelimiter(raw);
         const rows = parseDelimited(raw, delim);
         const type = delim === '\t' ? 'tsv' : 'csv';
-        addEntry('', type, [makeSheet('Sheet1', rows, true)]);
+        addEntry('', type, [makeSheet('Sheet1', rows, dtHeaderDefault())]);
         box.value = '';
     }
 
@@ -2918,6 +3358,7 @@
     }
 
     window.toggleTheme = function () {
+        if (window.DT && DT.embedded) { DT.post({ __devToolkit: 'themeToggle' }); return; }
         var current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
         var next = current === 'light' ? 'dark' : 'light';
         applyTheme(next);
