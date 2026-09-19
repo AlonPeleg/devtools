@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Dev Toolkit</title>
+  <rect width="64" height="64" rx="14" fill="#1e1e1e"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="12.5" fill="none" stroke="#3c3c3c" stroke-width="3"/>
+  <path d="M17 20 L33 32 L17 44" fill="none" stroke="#3ba7ff" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="37" y="41" width="16" height="7" rx="2" fill="#ffffff"/>
+</svg>
