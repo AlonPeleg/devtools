@@ -351,6 +351,10 @@
         if (!d || typeof d !== 'object') return;
         if (d.__devToolkitSettings) apply(d.settings);
         else if (d.__devToolkitCmd === 'export' && typeof window.exportLocalStorageBackup === 'function') window.exportLocalStorageBackup();
+        else if (d.__devToolkitCmd === 'focusInput') {
+            var ta = document.querySelector('#viewer-pane.active textarea');
+            if (ta && ta.offsetParent !== null) { try { ta.focus(); } catch (err) {} }
+        }
     });
 
     /* ---------- Tab inserts a tab in text boxes (instead of jumping to the next control) ----------
