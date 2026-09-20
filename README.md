@@ -197,6 +197,7 @@ Type to filter, use the arrow keys to move, and press Enter to run. The list cha
 
 - Show the Compare tab
 - Toggle view: list / grid
+- **Compare button** (left of the view toggle on every tool): press it, click two entries, and you land on the Compare tab with both loaded and compared. Esc cancels.
 - Font size: larger / smaller / reset
 - **Add sample** and **Add sample (long)**: a ready-made snippet, JSON object or table to play with. The long versions are about 500 lines of code, 400 JSON records, and 1,000 spreadsheet rows
 - **Clear all** (asks for confirmation first)

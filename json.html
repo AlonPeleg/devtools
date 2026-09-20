@@ -780,6 +780,14 @@
     .btn { display: inline-flex; align-items: center; gap: 6px; }
     svg.ic { width: 14px; height: 14px; flex-shrink: 0; display: block; }
     .btn-iconbtn { padding: 4px 7px; justify-content: center; }
+    .btn-compare-pick { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: 12px; }
+    .btn-compare-pick .ic { width: 14px; height: 14px; }
+    .btn-compare-pick[aria-pressed="true"] { background: var(--vscode-button-background); color: var(--vscode-button-foreground); outline: 1px solid var(--vscode-focusBorder); }
+    .btn-compare-pick:disabled { opacity: .5; cursor: not-allowed; }
+    .compare-pick-hint { font-size: 12px; color: var(--vscode-focusBorder); margin: 4px 0; }
+    #container.compare-pick-mode .entry { cursor: pointer; }
+    #container.compare-pick-mode .entry:hover { outline: 1px solid var(--vscode-focusBorder); }
+    #container.compare-pick-mode .entry.compare-picked { outline: 2px solid var(--vscode-focusBorder); background: color-mix(in srgb, var(--vscode-focusBorder) 12%, var(--vscode-editor-background)); }
     .split-toggle { display: flex; padding: 0; border: none; border-radius: 2px; overflow: hidden; background: var(--vscode-button-secondaryBackground); cursor: pointer; font-family: inherit; }
     .split-toggle-half { padding: 4px 8px; display: flex; align-items: center; color: var(--vscode-button-secondaryForeground); opacity: 0.6; }
     .split-toggle:hover .split-toggle-half:not(.active) { opacity: 0.9; background: var(--vscode-toolbar-hoverBackground); }
@@ -818,6 +826,7 @@
             <div class="toolbar">
                 <h3 style="margin:0; font-size:14px;">JSON/XML Viewer</h3>
                 <div class="btn-group">
+                    <button id="compareStartBtn" class="btn btn-secondary btn-compare-pick" type="button" aria-pressed="false" title="Pick two entries to compare" onclick="toggleComparePick()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="5" height="11" rx="0.8"/><rect x="9.5" y="2.5" width="5" height="11" rx="0.8"/></svg>Compare</button>
                     <button id="viewModeBtn" class="split-toggle" title="Line view — click for Grid view" onclick="toggleViewerLayout()">
                         <span class="split-toggle-half active" id="viewHalfStack"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2.5" width="12" height="2.8" rx="0.6"/><rect x="2" y="6.6" width="12" height="2.8" rx="0.6"/><rect x="2" y="10.7" width="12" height="2.8" rx="0.6"/></svg></span>
                         <span class="split-toggle-half" id="viewHalfGrid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="5" height="5" rx="0.8"/><rect x="9" y="2" width="5" height="5" rx="0.8"/><rect x="2" y="9" width="5" height="5" rx="0.8"/><rect x="9" y="9" width="5" height="5" rx="0.8"/></svg></span>
@@ -835,6 +844,7 @@
                     <button class="btn btn-secondary btn-iconbtn" title="Clear All" onclick="clearAllEntries()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
+            <div class="compare-pick-hint" id="comparePickHint" role="status" hidden>Click two entries to compare &mdash; Esc to cancel</div>
             <div class="drop-zone" id="jsonPasteZone">
                 <textarea class="input-box" id="jsonInput" rows="3" placeholder="Paste JSON or XML here, or drop a file. Ctrl+Enter to add." autofocus></textarea>
                 <div class="drop-zone-footer">
@@ -1129,7 +1139,60 @@
             clearEditorCompareResults();
         }
 
+        let comparePickMode = false;
+        let comparePickFirst = null;
+        function comparePickEntryCount() { return document.querySelectorAll('#container > .entry').length; }
+        function updateComparePickBtn() {
+            const btn = document.getElementById('compareStartBtn');
+            if (!btn) return;
+            const few = comparePickEntryCount() < 2;
+            btn.disabled = few;
+            btn.title = few ? 'Add at least two entries to compare' : (comparePickMode ? 'Cancel compare selection' : 'Pick two entries to compare');
+            btn.setAttribute('aria-pressed', comparePickMode ? 'true' : 'false');
+            const hint = document.getElementById('comparePickHint');
+            if (hint) hint.hidden = !comparePickMode;
+        }
+        function comparePickClear() {
+            comparePickFirst = null;
+            document.querySelectorAll('#container > .entry.compare-picked').forEach(e => e.classList.remove('compare-picked'));
+        }
+        function setComparePick(on) {
+            on = !!on && comparePickEntryCount() >= 2;
+            comparePickMode = on;
+            comparePickClear();
+            const c = document.getElementById('container');
+            if (c) c.classList.toggle('compare-pick-mode', on);
+            updateComparePickBtn();
+        }
+        function toggleComparePick() { setComparePick(!comparePickMode); }
+        function comparePickHandler(ev) {
+            if (!comparePickMode) return;
+            const card = ev.target.closest && ev.target.closest('#container > .entry');
+            if (!card) return;
+            ev.preventDefault(); ev.stopPropagation();
+            if (ev.type !== 'click') return;
+            if (comparePickFirst === card) { comparePickClear(); return; }
+            if (!comparePickFirst) { comparePickFirst = card; card.classList.add('compare-picked'); return; }
+            const a = comparePickFirst.dataset.entryId, b = card.dataset.entryId;
+            setComparePick(false);
+            const link = document.querySelector('.tab-link[onclick*="editor-pane"]');
+            if (link) link.click();
+            window.DTAPI.compareLoad(a, 'A');
+            window.DTAPI.compareLoad(b, 'B');
+            window.DTAPI.compareRun();
+        }
+        (function () {
+            const c = document.getElementById('container');
+            ['click', 'mousedown', 'mouseup', 'dblclick', 'auxclick'].forEach(t => c.addEventListener(t, comparePickHandler, true));
+            new MutationObserver(function () {
+                if (comparePickMode) setComparePick(false); else updateComparePickBtn();
+            }).observe(c, { childList: true });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && comparePickMode) { setComparePick(false); } });
+            updateComparePickBtn();
+        })();
+
         function switchTab(paneId, element) {
+            if (paneId !== 'viewer-pane' && typeof setComparePick === 'function') setComparePick(false);
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
             document.getElementById(paneId).classList.add('active');
@@ -2407,6 +2470,8 @@
                     });
                     return did;
                 }),
+
+                compareStart: guard(function () { toggleComparePick(); return true; }),
 
                 toggleLayout: guard(function () { toggleViewerLayout(); return true; })
             };

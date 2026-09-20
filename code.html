@@ -589,6 +589,13 @@
     /* Icon-only buttons in the compare toolbar (swap, reset, options, clear results) — same
        height as the text buttons around them, just centered on a single icon instead of a label. */
     .btn-iconbtn { padding: 6px 8px; justify-content: center; }
+    #cmpPickBtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg, #fff); }
+    #cmpPickBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #cmpPickHint { margin: 0 0 8px; padding: 5px 10px; font-size: 11px; color: var(--text); background: var(--input-bg); border-left: 3px solid var(--accent); border-radius: 4px; }
+    #cmpPickHint[hidden] { display: none; }
+    #container.cmp-picking .entry { cursor: pointer; }
+    #container.cmp-picking .entry:hover { outline: 2px dashed var(--accent); outline-offset: -2px; }
+    #container.cmp-picking .entry.cmp-marked { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--hover-bg); }
     /* Two-icon toggle presented as ONE button: both icons always visible side by side inside it,
        the blue highlight sits on whichever is active, and a click ANYWHERE on the button (either
        half) just flips which one is lit — it's a single toggle, not a picker for each half. */
@@ -1072,6 +1079,7 @@
                     <span class="title-sub">paste code &amp; auto-detect the language</span>
                 </div>
                 <div class="btn-group">
+                    <button id="cmpPickBtn" class="btn btn-secondary" type="button" aria-pressed="false" title="Pick two snippets to compare" onclick="cmpPickToggle()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="2.5" width="5" height="11" rx="0.8"/><rect x="9.2" y="2.5" width="5" height="11" rx="0.8"/></svg>Compare</button>
                     <button id="viewModeBtn" class="split-toggle" title="Stack view — click for Grid view" onclick="toggleLayout()">
                         <span class="split-toggle-half active" id="viewHalfStack"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2.5" width="12" height="2.8" rx="0.6"/><rect x="2" y="6.6" width="12" height="2.8" rx="0.6"/><rect x="2" y="10.7" width="12" height="2.8" rx="0.6"/></svg></span>
                         <span class="split-toggle-half" id="viewHalfGrid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="5" height="5" rx="0.8"/><rect x="9" y="2" width="5" height="5" rx="0.8"/><rect x="2" y="9" width="5" height="5" rx="0.8"/><rect x="9" y="9" width="5" height="5" rx="0.8"/></svg></span>
@@ -1098,6 +1106,7 @@
                 </div>
             </div>
 
+            <div id="cmpPickHint" role="status" hidden>Click two snippets to compare &mdash; Esc to cancel</div>
             <div id="container"><div class="empty-state">No snippets yet — paste or upload some code above.</div></div>
         </div>
 
@@ -3204,6 +3213,7 @@ function switchTab(paneId, element) {
     document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
     document.getElementById(paneId).classList.add('active');
     element.classList.add('active');
+    if (paneId !== 'viewer-pane') cmpPickCancel();
     if (paneId === 'compare-pane') renderCompareChips();
 }
 function toggleLayout() {
@@ -3739,7 +3749,71 @@ async function formatComparePanel(panelId, btnEl) {
     }
 }
 
+/* ---- Viewer "Compare" pick-two mode ---- */
+let cmpPickOn = false, cmpPickFirst = null, cmpPickSig = '';
+function cmpPickSigNow() { return postedEntries.map(e => e.id).join('|'); }
+function cmpPickClearMarks() {
+    document.querySelectorAll('#container .entry.cmp-marked').forEach(el => el.classList.remove('cmp-marked'));
+    cmpPickFirst = null;
+}
+function cmpPickSetMode(on) {
+    cmpPickOn = !!on;
+    cmpPickClearMarks();
+    cmpPickSig = cmpPickSigNow();
+    const c = document.getElementById('container'), b = document.getElementById('cmpPickBtn'), h = document.getElementById('cmpPickHint');
+    if (c) c.classList.toggle('cmp-picking', cmpPickOn);
+    if (b) b.setAttribute('aria-pressed', cmpPickOn ? 'true' : 'false');
+    if (h) h.hidden = !cmpPickOn;
+    document.querySelectorAll('#container .entry').forEach(el => { if (cmpPickOn) el.setAttribute('tabindex', '0'); else if (el.getAttribute('tabindex') === '0') el.removeAttribute('tabindex'); });
+}
+function cmpPickCancel() { if (cmpPickOn) cmpPickSetMode(false); }
+function cmpPickToggle() {
+    const b = document.getElementById('cmpPickBtn');
+    if (cmpPickOn) { cmpPickSetMode(false); return false; }
+    if (postedEntries.length < 2 || (b && b.disabled)) return false;
+    cmpPickSetMode(true);
+    return true;
+}
+function cmpPickSync() {
+    const b = document.getElementById('cmpPickBtn');
+    const few = postedEntries.length < 2;
+    if (b) { b.disabled = few; b.title = few ? 'Add at least two snippets to compare' : 'Pick two snippets to compare'; }
+    if (cmpPickOn && (few || cmpPickSig !== cmpPickSigNow())) cmpPickSetMode(false);
+}
+function cmpPickHandle(entryEl) {
+    const id = entryEl.dataset.entryId;
+    if (!id || !findEntry(id)) return;
+    if (!cmpPickFirst) { cmpPickFirst = id; entryEl.classList.add('cmp-marked'); return; }
+    if (cmpPickFirst === id) { cmpPickFirst = null; entryEl.classList.remove('cmp-marked'); return; }
+    const a = cmpPickFirst;
+    cmpPickSetMode(false);
+    loadEntryIntoPanel(a, 'compareLeft');
+    loadEntryIntoPanel(id, 'compareRight');
+    const link = document.querySelector('.tab-link[data-tab="compare-pane"]');
+    if (link) link.click();
+    runCompare();
+}
+(function () {
+    const c = document.getElementById('container');
+    if (c) {
+        c.addEventListener('click', function (e) {
+            if (!cmpPickOn) return;
+            const en = e.target.closest && e.target.closest('.entry');
+            if (!en) return;
+            e.preventDefault(); e.stopPropagation();
+            cmpPickHandle(en);
+        }, true);
+        c.addEventListener('keydown', function (e) {
+            if (!cmpPickOn || (e.key !== 'Enter' && e.key !== ' ') || !e.target.classList || !e.target.classList.contains('entry')) return;
+            e.preventDefault(); e.stopPropagation();
+            cmpPickHandle(e.target);
+        }, true);
+    }
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && cmpPickOn) { e.preventDefault(); cmpPickSetMode(false); } });
+})();
+
 function renderCompareChips() {
+    cmpPickSync();
     const box = document.getElementById('compareChips');
     if (!box) return;
     if (postedEntries.length === 0) {
@@ -5373,6 +5447,7 @@ init();
             loadEntryIntoPanel(String(id), panel);
             return true;
         }, false),
+        compareStart: safe(function () { cmpPickToggle(); return true; }, false),
         compareSwap: safe(function () { swapComparePanels(); return true; }, false),
         compareReset: safe(function () { resetCompareSection(); return true; }, false),
         compareClearResults: safe(function () { clearCompareResults(); return true; }, false),

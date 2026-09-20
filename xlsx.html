@@ -829,6 +829,14 @@
     .btn { display: inline-flex; align-items: center; gap: 6px; }
     svg.ic { width: 14px; height: 14px; flex-shrink: 0; display: block; }
     .btn-iconbtn { padding: 6px 8px; justify-content: center; }
+    .cmp-pick-btn { display: inline-flex; align-items: center; gap: 5px; }
+    .cmp-pick-btn .ic { width: 13px; height: 13px; }
+    .cmp-pick-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg, #fff); }
+    .cmp-pick-hint { font-size: 11px; color: var(--accent); }
+    .cmp-pick-hint[hidden] { display: none; }
+    #container.cmp-picking .entry { cursor: pointer; }
+    #container.cmp-picking .entry:hover { outline: 2px solid var(--accent); outline-offset: -2px; opacity: 0.95; }
+    #container.cmp-picking .entry.cmp-picked { outline: 2px solid var(--accent); outline-offset: -2px; background: color-mix(in srgb, var(--accent) 12%, var(--bg-panel)); }
     .split-toggle { display: flex; padding: 0; border: none; border-radius: 4px; overflow: hidden; background: var(--input-bg); cursor: pointer; font-family: var(--font-ui); }
     .split-toggle-half { padding: 6px 9px; display: flex; align-items: center; color: var(--text); opacity: 0.6; }
     .split-toggle:hover .split-toggle-half:not(.active) { opacity: 0.85; background: var(--hover-bg, #48484b); }
@@ -858,6 +866,8 @@
                     <span class="title-sub">browse, search &amp; sort spreadsheet files</span>
                 </div>
                 <div class="btn-group">
+                    <span id="cmpPickHint" class="cmp-pick-hint" role="status" hidden>Click two files to compare — Esc to cancel</span>
+                    <button id="cmpPickBtn" class="btn btn-secondary cmp-pick-btn" type="button" aria-pressed="false" title="Compare two files" onclick="toggleComparePick()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="5" height="11" rx="1"/><rect x="9.5" y="2.5" width="5" height="11" rx="1"/><path d="M7.2 8h1.6"/></svg> Compare</button>
                     <button id="viewModeBtn" class="split-toggle" title="Stack view — click for Grid view" onclick="toggleLayout()">
                         <span class="split-toggle-half active" id="viewHalfStack"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2.5" width="12" height="2.8" rx="0.6"/><rect x="2" y="6.6" width="12" height="2.8" rx="0.6"/><rect x="2" y="10.7" width="12" height="2.8" rx="0.6"/></svg></span>
                         <span class="split-toggle-half" id="viewHalfGrid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="5" height="5" rx="0.8"/><rect x="9" y="2" width="5" height="5" rx="0.8"/><rect x="2" y="9" width="5" height="5" rx="0.8"/><rect x="9" y="9" width="5" height="5" rx="0.8"/></svg></span>
@@ -1698,8 +1708,67 @@
         document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
         document.getElementById(paneId).classList.add('active');
         el.classList.add('active');
+        if (paneId !== 'viewer-pane') cancelComparePick();
         if (paneId === 'compare-pane') renderCompareChips();
     }
+
+    /* ---- "pick two to compare" mode (Viewer toolbar) ---- */
+    let cmpPicking = false, cmpFirstId = null;
+    function updateComparePickBtn() {
+        const btn = document.getElementById('cmpPickBtn');
+        if (!btn) return;
+        const few = postedEntries.length < 2;
+        btn.disabled = few;
+        btn.title = few ? 'Add at least two files to compare' : (cmpPicking ? 'Cancel compare (Esc)' : 'Pick two files to compare');
+    }
+    function cancelComparePick() {
+        const wasOn = cmpPicking;
+        cmpPicking = false; cmpFirstId = null;
+        const c = document.getElementById('container');
+        if (c) { c.classList.remove('cmp-picking'); c.querySelectorAll('.cmp-picked').forEach(x => x.classList.remove('cmp-picked')); }
+        const btn = document.getElementById('cmpPickBtn');
+        if (btn) btn.setAttribute('aria-pressed', 'false');
+        const h = document.getElementById('cmpPickHint');
+        if (h) h.hidden = true;
+        if (wasOn) updateComparePickBtn();
+    }
+    function toggleComparePick() {
+        if (cmpPicking) { cancelComparePick(); return true; }
+        if (postedEntries.length < 2) return false;
+        const vlink = document.querySelector('.tab-link[data-tab="viewer-pane"]');
+        if (!document.getElementById('viewer-pane').classList.contains('active') && vlink) vlink.click();
+        cmpPicking = true; cmpFirstId = null;
+        document.getElementById('container').classList.add('cmp-picking');
+        document.getElementById('cmpPickBtn').setAttribute('aria-pressed', 'true');
+        document.getElementById('cmpPickHint').hidden = false;
+        updateComparePickBtn();
+        return true;
+    }
+    function finishComparePick(a, b) {
+        cancelComparePick();
+        const api = window.DTAPI;
+        api.compareLoad(a, 'A');
+        api.compareLoad(b, 'B');
+        const link = document.querySelector('.tab-link[data-tab="compare-pane"]');
+        if (link) link.click();
+        api.compareRun();
+    }
+    (function () {
+        const c = document.getElementById('container');
+        c.addEventListener('click', function (ev) {
+            if (!cmpPicking) return;
+            ev.preventDefault(); ev.stopPropagation();
+            const card = ev.target.closest && ev.target.closest('.entry');
+            if (!card) return;
+            const id = card.dataset.entryId;
+            if (cmpFirstId === null) { cmpFirstId = id; card.classList.add('cmp-picked'); }
+            else if (cmpFirstId === id) { cmpFirstId = null; card.classList.remove('cmp-picked'); }
+            else finishComparePick(cmpFirstId, id);
+        }, true);
+        document.addEventListener('keydown', function (ev) {
+            if (cmpPicking && ev.key === 'Escape') { ev.preventDefault(); cancelComparePick(); }
+        });
+    })();
 
     function toggleLayout() {
         isGridView = !isGridView;
@@ -1893,6 +1962,8 @@
 
     /* ---- rendering the full entry list ---- */
     function renderAllEntries() {
+        cancelComparePick();
+        updateComparePickBtn();
         const container = document.getElementById('container');
         container.innerHTML = '';
         if (postedEntries.length === 0) {
@@ -3559,7 +3630,8 @@
                     return true;
                 }, false);
             },
-            toggleLayout() { return safe(() => { toggleLayout(); return true; }, false); }
+            toggleLayout() { return safe(() => { toggleLayout(); return true; }, false); },
+            compareStart() { return safe(() => { toggleComparePick(); return true; }, true); }
         };
     })();
 
@@ -3567,6 +3639,7 @@
        Init
        ========================================================================= */
     loadLayout();
+    updateComparePickBtn();
     renderComparePanel('compareLeft');
     renderComparePanel('compareRight');
     wireCompareSyncScroll();
