@@ -318,6 +318,25 @@
     };
     DT.post = function (msg) { if (!embedded) return; try { window.parent.postMessage(msg, TARGET); } catch (e) {} };
     DT.onChange = function (fn) { DT._l.push(fn); };
+    // Color palette chosen in Settings (CSS variables prepared by the shell, plus token colors for Monaco).
+    var palNames = [];
+    DT.palette = null;
+    DT.applyPalette = function (p) {
+        palNames.forEach(function (n) { root.style.removeProperty(n); });
+        palNames = [];
+        DT.palette = (p && p.vars) ? p : null;
+        if (DT.palette) Object.keys(p.vars).forEach(function (n) { root.style.setProperty(n, p.vars[n]); palNames.push(n); });
+    };
+    var monoFlip = 0;
+    // Name of the Monaco theme to use right now: the palette's, or the stock light / dark one.
+    DT.monacoTheme = function () {
+        var light = root.getAttribute('data-theme') === 'light', p = DT.palette;
+        if (!p || !p.mono || !window.monaco || !monaco.editor) return light ? 'vs' : 'vs-dark';
+        var name = 'dt-pal-' + (monoFlip = 1 - monoFlip), rules = [];
+        Object.keys(p.mono.rules).forEach(function (t) { rules.push({ token: t, foreground: p.mono.rules[t] }); });
+        try { monaco.editor.defineTheme(name, { base: light ? 'vs' : 'vs-dark', inherit: true, rules: rules, colors: p.mono.colors }); return name; }
+        catch (e) { return light ? 'vs' : 'vs-dark'; }
+    };
     // After importing a backup every tool has to re-read storage.
     DT.reloadAll = function () {
         if (embedded) { DT.post({ __devToolkit: 'reloadAll' }); setTimeout(function () { location.reload(); }, 600); }
@@ -333,8 +352,9 @@
         else if (TOOL === 'xlsx') addEntry(name, 'csv', [makeSheet('Sample', parseDelimited(String(text), ','), dtHeaderDefault())]);
     };
 
-    function apply(s) {
+    function apply(s, palette) {
         DT.settings = (s && typeof s === 'object') ? s : {};
+        if (palette !== undefined) DT.applyPalette(palette);
         var g = DT.settings.general || {}, t = DT.sec();
         root.setAttribute('data-hc', g.contrast === 'high' ? '1' : '0');
         if (g.motion === 'reduce' || g.motion === 'full') root.setAttribute('data-motion', g.motion);
@@ -353,7 +373,7 @@
         if (!IS_FILE && e.origin !== location.origin) return;
         var d = e.data;
         if (!d || typeof d !== 'object') return;
-        if (d.__devToolkitSettings) apply(d.settings);
+        if (d.__devToolkitSettings) apply(d.settings, d.palette || null);
         else if (d.__devToolkitCmd === 'export' && typeof window.exportLocalStorageBackup === 'function') window.exportLocalStorageBackup();
         else if (d.__devToolkitCmd === 'focusInput') {
             var ta = document.querySelector('#viewer-pane.active textarea');
@@ -367,6 +387,12 @@
         else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults',
              'toggleLayout', 'toggleViewerLayout', 'toggleCompareDiffMode', 'toggleEditorDiffMode'].indexOf(d.fn) >= 0 && typeof window[d.fn] === 'function') {
             window[d.fn]();
+        }
+        else if (d.__devToolkitCmd === 'api' && typeof d.method === 'string' && d.method !== 'tool' && window.DTAPI && typeof window.DTAPI[d.method] === 'function') {
+            var reply = function (ok, val) { DT.post(ok ? { __devToolkit: 'reply', id: d.id, ok: true, result: val } : { __devToolkit: 'reply', id: d.id, ok: false, error: String(val) }); };
+            try {
+                Promise.resolve(window.DTAPI[d.method].apply(window.DTAPI, Array.isArray(d.args) ? d.args : [])).then(function (r) { reply(true, r); }, function (err) { reply(false, err); });
+            } catch (err) { reply(false, err); }
         }
         else if (d.__devToolkitCmd === 'addSample' && typeof d.text === 'string') DT.addSample(d.text, d.name || 'Sample');
         else if (d.__devToolkitCmd === 'uploadFiles' && d.files && d.files.length) {
@@ -603,7 +629,7 @@
         .collapsed > .json-tree, .collapsed > .footer { display: none; }
         .collapsed > .header-line::after { content: ' ... }'; color: #808080; }
         .collapsed.is-array > .header-line::after { content: ' ... ]'; }
-        .key { color: #9cdcfe; } .string { color: #ce9178; } .number { color: #b5cea8; } .boolean, .null { color: #569cd6; }
+        .key { color: var(--tok-key, #9cdcfe); } .string { color: var(--tok-string, #ce9178); } .number { color: var(--tok-number, #b5cea8); } .boolean, .null { color: var(--tok-keyword, #569cd6); }
         .header-line, .footer { direction: ltr; unicode-bidi: embed; }
         .key bdi, .string bdi, .xml-attr bdi, .xml-text bdi { unicode-bidi: isolate; }
         .match { background-color: rgba(151, 121, 0, 0.4); border-radius: 1px; }
@@ -614,7 +640,7 @@
         .ctx-item:hover { background: var(--vscode-menu-selectionBackground); color: var(--vscode-menu-selectionForeground); }
         .ctx-divider { height: 1px; background: var(--vscode-menu-separatorBackground); margin: 4px 0; }
         .ctx-shortcut { opacity: 0.5; font-size: 11px; margin-left: 20px; }
-        .xml-tag { color: #569cd6; } .xml-attr { color: #9cdcfe; } .xml-text { color: var(--vscode-foreground); }
+        .xml-tag { color: var(--tok-tag, #569cd6); } .xml-attr { color: var(--tok-key, #9cdcfe); } .xml-text { color: var(--vscode-foreground); }
         
         .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 300px; flex-shrink: 0; }
         .compare-col { display: flex; flex-direction: column; gap: 4px; height: 100%; min-height: 0; }
@@ -628,9 +654,9 @@
         .diff-icon { font-weight: bold; width: 12px; text-align: center; flex-shrink: 0; }
         .diff-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
         
-        .diff-added { background: rgba(78, 201, 176, 0.1); color: #4ec9b0; border-left: 3px solid #4ec9b0; }
-        .diff-removed { background: rgba(244, 135, 113, 0.1); color: #f48771; border-left: 3px solid #f48771; }
-        .diff-changed { background: rgba(220, 220, 170, 0.1); color: #dcdcaa; border-left: 3px solid #dcdcaa; }
+        .diff-added { background: rgba(78, 201, 176, 0.1); color: var(--diff-add, #4ec9b0); border-left: 3px solid var(--diff-add, #4ec9b0); }
+        .diff-removed { background: rgba(244, 135, 113, 0.1); color: var(--diff-remove, #f48771); border-left: 3px solid var(--diff-remove, #f48771); }
+        .diff-changed { background: rgba(220, 220, 170, 0.1); color: var(--diff-change, #dcdcaa); border-left: 3px solid var(--diff-change, #dcdcaa); }
         
         .diff-tag { font-size: 9px; font-weight: bold; text-transform: uppercase; opacity: 0.8; flex-shrink: 0; }
         .side-diff-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-width: 0; }
@@ -694,12 +720,12 @@
             --vscode-list-hoverBackground: #ececec;
             --vscode-foreground: #1e1e1e;
         }
-        html[data-theme="light"] .key { color: #001080; }
-        html[data-theme="light"] .string { color: #a31515; }
-        html[data-theme="light"] .number { color: #098658; }
-        html[data-theme="light"] .boolean, html[data-theme="light"] .null { color: #0000ff; }
-        html[data-theme="light"] .xml-tag { color: #800000; }
-        html[data-theme="light"] .xml-attr { color: #001080; }
+        html[data-theme="light"] .key { color: var(--tok-key, #001080); }
+        html[data-theme="light"] .string { color: var(--tok-string, #a31515); }
+        html[data-theme="light"] .number { color: var(--tok-number, #098658); }
+        html[data-theme="light"] .boolean, html[data-theme="light"] .null { color: var(--tok-keyword, #0000ff); }
+        html[data-theme="light"] .xml-tag { color: var(--tok-tag, #800000); }
+        html[data-theme="light"] .xml-attr { color: var(--tok-key, #001080); }
         html[data-theme="light"] .toggle { color: #6b6b6b; }
         html[data-theme="light"] .json-tree { border-left-color: #d4d4d4; }
         html[data-theme="light"] .collapsed > .header-line::after { color: #6b6b6b; }
@@ -708,9 +734,9 @@
         html[data-theme="light"] .btn-minify svg { fill: #8a6d1f; }
         html[data-theme="light"] .btn-focus svg { fill: #333333; }
         html[data-theme="light"] .btn-viewer svg { fill: #107c5a; }
-        html[data-theme="light"] .diff-added { color: #22863a; border-left-color: #22863a; }
-        html[data-theme="light"] .diff-removed { color: #cb2431; border-left-color: #cb2431; }
-        html[data-theme="light"] .diff-changed { color: #9a7d0a; border-left-color: #9a7d0a; }
+        html[data-theme="light"] .diff-added { color: var(--diff-add, #22863a); border-left-color: var(--diff-add, #22863a); }
+        html[data-theme="light"] .diff-removed { color: var(--diff-remove, #cb2431); border-left-color: var(--diff-remove, #cb2431); }
+        html[data-theme="light"] .diff-changed { color: var(--diff-change, #9a7d0a); border-left-color: var(--diff-change, #9a7d0a); }
     
     /* Included fonts (SIL Open Font License, see fonts/). A face is only downloaded if it is actually used. */
     @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: local("JetBrains Mono"), local("JetBrainsMono-Regular"), url("fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
@@ -2166,6 +2192,225 @@
         }
 
         function findEntry(id) { return postedEntries.find(e => e.id === id); }
+
+        /* =========================================================================
+           window.DTAPI - programmatic API for the shell's command palette.
+           Wraps the tool's existing functions; every member is guarded and never throws.
+           ========================================================================= */
+        (function () {
+            const PANELS = { A: 'editorLeft', B: 'editorRight' };
+            const entryEl = id => { try { return document.querySelector('.entry[data-entry-id="' + String(id).replace(/"/g, '') + '"]'); } catch (e) { return null; } };
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            const guard = fn => function () { try { return fn.apply(null, arguments); } catch (e) { console.error(e); return false; } };
+            const idList = ids => (Array.isArray(ids) ? ids : (ids == null ? [] : [ids])).map(String);
+
+            function countKeys(v, cap) {
+                let n = 0; const stack = [v];
+                while (stack.length && n < cap) {
+                    const x = stack.pop();
+                    if (x && typeof x === 'object') {
+                        const ks = Array.isArray(x) ? x : Object.keys(x);
+                        n += ks.length;
+                        (Array.isArray(x) ? x : Object.values(x)).forEach(c => { if (c && typeof c === 'object') stack.push(c); });
+                    }
+                }
+                return n;
+            }
+            function fmtSize(n) { return n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KB'; }
+
+            function textFor(item, kind) {
+                const isJson = item.type === 'json';
+                switch (kind) {
+                    case 'minified':
+                        return isJson ? JSON.stringify(item.data) : stripInternalXmlMarkers(item.rawString.replace(/>\s+</g, '><').trim());
+                    case 'xml':
+                        return isJson ? jsonToXml(item.data) : stripInternalXmlMarkers(item.rawString);
+                    case 'json':
+                        return isJson ? JSON.stringify(item.data, null, 4) : JSON.stringify(xmlToJson(item.data.documentElement), null, 4);
+                    default: // formatted
+                        return isJson ? JSON.stringify(item.data, null, 4) : stripInternalXmlMarkers(item.rawString);
+                }
+            }
+
+            function flash(btn, svg) {
+                if (!btn) return;
+                btn.innerHTML = '<span style="color:#89d185; font-size:11px; font-weight:bold;">✓</span>';
+                setTimeout(() => { btn.innerHTML = svg; }, 700);
+            }
+
+            function panelText(id) { const t = document.getElementById(id); return t ? t.value : ''; }
+
+            function refreshPanel(id) {
+                const tree = document.getElementById(id + 'Tree');
+                if (tree && tree.style.display !== 'none') renderEditorTree(id);
+            }
+
+            let diffIdx = -1;
+            function diffRows() {
+                const res = document.getElementById('editorCompareResults');
+                if (!res) return [];
+                const side = res.querySelector('.side-diff-container');
+                if (side && side.children.length === 2) {
+                    const L = Array.from(side.children[0].children), R = Array.from(side.children[1].children);
+                    const rows = [];
+                    L.forEach((c, i) => {
+                        if (c.classList.contains('diff-line')) rows.push(c);
+                        else if (R[i] && R[i].classList.contains('diff-line')) rows.push(R[i]);
+                    });
+                    return rows;
+                }
+                return Array.from(res.querySelectorAll('.diff-line'));
+            }
+            function stepDiff(dir) {
+                const rows = diffRows();
+                if (!rows.length) return false;
+                const res = document.getElementById('editorCompareResults');
+                const cur = rows.findIndex(r => r.classList.contains('dt-diff-current'));
+                let i = cur >= 0 ? cur : diffIdx;
+                i = i < 0 ? (dir > 0 ? 0 : rows.length - 1) : (i + dir + rows.length) % rows.length;
+                res.querySelectorAll('.dt-diff-current').forEach(r => { r.classList.remove('dt-diff-current'); r.style.outline = ''; });
+                diffIdx = i;
+                const row = rows[i];
+                row.classList.add('dt-diff-current');
+                row.style.outline = '2px solid var(--vscode-focusBorder, #007fd4)';
+                row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                if (typeof row.onclick === 'function') row.onclick();
+                return true;
+            }
+
+            window.DTAPI = {
+                tool: 'json',
+
+                list() {
+                    try {
+                        const order = Array.from(document.querySelectorAll('#container > .entry')).map(el => el.dataset.entryId);
+                        const items = order.map(id => findEntry(id)).filter(Boolean);
+                        postedEntries.forEach(e => { if (items.indexOf(e) < 0) items.push(e); });
+                        return items.map((e, i) => {
+                            const isJson = e.type === 'json';
+                            const info = isJson
+                                ? 'JSON · ' + countKeys(e.data, 20000) + ' keys'
+                                : 'XML · ' + fmtSize((e.rawString || '').length);
+                            return { id: String(e.id), name: (e.name && e.name.trim()) || ('Entry ' + (i + 1)), info };
+                        });
+                    } catch (err) { console.error(err); return []; }
+                },
+
+                copy(ids, kind) {
+                    try {
+                        const parts = [];
+                        for (const id of idList(ids)) {
+                            const item = findEntry(id);
+                            if (item) parts.push(textFor(item, kind || 'formatted'));
+                        }
+                        if (!parts.length) return false;
+                        const btnFor = { formatted: '.btn-copy', minified: '.btn-minify', xml: '.btn-convert', json: '.btn-convert' }[kind || 'formatted'];
+                        return Promise.resolve(navigator.clipboard.writeText(parts.join('\n\n'))).then(() => {
+                            idList(ids).forEach(id => {
+                                const el = entryEl(id), b = el && btnFor && el.querySelector(btnFor);
+                                if (b) { const svg = b.innerHTML; flash(b, svg); }
+                            });
+                            return true;
+                        }, () => false);
+                    } catch (err) { console.error(err); return false; }
+                },
+
+                save(ids, kind) {
+                    try {
+                        const list = idList(ids).filter(id => { const el = entryEl(id); return el && el.querySelector('.btn-save'); });
+                        if (!list.length) return false;
+                        list.forEach((id, i) => setTimeout(() => {
+                            try { entryEl(id).querySelector('.btn-save').click(); } catch (e) { console.error(e); }
+                        }, i * 300));
+                        return true;
+                    } catch (err) { console.error(err); return false; }
+                },
+
+                compareLoad: guard(function (id, slot) {
+                    const panel = PANELS[String(slot).toUpperCase()];
+                    if (!panel || !findEntry(String(id))) return false;
+                    loadEditorJson(String(id), panel);
+                    return true;
+                }),
+
+                compareSwap: guard(function () {
+                    const a = document.getElementById('editorLeft'), b = document.getElementById('editorRight');
+                    const an = document.getElementById('editorLeftName'), bn = document.getElementById('editorRightName');
+                    if (!a || !b) return false;
+                    const t = a.value; a.value = b.value; b.value = t;
+                    if (an && bn) { const n = an.value; an.value = bn.value; bn.value = n; }
+                    refreshPanel('editorLeft'); refreshPanel('editorRight');
+                    const res = document.getElementById('editorCompareResults');
+                    if (res && res.children.length && !/^Click "Compare"/.test(res.textContent.trim())) runEditorCompare();
+                    return true;
+                }),
+
+                compareReset: guard(function () { clearEditorCompareAll(); return true; }),
+                compareClearResults: guard(function () { clearEditorCompareResults(); return true; }),
+                compareRun: guard(function () { runEditorCompare(); return true; }),
+
+                compareToggle: guard(function (option) {
+                    if (option && option !== 'view') return null;
+                    toggleEditorDiffMode();
+                    return 'Compare view: ' + (isEditorSideMode ? 'side-by-side' : 'list');
+                }),
+
+                compareFormat: guard(function () {
+                    let did = false;
+                    ['editorLeft', 'editorRight'].forEach(p => { if (panelText(p).trim()) { formatEditorPanel(p); did = true; } });
+                    return did;
+                }),
+
+                compareMinify: guard(function () {
+                    let did = false;
+                    ['editorLeft', 'editorRight'].forEach(p => {
+                        const t = panelText(p);
+                        if (!t.trim()) return;
+                        let v; try { v = JSON.parse(t); } catch (e) { return; }
+                        document.getElementById(p).value = JSON.stringify(v);
+                        refreshPanel(p);
+                        did = true;
+                    });
+                    return did;
+                }),
+
+                compareNext: guard(function () { return stepDiff(1); }),
+                comparePrev: guard(function () { return stepDiff(-1); }),
+
+                expandAll: guard(function () {
+                    setAllCollapse(false);
+                    document.querySelectorAll('#container .entry .actions .btn-global-icon[title="Expand All Nodes"]').forEach(b => setEntryTreeCollapse(b, false));
+                    return document.querySelector('#container .entry') !== null;
+                }),
+                collapseAll: guard(function () {
+                    setAllCollapse(true);
+                    return document.querySelector('#container .entry') !== null;
+                }),
+
+                focusSearch: guard(function () {
+                    const inputs = document.querySelectorAll('#container .entry .search-inline');
+                    for (const inp of inputs) {
+                        if (inp.offsetParent !== null) { inp.focus(); inp.select && inp.select(); return true; }
+                    }
+                    return false;
+                }),
+
+                toggleWrap: function () { return false; },
+
+                toggleMinimap: guard(function (ids) {
+                    let list = idList(ids);
+                    if (!list.length) list = postedEntries.map(e => e.id);
+                    let did = false;
+                    list.forEach(id => {
+                        const el = entryEl(id), btn = el && el.querySelector('.minimap-toggle');
+                        if (findEntry(id)) { toggleEntryMinimapBtn(id, btn); did = true; }
+                    });
+                    return did;
+                }),
+
+                toggleLayout: guard(function () { toggleViewerLayout(); return true; })
+            };
+        })();
 
         /* =========================================================================
            Minimap (ported from the code viewer's proven implementation) — VS Code-style,

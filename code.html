@@ -318,6 +318,25 @@
     };
     DT.post = function (msg) { if (!embedded) return; try { window.parent.postMessage(msg, TARGET); } catch (e) {} };
     DT.onChange = function (fn) { DT._l.push(fn); };
+    // Color palette chosen in Settings (CSS variables prepared by the shell, plus token colors for Monaco).
+    var palNames = [];
+    DT.palette = null;
+    DT.applyPalette = function (p) {
+        palNames.forEach(function (n) { root.style.removeProperty(n); });
+        palNames = [];
+        DT.palette = (p && p.vars) ? p : null;
+        if (DT.palette) Object.keys(p.vars).forEach(function (n) { root.style.setProperty(n, p.vars[n]); palNames.push(n); });
+    };
+    var monoFlip = 0;
+    // Name of the Monaco theme to use right now: the palette's, or the stock light / dark one.
+    DT.monacoTheme = function () {
+        var light = root.getAttribute('data-theme') === 'light', p = DT.palette;
+        if (!p || !p.mono || !window.monaco || !monaco.editor) return light ? 'vs' : 'vs-dark';
+        var name = 'dt-pal-' + (monoFlip = 1 - monoFlip), rules = [];
+        Object.keys(p.mono.rules).forEach(function (t) { rules.push({ token: t, foreground: p.mono.rules[t] }); });
+        try { monaco.editor.defineTheme(name, { base: light ? 'vs' : 'vs-dark', inherit: true, rules: rules, colors: p.mono.colors }); return name; }
+        catch (e) { return light ? 'vs' : 'vs-dark'; }
+    };
     // After importing a backup every tool has to re-read storage.
     DT.reloadAll = function () {
         if (embedded) { DT.post({ __devToolkit: 'reloadAll' }); setTimeout(function () { location.reload(); }, 600); }
@@ -342,8 +361,9 @@
         else if (TOOL === 'xlsx') addEntry(name, 'csv', [makeSheet('Sample', parseDelimited(String(text), ','), dtHeaderDefault())]);
     };
 
-    function apply(s) {
+    function apply(s, palette) {
         DT.settings = (s && typeof s === 'object') ? s : {};
+        if (palette !== undefined) DT.applyPalette(palette);
         var g = DT.settings.general || {}, t = DT.sec();
         root.setAttribute('data-hc', g.contrast === 'high' ? '1' : '0');
         if (g.motion === 'reduce' || g.motion === 'full') root.setAttribute('data-motion', g.motion);
@@ -364,7 +384,7 @@
         if (!IS_FILE && e.origin !== location.origin) return;
         var d = e.data;
         if (!d || typeof d !== 'object') return;
-        if (d.__devToolkitSettings) apply(d.settings);
+        if (d.__devToolkitSettings) apply(d.settings, d.palette || null);
         else if (d.__devToolkitCmd === 'export' && typeof window.exportLocalStorageBackup === 'function') window.exportLocalStorageBackup();
         else if (d.__devToolkitCmd === 'focusInput') {
             var ta = document.querySelector('#viewer-pane.active textarea');
@@ -378,6 +398,14 @@
         else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults',
              'toggleLayout', 'toggleViewerLayout', 'toggleCompareDiffMode', 'toggleEditorDiffMode'].indexOf(d.fn) >= 0 && typeof window[d.fn] === 'function') {
             window[d.fn]();
+        }
+        else if (d.__devToolkitCmd === 'api' && typeof d.method === 'string' && d.method !== 'tool' && window.DTAPI && typeof window.DTAPI[d.method] === 'function') {
+            var apiId = d.id;
+            try {
+                Promise.resolve(window.DTAPI[d.method].apply(window.DTAPI, Array.isArray(d.args) ? d.args : [])).then(
+                    function (r) { DT.post({ __devToolkit: 'reply', id: apiId, ok: true, result: r }); },
+                    function (err) { DT.post({ __devToolkit: 'reply', id: apiId, ok: false, error: String(err) }); });
+            } catch (err) { DT.post({ __devToolkit: 'reply', id: apiId, ok: false, error: String(err) }); }
         }
         else if (d.__devToolkitCmd === 'addSample' && typeof d.text === 'string') DT.addSample(d.text, d.name || 'Sample');
         else if (d.__devToolkitCmd === 'uploadFiles' && d.files && d.files.length) {
@@ -2505,7 +2533,7 @@ function mountMonacoEditor(item) {
     const model = monaco.editor.createModel(item.rawCode || '', monacoLang);
     const editor = monaco.editor.create(host, {
         model: model,
-        theme: (document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark'),
+        theme: (window.DT ? DT.monacoTheme() : (document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark')),
         automaticLayout: true,
         minimap: { enabled: !!item.minimap },
         wordWrap: item.wrap ? 'on' : 'off',
@@ -3562,7 +3590,7 @@ function mountComparePanelEditor(panelId) {
     const model = monaco.editor.createModel(initialCode, getMonacoLangId(effId));
     const editor = monaco.editor.create(host, {
         model: model,
-        theme: (document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark'),
+        theme: (window.DT ? DT.monacoTheme() : (document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark')),
         automaticLayout: true,
         minimap: { enabled: false },
         wordWrap: ce.wrap ? 'on' : 'off',
@@ -3962,6 +3990,7 @@ function runCompare() {
     const codeA = getPanelCode('compareLeft');
     const codeB = getPanelCode('compareRight');
     if (!codeA.trim() && !codeB.trim()) { results.innerHTML = 'Load code into each panel, then click "Compare".'; lastDiffResult = null; return; }
+    if (!codeA.trim() || !codeB.trim()) { results.innerHTML = '<div style="color:var(--diff-remove)">❌ Error: Both Panel A and Panel B need code to compare.</div>'; lastDiffResult = null; return; }
     const opts = {
         ignoreWhitespace: document.getElementById('ignoreWhitespaceToggle').checked,
         ignoreCase: document.getElementById('ignoreCaseToggle').checked,
@@ -4475,7 +4504,7 @@ init();
     function syncMonacoTheme(theme) {
         try {
             if (window.monaco && window.monaco.editor) {
-                monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
+                monaco.editor.setTheme(window.DT ? DT.monacoTheme() : (theme === 'light' ? 'vs' : 'vs-dark'));
             }
         } catch (e) {}
     }
@@ -4497,6 +4526,9 @@ init();
         syncMonacoTheme(theme);
         refreshCustomMinimaps();
     }
+
+    // Called when a color palette arrives or changes.
+    window.dtSyncTheme = function () { var t = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; syncMonacoTheme(t); refreshCustomMinimaps(); };
 
     window.toggleTheme = function () {
         if (window.DT && DT.embedded) { DT.post({ __devToolkit: 'themeToggle' }); return; }
@@ -4521,7 +4553,10 @@ init();
 <script>
 (function () {
     if (!window.DT) return;
+    var palSig = '';
     DT.onChange(function () {
+        var sig = DT.palette ? DT.palette.id + DT.palette.kind : '';
+        if (sig !== palSig) { palSig = sig; if (window.dtSyncTheme) dtSyncTheme(); }
         var o = DT.monacoOpts();
         try { postedEntries.forEach(function (item) { if (item.editor) item.editor.updateOptions(o); }); } catch (e) {}
         try { Object.keys(compareEditors).forEach(function (k) { var ce = compareEditors[k]; if (ce && ce.editor) ce.editor.updateOptions(o); }); } catch (e) {}
@@ -5284,6 +5319,127 @@ init();
         e.preventDefault();
         files.forEach(function (f) { DTOcr.enqueue(f); });
     });
+})();
+/* =========================================================================
+   DTAPI: programmatic API used by the shell's command palette
+   ========================================================================= */
+(function () {
+    function safe(fn, fallback) { return function () { try { return fn.apply(null, arguments); } catch (e) { console.error(e); return fallback; } }; }
+    function entryEls() { return Array.prototype.slice.call(document.querySelectorAll('#container .entry')); }
+    function orderedEntries() {
+        const out = [];
+        entryEls().forEach(el => { const it = findEntry(el.dataset.entryId); if (it) out.push(it); });
+        postedEntries.forEach(it => { if (out.indexOf(it) < 0) out.push(it); });
+        return out;
+    }
+    function pick(ids) {
+        if (!Array.isArray(ids) || !ids.length) return orderedEntries();
+        const out = [];
+        ids.forEach(id => { const it = findEntry(String(id)); if (it && out.indexOf(it) < 0) out.push(it); });
+        return out;
+    }
+    function fenceOf(item) {
+        const lang = effectiveLangId(item);
+        return '```' + (lang === 'plaintext' ? '' : lang) + '\n' + item.rawCode + '\n```';
+    }
+    function isActive(id) { const el = document.getElementById(id); return !!(el && el.classList.contains('active')); }
+    const OPTS = { whitespace: ['ignoreWhitespaceToggle', 'Ignore whitespace'], case: ['ignoreCaseToggle', 'Ignore case'], blank: ['ignoreBlankToggle', 'Ignore blank lines'] };
+    let listNavIdx = -1;
+
+    window.DTAPI = {
+        tool: 'code',
+        list: safe(function () {
+            return orderedEntries().map((it, i) => {
+                const lang = LANGS[effectiveLangId(it)];
+                const lines = String(it.rawCode || '').split('\n').length;
+                return { id: String(it.id), name: (it.name && it.name.trim()) ? it.name.trim() : ('Snippet ' + (i + 1)),
+                         info: (lang ? lang.label : 'Text') + ' · ' + lines + ' line' + (lines === 1 ? '' : 's') };
+            });
+        }, []),
+        copy: safe(function (ids, kind) {
+            const items = pick(ids); if (!items.length) return false;
+            const text = items.map(it => kind === 'fence' ? fenceOf(it) : it.rawCode).join('\n\n');
+            return navigator.clipboard.writeText(text).then(() => true, () => false);
+        }, false),
+        save: safe(function (ids) {
+            const items = pick(ids); if (!items.length) return false;
+            items.forEach((it, i) => setTimeout(() => { try { downloadEntry(it.id); } catch (e) {} }, i * 300));
+            return true;
+        }, false),
+        compareLoad: safe(function (id, slot) {
+            if (!findEntry(String(id))) return false;
+            const panel = slot === 'B' ? 'compareRight' : slot === 'A' ? 'compareLeft' : null;
+            if (!panel) return false;
+            loadEntryIntoPanel(String(id), panel);
+            return true;
+        }, false),
+        compareSwap: safe(function () { swapComparePanels(); return true; }, false),
+        compareReset: safe(function () { resetCompareSection(); return true; }, false),
+        compareClearResults: safe(function () { clearCompareResults(); return true; }, false),
+        compareRun: safe(function () { runCompare(); return true; }, false),
+        compareToggle: safe(function (option) {
+            const o = OPTS[option]; if (!o) return null;
+            const cb = document.getElementById(o[0]); if (!cb) return null;
+            cb.checked = !cb.checked;
+            runCompare();
+            if (typeof updateCompareOptionsBadge === 'function') updateCompareOptionsBadge();
+            return o[1] + ': ' + (cb.checked ? 'on' : 'off');
+        }, null),
+        compareFormat: safe(function () {
+            formatComparePanel('compareLeft', null); formatComparePanel('compareRight', null); return true;
+        }, false),
+        compareNext: safe(function () { return compareStep(1); }, false),
+        comparePrev: safe(function () { return compareStep(-1); }, false),
+        expandAll: safe(function () { setAllCollapse(false); return true; }, false),
+        collapseAll: safe(function () { setAllCollapse(true); return true; }, false),
+        focusSearch: safe(function () {
+            if (!isActive('viewer-pane')) return false;
+            const els = entryEls().filter(el => el.offsetParent !== null);
+            for (const el of els) {
+                const inp = el.querySelector('.search-inline');
+                if (inp && inp.offsetParent !== null) { inp.focus(); return true; }
+                const item = findEntry(el.dataset.entryId);
+                if (item && item.editor) {
+                    item.editor.focus();
+                    const act = item.editor.getAction('actions.find');
+                    if (act) act.run();
+                    return true;
+                }
+            }
+            return false;
+        }, false),
+        toggleWrap: safe(function (ids) {
+            const items = pick(ids); if (!items.length) return false;
+            items.forEach(it => toggleEntryWrapBtn(it.id, document.querySelector('.entry[data-entry-id="' + it.id + '"] .wrap-toggle')));
+            return true;
+        }, false),
+        toggleMinimap: safe(function (ids) {
+            const items = pick(ids); if (!items.length) return false;
+            items.forEach(it => toggleEntryMinimapBtn(it.id, document.querySelector('.entry[data-entry-id="' + it.id + '"] .minimap-toggle')));
+            return true;
+        }, false),
+        toggleLayout: safe(function () { toggleLayout(); return true; }, false)
+    };
+
+    // Next/previous difference: reuse the side-by-side nav pill when present, else walk the list rows.
+    function compareStep(dir) {
+        const res = document.getElementById('compareResults'); if (!res) return false;
+        const pill = res.querySelector('.diff-nav');
+        if (pill) {
+            const btns = pill.querySelectorAll('button');
+            const b = dir > 0 ? btns[1] : btns[0];
+            if (b && !b.disabled) { b.click(); return true; }
+            return btns.length > 0;
+        }
+        const rows = res.querySelectorAll('.diff-line');
+        if (!rows.length) return false;
+        listNavIdx = dir > 0 ? Math.min(rows.length - 1, listNavIdx + 1) : Math.max(0, listNavIdx < 0 ? 0 : listNavIdx - 1);
+        rows.forEach(r => r.classList.remove('row-hover'));
+        const r = rows[listNavIdx];
+        r.classList.add('row-hover');
+        r.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return true;
+    }
 })();
 </script>
 </body>

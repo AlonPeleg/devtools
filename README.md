@@ -184,10 +184,10 @@ Type to filter, use the arrow keys to move, and press Enter to run. The list cha
 - Go to Code, JSON/XML or CSV/XLSX
 - Upload file(s) to the current tool (<kbd>Ctrl</kbd>+<kbd>O</kbd>)
 - Open settings, or jump to one tool's settings
-- Theme: follow system / dark / light / toggle
+- Theme: follow system / dark / light / toggle, **Color palette picker…** (System on top, then each palette; moving through the list previews each one live, Enter keeps it, Esc cancels), **Next color palette**, **Color palette: stock**
 - Accessibility: high contrast, reduce animations
 - Interface size: larger / smaller / reset
-- Back up my data (export)
+- Back up my data (export), and **Export / Import** for everything, settings only, or one tool
 - Show keyboard shortcuts
 - Install Dev Toolkit as an app (Chrome and Edge, when the browser offers it)
 - Star Dev Toolkit on GitHub
@@ -209,6 +209,13 @@ Type to filter, use the arrow keys to move, and press Enter to run. The list cha
 - **Clear all**: empties both panels and the results
 - **Clear compare**: clears only the results area
 
+**Tool commands** (also bindable to shortcuts in Settings → Keyboard shortcuts)
+
+- Viewer: expand / collapse all, focus the search box, wrap lines, minimap, first-row-as-header
+- **Copy / download**: copy a snippet as raw text or a Markdown block, JSON as formatted / minified / XML, a table as CSV / JSON / Markdown, download as a file or XLSX. If the tool holds several entries, a second step lists them: tick one or more (Space or Shift+Enter), or press Enter on one. **All** is the first row. A single entry runs straight away.
+- **Compare**: *Load entries into Compare* shows your entries; Enter (or the **A** / **B** buttons, or Alt+1 / Alt+2) sets an entry as A or B, and the comparison runs once both are set. Also: run compare, swap panels, next / previous difference, format, minify (JSON), ignore whitespace / case / blank lines, header row (tables).
+- Using a shortcut for any of these does the same thing, including the entry list.
+
 ---
 
 ## Settings
@@ -217,11 +224,11 @@ Open them with the gear icon, <kbd>Ctrl</kbd>+<kbd>,</kbd>, or the palette. Chan
 
 | Section | Options |
 |---|---|
-| **General** | Theme (system / dark / light), interface size (90-150%), contrast, animations, welcome screen on/off (you can also switch it off right on the welcome screen with **Don’t show this page again**), install as an app, storage meter and "protect my data" |
+| **General** | A **System** button (on by default: stock colors, light or dark as your device says; it turns off when you pick a palette), **color palette** (Stock, Monokai, Solarized, Dracula, Nord, GitHub; click again for stock; a dark-only or light-only palette switches to that mode), export / import everything, interface size (90-150%), contrast, animations, welcome screen on/off (you can also switch it off right on the welcome screen with **Don’t show this page again**), install as an app, storage meter and "protect my data" |
 | **Keyboard shortcuts** | Rebind or remove any shortcut and assign one to any palette command (per shortcut or all at once) |
-| **Code Viewer** | Font, font size, line spacing, tab width, wrap long lines by default |
-| **JSON / XML** | Font, font size, how many tree levels open by default |
-| **CSV / XLSX** | Font, font size, row density, treat the first row as a header by default |
+| **Code Viewer** | Export / import your snippets, font, font size, line spacing, tab width, wrap long lines by default |
+| **JSON / XML** | Export / import your entries, font, font size, how many tree levels open by default |
+| **CSV / XLSX** | Export / import your files, font, font size, row density, treat the first row as a header by default |
 
 **Fonts.** JetBrains Mono, Fira Code, Source Code Pro and IBM Plex Mono are included in [`fonts/`](fonts) and work on any device. Cascadia Code, Consolas, Menlo and SF Mono are offered only if they are installed on your machine. With **Custom** you can name any installed font.
 
@@ -273,7 +280,7 @@ Two libraries are loaded from public CDNs when the page opens, so those two host
 
 **Saved automatically.** Snippets, JSON entries and tables you add are stored in your browser's **IndexedDB** (database `dev_toolkit_v1`), one record per item, so saving is fast and large files are fine. Settings and a few small preferences are in `localStorage` (`dev_toolkit_settings_v1`, `dev_toolkit_last_tab_v1`, and layout choices).
 
-**Backups.** Each tool has **export** and **import** icons in the top-right corner. An export is a single JSON file with all three tools' data and your settings. Importing overwrites matching data and reloads the page. Backups made by earlier versions still import.
+**Backups, export and import.** Everything lives in **Settings**, so nothing clutters the main window. **General** exports or imports everything (settings plus the data of all three tools) in one file; when you import it, you choose whether to include the settings. Each of the Code, JSON / XML and CSV / XLSX settings pages has its own export and import for just that tool. Data imports offer **Add** (the default: keeps what you have and skips items that are already there) or **Replace** (swaps what you have; a backup file is downloaded first). The same actions are in the command palette. Older backup files from earlier versions still import.
 
 **Good to know**
 

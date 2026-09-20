@@ -323,8 +323,22 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .pal-item[aria-selected="true"] kbd { background: rgba(255,255,255,0.18); color: #fff; border-color: rgba(255,255,255,0.35); }
   .pal-group { padding: 0.5rem 0.625rem 0.1875rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-dim); cursor: default; }
   .pal-group:first-child { padding-top: 0.25rem; }
+  .pal-pick-head { padding: 0.5rem 0.75rem; font-size: 0.75rem; color: var(--text-dim); border-bottom: 1px solid var(--bar-border); line-height: 1.4; }
+  .pal-pick-head b { color: var(--text-bright); }
+  .pal-pick-head[hidden] { display: none; }
+  .pick-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pick-info { flex: 0 1 auto; color: var(--text-dim); font-size: 0.6875rem; white-space: nowrap; }
+  .pal-item[aria-selected="true"] .pick-info { color: rgba(255,255,255,0.8); }
+  .pick-check { font-family: var(--font-mono); flex: 0 0 auto; }
+  .pick-slots { display: flex; gap: 0.25rem; flex: 0 0 auto; }
+  .pick-slot { font: inherit; font-family: var(--font-mono); font-size: 0.6875rem; min-width: 1.5rem; padding: 0.0625rem 0.375rem; border-radius: 3px; cursor: pointer; border: 1px solid var(--bar-border); background: var(--bg); color: var(--text-dim); }
+  .pick-slot:hover { border-color: var(--focus); color: var(--text-bright); }
+  .pick-slot.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .pal-item[aria-selected="true"] .pick-slot { border-color: rgba(255,255,255,0.5); color: #fff; background: rgba(255,255,255,0.12); }
+  .pal-item[aria-selected="true"] .pick-slot.on { background: #fff; color: var(--accent); border-color: #fff; }
   .pal-empty { padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8125rem; }
-  .pal-foot { padding: 0.375rem 0.75rem; border-top: 1px solid var(--bar-border); font-size: 0.6875rem; color: var(--text-dim); display: flex; gap: 1rem; }
+  .pal-foot { padding: 0.375rem 0.75rem; border-top: 1px solid var(--bar-border); font-size: 0.6875rem; color: var(--text-dim); display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+  .pal-foot > span { white-space: nowrap; }
 
   /* Settings */
   #settings .dialog { width: 58rem; height: min(40rem, calc(100vh - 2rem)); }
@@ -351,7 +365,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .dlg-foot { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1rem; border-top: 1px solid var(--bar-border); font-size: 0.75rem; color: var(--text-dim); }
   .dlg-foot .spacer { flex: 1; }
 
-  #installBox, #storageBox { margin-top: 1rem; }
+  #installBox, #storageBox, #ioBox { margin-top: 1rem; }
   .set-main.no-preview { grid-template-columns: minmax(0, 1fr); }
   .set-main.no-preview .set-preview-col { display: none; }
   .key-list { list-style: none; margin: 0; padding: 0; }
@@ -372,7 +386,38 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .key-group[hidden], .key-row[hidden], .key-none[hidden] { display: none; }
   .ord-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
   .ord-row select.field { width: auto; min-width: 11rem; }
-  #palEdit { z-index: 1100; }
+  #palEdit, #ioDlg { z-index: 1100; }
+  #ioDlg .dialog { width: 34rem; max-height: calc(100vh - 2rem); }
+  .io-body { padding: 0.75rem 1rem 0.5rem; overflow-y: auto; min-height: 0; font-size: 0.8125rem; }
+  .io-body p { margin: 0 0 0.625rem; color: var(--text-dim); font-size: 0.75rem; line-height: 1.45; }
+  .io-body p b { color: var(--text-bright); }
+  .io-row { display: flex; align-items: center; gap: 0.625rem; padding: 0.4375rem 0; border-bottom: 1px solid var(--bar-border); cursor: pointer; }
+  .io-row input { accent-color: var(--accent-strong); flex: 0 0 auto; }
+  .io-row .io-count { margin-left: auto; color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
+  .io-row.off { opacity: 0.5; cursor: default; }
+  .io-mode { margin-top: 0.75rem; }
+  .io-mode label { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.25rem 0; cursor: pointer; }
+  .io-mode label span small { display: block; color: var(--text-dim); font-size: 0.6875rem; margin-top: 1px; }
+  .io-mode input { accent-color: var(--accent-strong); margin-top: 0.1875rem; }
+  #ioDlg .dlg-foot { flex-wrap: wrap; }
+  .pal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0.5rem; margin-top: 0.375rem; }
+  .pal-card { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; text-align: left; padding: 0.5rem; border-radius: 6px; cursor: pointer; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--bar-border); }
+  .pal-card:hover { border-color: var(--focus); }
+  .pal-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .pal-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .pal-sw { display: flex; height: 1.25rem; border-radius: 3px; overflow: hidden; border: 1px solid var(--bar-border); }
+  .pal-sw:empty { background: repeating-linear-gradient(45deg, transparent 0 4px, var(--hover) 4px 8px); }
+  .pal-sw i { flex: 1 1 0; }
+  .pal-sw i:first-child { flex: 2 1 0; }
+  .pal-name { font-size: 0.8125rem; color: var(--text-bright); }
+  .pal-note { font-size: 0.6875rem; color: var(--text-dim); }
+  .pal-mode { display: inline-flex; align-self: flex-start; border: 1px solid var(--bar-border); border-radius: 4px; overflow: hidden; }
+  .pal-mode button { font: inherit; font-size: 0.6875rem; padding: 0.0625rem 0.5rem; background: var(--bg); color: var(--text-dim); border: none; border-right: 1px solid var(--bar-border); cursor: pointer; }
+  .pal-mode button:last-child { border-right: none; }
+  .pal-mode button:hover { background: var(--hover); color: var(--text-bright); }
+  .pal-mode button.on { background: var(--accent); color: var(--accent-fg); }
+  .pal-mode button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .io-btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
   #palEdit .dialog { width: 52rem; height: min(38rem, calc(100vh - 2rem)); }
   .pe-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; padding: 0.75rem; }
   .pe-col { min-height: 0; overflow-y: auto; border: 1px solid var(--bar-border); border-radius: 6px; background: var(--bg); padding: 0 0.375rem 0.5rem; }
@@ -551,8 +596,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
     <div class="pal-input-wrap">
       <input id="palInput" class="pal-input" type="text" role="combobox" aria-expanded="true" aria-controls="palList" aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Type a command…" aria-label="Search commands">
     </div>
+    <div id="palPickHead" class="pal-pick-head" hidden></div>
     <ul id="palList" class="pal-list" role="listbox" aria-label="Commands"></ul>
-    <div class="pal-foot"><span><span class="kbd">↑</span> <span class="kbd">↓</span> to move</span><span><span class="kbd">Enter</span> to run</span><span><span class="kbd">Esc</span> to close</span></div>
+    <div class="pal-foot" id="palFoot"><span><span class="kbd">↑</span> <span class="kbd">↓</span> to move</span><span><span class="kbd">Enter</span> to run</span><span><span class="kbd">Esc</span> to close</span></div>
   </div>
 </div>
 
@@ -601,6 +647,25 @@ window.addEventListener('beforeinstallprompt', function (e) {
       <span class="spacer"></span>
       <button id="peReset" class="btn" type="button">Reset to essentials</button>
       <button id="peDone" class="btn primary" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export / import -->
+<div id="ioDlg" class="overlay center" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="ioTitle">
+    <div class="dlg-head">
+      <h2 id="ioTitle">Export</h2>
+      <button id="ioClose" class="icon-btn" type="button" aria-label="Close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="io-body" id="ioBody"></div>
+    <div class="dlg-foot">
+      <span id="ioNote"></span>
+      <span class="spacer"></span>
+      <button id="ioCancel" class="btn" type="button">Cancel</button>
+      <button id="ioGo" class="btn primary" type="button">Export</button>
     </div>
   </div>
 </div>
@@ -670,6 +735,42 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // Every command can have a shortcut. def '' means none by default. run is what runShortcut() dispatches;
   // close: true closes an open palette / settings dialog first (for commands that act on a tool).
   var G_GEN = 'General', G_TOOLS = 'Tools', G_CUR = 'Current tool (whichever is open)', G_LOOK = 'Appearance', G_SET = 'Settings pages';
+  var G_VIEW = 'Viewer commands (current tool)', G_CMP = 'Compare commands (current tool)', G_CODE = 'Code Viewer', G_JSON = 'JSON / XML Viewer', G_XLSX = 'CSV / XLSX Viewer', G_IO = 'Import & export';
+  // Commands that drive the open tool through its window.DTAPI. tools: null = every tool. pane: where it applies.
+  // call: [method, ...args] runs at once; pick: asks which entries (mode 'copy' = one or more, 'compare' = set entries as A / B).
+  var ALL_T = ['code', 'json', 'xlsx'];
+  var TOOL_CMDS = [
+    { id: 'expandAll', group: G_VIEW, label: 'Expand all entries', tools: ALL_T, pane: 'viewer', generic: true, kw: 'open unfold show all', call: ['expandAll'], say: 'Expanded all' },
+    { id: 'collapseAll', group: G_VIEW, label: 'Collapse all entries', tools: ALL_T, pane: 'viewer', generic: true, kw: 'close fold hide all', call: ['collapseAll'], say: 'Collapsed all' },
+    { id: 'focusSearch', group: G_VIEW, label: 'Search in the first entry', tools: ALL_T, pane: 'viewer', generic: true, kw: 'find filter', call: ['focusSearch'], say: '' },
+    { id: 'toggleWrap', group: G_CODE, label: 'Toggle line wrap on all snippets', tools: ['code'], pane: 'viewer', kw: 'wrap long lines', call: ['toggleWrap', []], say: 'Line wrap toggled' },
+    { id: 'toggleMinimap', group: G_VIEW, label: 'Toggle the minimap on all entries', tools: ['code', 'json'], pane: 'viewer', generic: true, kw: 'map overview', call: ['toggleMinimap', []], say: 'Minimap toggled' },
+    { id: 'toggleHeader', group: G_XLSX, label: 'Toggle “first row is a header” on all files', tools: ['xlsx'], pane: 'viewer', kw: 'header row columns', call: ['toggleHeader', []], say: 'Header row toggled' },
+    { id: 'copyRaw', group: G_CODE, label: 'Copy a snippet as raw text', tools: ['code'], pane: 'viewer', kw: 'clipboard plain', pick: { mode: 'copy', api: 'copy', arg: 'raw', verb: 'Copy', done: 'Copied' } },
+    { id: 'copyFence', group: G_CODE, label: 'Copy a snippet as a Markdown code block', tools: ['code'], pane: 'viewer', kw: 'clipboard markdown fence', pick: { mode: 'copy', api: 'copy', arg: 'fence', verb: 'Copy', done: 'Copied' } },
+    { id: 'saveFile', group: G_CODE, label: 'Download a snippet / JSON entry as a file', tools: ['code', 'json'], pane: 'viewer', kw: 'save export file', pick: { mode: 'copy', api: 'save', arg: 'file', verb: 'Download', done: 'Downloading' } },
+    { id: 'copyFormatted', group: G_JSON, label: 'Copy an entry as formatted JSON / XML', tools: ['json'], pane: 'viewer', kw: 'clipboard pretty indent', pick: { mode: 'copy', api: 'copy', arg: 'formatted', verb: 'Copy', done: 'Copied' } },
+    { id: 'copyMinified', group: G_JSON, label: 'Copy an entry as minified JSON', tools: ['json'], pane: 'viewer', kw: 'clipboard compact', pick: { mode: 'copy', api: 'copy', arg: 'minified', verb: 'Copy', done: 'Copied' } },
+    { id: 'copyXml', group: G_JSON, label: 'Copy an entry as XML', tools: ['json'], pane: 'viewer', kw: 'clipboard convert', pick: { mode: 'copy', api: 'copy', arg: 'xml', verb: 'Copy', done: 'Copied' } },
+    { id: 'copyAsJson', group: G_JSON, label: 'Copy an XML entry as JSON', tools: ['json'], pane: 'viewer', kw: 'clipboard convert', pick: { mode: 'copy', api: 'copy', arg: 'json', verb: 'Copy', done: 'Copied' } },
+    { id: 'copyCsv', group: G_XLSX, label: 'Copy a table as CSV', tools: ['xlsx'], pane: 'viewer', kw: 'clipboard', pick: { mode: 'copy', api: 'copy', arg: 'csv', verb: 'Copy', done: 'Copied' } },
+    { id: 'copyTableJson', group: G_XLSX, label: 'Copy a table as JSON', tools: ['xlsx'], pane: 'viewer', kw: 'clipboard', pick: { mode: 'copy', api: 'copy', arg: 'json', verb: 'Copy', done: 'Copied' } },
+    { id: 'copyMarkdown', group: G_XLSX, label: 'Copy a table as a Markdown table', tools: ['xlsx'], pane: 'viewer', kw: 'clipboard', pick: { mode: 'copy', api: 'copy', arg: 'markdown', verb: 'Copy', done: 'Copied' } },
+    { id: 'saveCsv', group: G_XLSX, label: 'Download a table as CSV', tools: ['xlsx'], pane: 'viewer', kw: 'save export file', pick: { mode: 'copy', api: 'save', arg: 'csv', verb: 'Download', done: 'Downloading' } },
+    { id: 'saveXlsx', group: G_XLSX, label: 'Download a file as XLSX', tools: ['xlsx'], pane: 'viewer', kw: 'save export excel', pick: { mode: 'copy', api: 'save', arg: 'xlsx', verb: 'Download', done: 'Downloading' } },
+    { id: 'compareLoad', group: G_CMP, label: 'Load entries into Compare (pick which are A and B)', tools: ALL_T, pane: 'any', generic: true, kw: 'compare diff panels left right a b', pick: { mode: 'compare', verb: 'Load into Compare' } },
+    { id: 'compareRun', group: G_CMP, label: 'Compare now', tools: ALL_T, pane: 'compare', generic: true, kw: 'diff run refresh', call: ['compareRun'], say: 'Compared' },
+    { id: 'compareSwap', group: G_CMP, label: 'Swap the two compare panels', tools: ALL_T, pane: 'compare', generic: true, kw: 'exchange left right', call: ['compareSwap'], say: 'Panels swapped' },
+    { id: 'compareNext', group: G_CMP, label: 'Jump to the next difference', tools: ALL_T, pane: 'compare', generic: true, kw: 'diff change down', call: ['compareNext'], say: '' },
+    { id: 'comparePrev', group: G_CMP, label: 'Jump to the previous difference', tools: ALL_T, pane: 'compare', generic: true, kw: 'diff change up', call: ['comparePrev'], say: '' },
+    { id: 'compareFormat', group: G_CMP, label: 'Format both compare panels', tools: ['code', 'json'], pane: 'compare', generic: true, kw: 'pretty indent beautify', call: ['compareFormat'], say: 'Panels formatted' },
+    { id: 'compareMinify', group: G_JSON, label: 'Minify both compare panels', tools: ['json'], pane: 'compare', kw: 'compact', call: ['compareMinify'], say: 'Panels minified' },
+    { id: 'cmpWhitespace', group: G_CODE, label: 'Compare: ignore whitespace on / off', tools: ['code'], pane: 'compare', kw: 'spaces trim', call: ['compareToggle', 'whitespace'], say: '' },
+    { id: 'cmpCase', group: G_CODE, label: 'Compare: ignore case on / off', tools: ['code'], pane: 'compare', kw: 'uppercase lowercase', call: ['compareToggle', 'case'], say: '' },
+    { id: 'cmpBlank', group: G_CODE, label: 'Compare: ignore blank lines on / off', tools: ['code'], pane: 'compare', kw: 'empty lines', call: ['compareToggle', 'blank'], say: '' },
+    { id: 'cmpHeader', group: G_XLSX, label: 'Compare: first row is a header on / off', tools: ['xlsx'], pane: 'compare', kw: 'header row', call: ['compareToggle', 'header'], say: '' }
+  ];
+  function toolCmd(id) { return TOOL_CMDS.filter(function (c) { return c.id === id; })[0]; }
   var KEY_DEFS = [
     { id: 'palette', group: G_GEN, label: 'Open the command palette', def: 'Mod+KeyK', run: 'palette' },
     { id: 'paletteEditor', group: G_GEN, label: 'Open the command palette while typing in the code editor', def: 'Mod+Shift+KeyP', run: 'palette' },
@@ -694,6 +795,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
     { id: 'themeSystem', group: G_LOOK, label: 'Theme: follow system', def: '', run: 'themeSystem' },
     { id: 'themeDark', group: G_LOOK, label: 'Theme: dark', def: '', run: 'themeDark' },
     { id: 'themeLight', group: G_LOOK, label: 'Theme: light', def: '', run: 'themeLight' },
+    { id: 'palNext', group: G_LOOK, label: 'Next color palette', def: '', run: 'palNext' },
+    { id: 'palPicker', group: G_LOOK, label: 'Color palette picker…', def: '', run: 'palPicker', close: true },
+    { id: 'palStock', group: G_LOOK, label: 'Color palette: stock', def: '', run: 'palStock' },
     { id: 'contrast', group: G_LOOK, label: 'Accessibility: turn high contrast on / off', def: '', run: 'contrast' },
     { id: 'motion', group: G_LOOK, label: 'Accessibility: reduce animations on / off', def: '', run: 'motion' },
     { id: 'scaleUp', group: G_LOOK, label: 'Interface size: larger', def: '', run: 'scaleUp' },
@@ -703,16 +807,30 @@ window.addEventListener('beforeinstallprompt', function (e) {
     { id: 'settingsCode', group: G_SET, label: 'Settings: Code Viewer', def: '', run: 'settingsCode' },
     { id: 'settingsJson', group: G_SET, label: 'Settings: JSON / XML Viewer', def: '', run: 'settingsJson' },
     { id: 'settingsXlsx', group: G_SET, label: 'Settings: CSV / XLSX Viewer', def: '', run: 'settingsXlsx' },
-    { id: 'shortcuts', group: G_SET, label: 'Open these keyboard shortcuts', def: '', run: 'shortcuts' }
+    { id: 'shortcuts', group: G_SET, label: 'Open these keyboard shortcuts', def: '', run: 'shortcuts' },
+    { id: 'exportAll', group: G_IO, label: 'Export everything (settings and data)…', def: '', run: 'exportAll' },
+    { id: 'importAll', group: G_IO, label: 'Import everything from a file…', def: '', run: 'importAll' },
+    { id: 'exportSettings', group: G_IO, label: 'Export my settings and shortcuts', def: '', run: 'exportSettings' },
+    { id: 'importSettings', group: G_IO, label: 'Import settings and shortcuts…', def: '', run: 'importSettings' },
+    { id: 'exportCode', group: G_IO, label: 'Export all Code snippets', def: '', run: 'exportCode' },
+    { id: 'importCode', group: G_IO, label: 'Import Code snippets…', def: '', run: 'importCode' },
+    { id: 'exportJson', group: G_IO, label: 'Export all JSON / XML entries', def: '', run: 'exportJson' },
+    { id: 'importJson', group: G_IO, label: 'Import JSON / XML entries…', def: '', run: 'importJson' },
+    { id: 'exportXlsx', group: G_IO, label: 'Export all CSV / XLSX files', def: '', run: 'exportXlsx' },
+    { id: 'importXlsx', group: G_IO, label: 'Import CSV / XLSX files…', def: '', run: 'importXlsx' }
   ];
+  TOOL_CMDS.forEach(function (tc) { KEY_DEFS.push({ id: tc.id, group: tc.group, label: tc.label, def: '', run: tc.id, close: true }); });
   // How the command palette is arranged by default ("By type"): what matters most first, then the current tool.
   var PAL_TYPE = [
     ['General', ['shortcuts', 'settings']],
     ['Navigate', ['tab1', 'tab2', 'tab3', 'switchInner']],
-    ['This tool', ['upload', 'toggleView', 'fontUp', 'fontDown', 'fontReset', 'addSample', 'addSampleLong', 'ocr', 'clearAll', 'clearResults']],
-    ['Appearance', ['themeToggle', 'themeSystem', 'themeDark', 'themeLight', 'contrast', 'motion', 'scaleUp', 'scaleDown', 'scaleReset']],
+    ['This tool', ['upload', 'toggleView', 'expandAll', 'collapseAll', 'focusSearch', 'copyRaw', 'copyFence', 'copyFormatted', 'copyMinified', 'copyXml', 'copyAsJson', 'copyCsv', 'copyTableJson', 'copyMarkdown',
+      'saveFile', 'saveCsv', 'saveXlsx', 'toggleWrap', 'toggleMinimap', 'toggleHeader', 'fontUp', 'fontDown', 'fontReset', 'addSample', 'addSampleLong', 'ocr', 'clearAll', 'clearResults']],
+    ['Compare', ['compareLoad', 'compareRun', 'compareSwap', 'compareNext', 'comparePrev', 'compareFormat', 'compareMinify', 'cmpWhitespace', 'cmpCase', 'cmpBlank', 'cmpHeader']],
+    ['Appearance', ['themeToggle', 'themeSystem', 'themeDark', 'themeLight', 'palPicker', 'palNext', 'palStock', 'contrast', 'motion', 'scaleUp', 'scaleDown', 'scaleReset']],
+    ['Import & export', ['exportAll', 'importAll', 'exportSettings', 'importSettings', 'exportCode', 'importCode', 'exportJson', 'importJson', 'exportXlsx', 'importXlsx', 'backup']],
     ['Settings pages', ['settingsCode', 'settingsJson', 'settingsXlsx']],
-    ['App', ['backup', 'install', 'github']]
+    ['App', ['install', 'github']]
   ];
   var MIN_PAL_ORDER = ['shortcuts', 'tab1', 'tab2', 'tab3'];   // what a new or empty custom palette shows
   var DEFAULT_PAL_ORDER = [];   // every command that can appear in the palette, by type
@@ -760,6 +878,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
         uiScale: pick(Number(g.uiScale), [90, 100, 110, 125, 150], 100),
         motion: pick(g.motion, ['system', 'reduce', 'full'], 'system'),
         contrast: pick(g.contrast, ['normal', 'high'], 'normal'),
+        palette: pick(g.palette, PALETTE_IDS, 'stock'),
         splash: g.splash !== false
       },
       keys: {},
@@ -801,6 +920,29 @@ window.addEventListener('beforeinstallprompt', function (e) {
     return s;
   }
 
+  var PALETTES = [
+    { id: 'stock', name: 'Stock (dark / light)', variants: {} },
+    { id: 'monokai', name: 'Monokai', variants: { dark: {
+      bg: '#272822', panel: '#1e1f1c', elev: '#3e3d32', border: '#49483e', text: '#f8f8f2', dim: '#a6a28c', bright: '#ffffff', accent: '#a6e22e', accentFg: '#1e1f1c', sel: '#49483e', input: '#3e3d32',
+      comment: '#75715e', string: '#e6db74', keyword: '#f92672', number: '#ae81ff', type: '#66d9ef', func: '#a6e22e', key: '#66d9ef', tag: '#f92672', macro: '#fd971f', add: '#a6e22e', remove: '#f92672', change: '#e6db74' } } },
+    { id: 'solarized', name: 'Solarized', variants: {
+      dark: { bg: '#002b36', panel: '#073642', elev: '#0b4352', border: '#1a5566', text: '#93a1a1', dim: '#7f9599', bright: '#fdf6e3', accent: '#268bd2', accentFg: '#ffffff', sel: '#0d4a5b', input: '#073642',
+        comment: '#657b83', string: '#2aa198', keyword: '#859900', number: '#d33682', type: '#b58900', func: '#268bd2', key: '#268bd2', tag: '#268bd2', macro: '#cb4b16', add: '#859900', remove: '#dc322f', change: '#b58900' },
+      light: { bg: '#fdf6e3', panel: '#eee8d5', elev: '#e6dfc8', border: '#d3cbb1', text: '#586e75', dim: '#66797f', bright: '#002b36', accent: '#1b76b8', accentFg: '#ffffff', sel: '#e0dabf', input: '#f5eedb',
+        comment: '#8a9a9a', string: '#1f8a82', keyword: '#6f8000', number: '#d33682', type: '#9a7400', func: '#1f78b8', key: '#1f78b8', tag: '#1f78b8', macro: '#cb4b16', add: '#6f8000', remove: '#dc322f', change: '#9a7400' } } },
+    { id: 'dracula', name: 'Dracula', variants: { dark: {
+      bg: '#282a36', panel: '#21222c', elev: '#343746', border: '#44475a', text: '#f8f8f2', dim: '#9aa0be', bright: '#ffffff', accent: '#bd93f9', accentFg: '#21222c', sel: '#44475a', input: '#343746',
+      comment: '#6272a4', string: '#f1fa8c', keyword: '#ff79c6', number: '#bd93f9', type: '#8be9fd', func: '#50fa7b', key: '#8be9fd', tag: '#ff79c6', macro: '#ffb86c', add: '#50fa7b', remove: '#ff5555', change: '#f1fa8c' } } },
+    { id: 'nord', name: 'Nord', variants: { dark: {
+      bg: '#2e3440', panel: '#272c36', elev: '#3b4252', border: '#434c5e', text: '#d8dee9', dim: '#9aa5b8', bright: '#eceff4', accent: '#88c0d0', accentFg: '#2e3440', sel: '#434c5e', input: '#3b4252',
+      comment: '#6b7a96', string: '#a3be8c', keyword: '#81a1c1', number: '#b48ead', type: '#8fbcbb', func: '#88c0d0', key: '#8fbcbb', tag: '#81a1c1', macro: '#d08770', add: '#a3be8c', remove: '#bf616a', change: '#ebcb8b' } } },
+    { id: 'github', name: 'GitHub', variants: {
+      dark: { bg: '#0d1117', panel: '#161b22', elev: '#21262d', border: '#30363d', text: '#c9d1d9', dim: '#8b949e', bright: '#f0f6fc', accent: '#1f6feb', accentFg: '#ffffff', sel: '#1c3d6e', input: '#21262d',
+        comment: '#8b949e', string: '#a5d6ff', keyword: '#ff7b72', number: '#79c0ff', type: '#ffa657', func: '#d2a8ff', key: '#79c0ff', tag: '#7ee787', macro: '#ffa657', add: '#3fb950', remove: '#f85149', change: '#d29922' },
+      light: { bg: '#ffffff', panel: '#f6f8fa', elev: '#eaeef2', border: '#d0d7de', text: '#24292f', dim: '#57606a', bright: '#000000', accent: '#0969da', accentFg: '#ffffff', sel: '#b6e3ff', input: '#f6f8fa',
+        comment: '#6e7781', string: '#0a3069', keyword: '#cf222e', number: '#0550ae', type: '#953800', func: '#8250df', key: '#0550ae', tag: '#116329', macro: '#953800', add: '#1a7f37', remove: '#cf222e', change: '#9a6700' } } }
+  ];
+  var PALETTE_IDS = PALETTES.map(function (p) { return p.id; });
   var settings = loadSettings();
   var saveTimer = null;
   function saveSettings() {
@@ -838,6 +980,50 @@ window.addEventListener('beforeinstallprompt', function (e) {
   var moonIcon = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M6.5 1.3a6.7 6.7 0 1 0 8.2 8.2A6.95 6.95 0 0 1 6.5 1.3z"/></svg>';
   var sunIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3.2" fill="currentColor" stroke="none"/><path d="M8 0.7v2.1M8 13.2v2.1M0.7 8h2.1M13.2 8h2.1M2.8 2.8l1.5 1.5M11.7 11.7l1.5 1.5M2.8 13.2l1.5-1.5M11.7 4.3l1.5-1.5"/></svg>';
 
+  /* ===== Color palettes (editor-style presets). "stock" is the built-in dark / light look and is the default.
+     A palette can have a dark and/or a light variant; when the current mode has none, the stock colors are used. ===== */
+  function paletteById(id) { return PALETTES.filter(function (p) { return p.id === id; })[0] || PALETTES[0]; }
+  // The colors of the chosen palette for the current light / dark mode, or null (stock look; also null in high contrast).
+  function activePalette() {
+    var g = settings.general;
+    if (g.contrast === 'high' || !g.palette || g.palette === 'stock') return null;
+    return paletteById(g.palette).variants[effectiveTheme()] || null;
+  }
+  var SHELL_PAL_VARS = [];
+  function applyShellPalette(v) {
+    SHELL_PAL_VARS.forEach(function (n) { root.style.removeProperty(n); });
+    SHELL_PAL_VARS = [];
+    if (!v) return;
+    var m = { '--bg': v.bg, '--bar-bg': v.panel, '--bar-border': v.border, '--elev': v.elev, '--input': v.input, '--text': v.text, '--text-dim': v.dim, '--text-bright': v.bright,
+      '--tab-fg': v.dim, '--tab-fg-active': v.bright, '--tab-active-bg': v.bg, '--accent': v.accent, '--accent-strong': v.accent, '--accent-fg': v.accentFg, '--focus': v.accent, '--cursor-color': v.bright,
+      '--tok-comment': v.comment, '--tok-string': v.string, '--tok-keyword': v.keyword, '--tok-number': v.number, '--tok-type': v.type, '--tok-func': v.func, '--tok-key': v.key };
+    Object.keys(m).forEach(function (n) { root.style.setProperty(n, m[n]); SHELL_PAL_VARS.push(n); });
+  }
+  // What a tool page receives: ready-made CSS variables for that tool (each page names its variables differently) plus token colors for Monaco.
+  function paletteFor(tool) {
+    var v = activePalette();
+    if (!v) return null;
+    var m = { '--tok-comment': v.comment, '--tok-string': v.string, '--tok-keyword': v.keyword, '--tok-number': v.number, '--tok-type': v.type, '--tok-func': v.func, '--tok-key': v.key, '--tok-tag': v.tag, '--tok-macro': v.macro,
+      '--diff-add': v.add, '--diff-remove': v.remove, '--diff-change': v.change };
+    if (tool === 'json') {
+      Object.assign(m, { '--vscode-editor-foreground': v.text, '--vscode-foreground': v.text, '--vscode-editor-background': v.bg, '--vscode-editorGroupHeader-tabsBackground': v.panel,
+        '--vscode-tab-inactiveForeground': v.dim, '--vscode-tab-hoverBackground': v.elev, '--vscode-tab-activeBackground': v.bg, '--vscode-tab-activeForeground': v.bright, '--vscode-tab-activeBorder': v.accent,
+        '--vscode-button-background': v.accent, '--vscode-button-foreground': v.accentFg, '--vscode-button-secondaryBackground': v.elev, '--vscode-button-secondaryForeground': v.text,
+        '--vscode-input-background': v.input, '--vscode-input-foreground': v.text, '--vscode-input-border': v.border, '--vscode-focusBorder': v.accent, '--vscode-toolbar-hoverBackground': v.elev,
+        '--vscode-editor-lineHighlightBackground': v.elev, '--vscode-menu-background': v.panel, '--vscode-menu-foreground': v.text, '--vscode-menu-border': v.border,
+        '--vscode-menu-selectionBackground': v.sel, '--vscode-menu-selectionForeground': v.bright, '--vscode-menu-separatorBackground': v.border, '--vscode-list-hoverBackground': v.elev, '--vscode-panel-border': v.border });
+    } else {
+      Object.assign(m, { '--bg': v.bg, '--bg-panel': v.panel, '--bg-elevated': v.elev, '--border': v.border, '--text': v.text, '--text-dim': v.dim, '--text-bright': v.bright,
+        '--accent': v.accent, '--accent-fg': v.accentFg, '--accent-hover': v.accent, '--input-bg': v.input, '--hover-bg': v.elev, '--sel-bg': v.sel, '--focus': v.accent });
+      if (tool === 'xlsx') Object.assign(m, { '--num-color': v.number, '--bool-color': v.keyword, '--date-color': v.func });
+    }
+    function hx(c) { return String(c).replace('#', ''); }
+    return { id: settings.general.palette, kind: effectiveTheme(), vars: m, mono: {
+      rules: { comment: hx(v.comment), string: hx(v.string), keyword: hx(v.keyword), number: hx(v.number), type: hx(v.type), tag: hx(v.tag), 'attribute.name': hx(v.key), 'attribute.value': hx(v.string), variable: hx(v.text), delimiter: hx(v.text), regexp: hx(v.string), 'string.escape': hx(v.macro), 'predefined': hx(v.func), 'meta': hx(v.macro) },
+      colors: { 'editor.background': v.bg, 'editor.foreground': v.text, 'editor.lineHighlightBackground': v.elev, 'editor.selectionBackground': v.sel, 'editorCursor.foreground': v.bright,
+        'editorLineNumber.foreground': v.dim, 'editorLineNumber.activeForeground': v.bright, 'editorGutter.background': v.bg, 'editorWidget.background': v.panel, 'minimap.background': v.bg } } };
+  }
+
   function effectiveTheme() {
     var t = settings.general.theme;
     if (t === 'light' || t === 'dark') return t;
@@ -848,12 +1034,14 @@ window.addEventListener('beforeinstallprompt', function (e) {
     var g = settings.general, theme = effectiveTheme(), scale = g.uiScale / 100;
     root.setAttribute('data-theme', theme);
     root.setAttribute('data-hc', g.contrast === 'high' ? '1' : '0');
+    var ap = activePalette();
+    applyShellPalette(ap);
     if (g.motion === 'system') root.removeAttribute('data-motion'); else root.setAttribute('data-motion', g.motion);
     root.style.setProperty('--ui-scale', scale);
     root.style.fontSize = (16 * scale) + 'px';
     $('themeToggleIcon').innerHTML = theme === 'light' ? sunIcon : moonIcon;
     var tcm = $('themeColorMeta');
-    if (tcm) tcm.setAttribute('content', theme === 'light' ? '#f3f3f3' : '#252526');
+    if (tcm) tcm.setAttribute('content', ap ? ap.panel : (theme === 'light' ? '#f3f3f3' : '#252526'));
     var si = $('splashImg');
     if (si && settings.general.splash !== false) { var want = theme === 'light' ? 'og-image-light.png' : 'og-image.png'; if (si.getAttribute('src') !== want) si.setAttribute('src', want); }
     var other = theme === 'light' ? 'dark' : 'light';
@@ -879,7 +1067,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function postTo(iframe, msg) { try { iframe.contentWindow.postMessage(msg, TARGET); } catch (e) {} }
   function pushStateToFrame(iframe) {
     postTo(iframe, { __devToolkitThemeSet: true, theme: effectiveTheme() });
-    postTo(iframe, { __devToolkitSettings: true, settings: settings });
+    var pane = iframe.closest ? iframe.closest('[id^="pane-"]') : null;
+    postTo(iframe, { __devToolkitSettings: true, settings: settings, palette: paletteFor(pane ? pane.id.slice(5) : '') });
   }
   function broadcast() { frames().forEach(pushStateToFrame); }
 
@@ -909,6 +1098,19 @@ window.addEventListener('beforeinstallprompt', function (e) {
     settings = sanitize(settings);
     commit(opts);
   }
+  // Chooses a palette (id 'stock' = none). mode: the light / dark mode to switch to. Picking anything here stops following the system.
+  function selectPalette(id, mode) {
+    var g = settings.general;
+    var pl = paletteById(id), have = Object.keys(pl.variants);
+    if (mode) g.theme = mode;
+    else if (have.length === 1) g.theme = have[0];   // a dark-only (or light-only) palette switches the theme to that mode
+    else if (g.theme === 'system' && id !== 'stock') g.theme = effectiveTheme();
+    g.palette = paletteById(id).id;
+    settings = sanitize(settings);
+    commit();
+  }
+  // Back to the stock colors, following the system light / dark setting (the default).
+  function selectSystem() { settings.general.theme = 'system'; settings.general.palette = 'stock'; settings = sanitize(settings); commit(); }
 
   function toggleTheme() {
     setVal('general', 'theme', effectiveTheme() === 'dark' ? 'light' : 'dark');
@@ -1420,12 +1622,30 @@ window.addEventListener('beforeinstallprompt', function (e) {
       list.push({ id: 'clearResults', title: 'Clear compare — results only (' + cm.short + ')', kw: 'delete remove empty results diff output',
         run: function () { callTool(ct, CLEAR_RESULTS[ct]); announce('Compare results cleared'); } });
     }
+    TOOL_CMDS.forEach(function (tc) {
+      if (tc.tools && tc.tools.indexOf(ct) < 0) return;
+      if (tc.pane === 'viewer' && pane !== 'viewer') return;
+      if (tc.pane === 'compare' && pane !== 'compare') return;
+      var title = tc.generic ? tc.label + ' (' + cm.short + ')' : tc.label;
+      if (tc.id === 'saveFile') title = ct === 'json' ? 'Download a JSON / XML entry as a file' : 'Download a snippet as a file';
+      var it = { id: tc.id, title: title, kw: tc.kw + ' ' + cm.short.toLowerCase() };
+      if (tc.pick) it.pick = tc; else it.run = function () { runToolCmd(tc.id); };
+      list.push(it);
+    });
+    [['exportAll', 'Export everything (settings and data)…'], ['importAll', 'Import everything from a file…'], ['exportSettings', 'Export my settings and shortcuts'], ['importSettings', 'Import settings and shortcuts…'],
+     ['exportCode', 'Export all Code snippets'], ['importCode', 'Import Code snippets…'], ['exportJson', 'Export all JSON / XML entries'], ['importJson', 'Import JSON / XML entries…'],
+     ['exportXlsx', 'Export all CSV / XLSX files'], ['importXlsx', 'Import CSV / XLSX files…']].forEach(function (x) {
+      list.push({ id: x[0], title: x[1], kw: 'backup restore save load file download upload move transfer', run: function () { CMD[x[0]](); } });
+    });
     list.push({ id: 'settings', title: 'Open settings', kw: 'preferences options', run: function () { openSettings('general'); } });
     list.push({ id: 'settingsCode', title: 'Settings: Code Viewer (font, size, tabs, wrap)', kw: 'code font size line height tab wrap', run: function () { openSettings('code'); } });
     list.push({ id: 'settingsJson', title: 'Settings: JSON / XML Viewer (font, size, expand)', kw: 'json xml font size expand levels', run: function () { openSettings('json'); } });
     list.push({ id: 'settingsXlsx', title: 'Settings: CSV / XLSX Viewer (font, density, header)', kw: 'csv xlsx sheet font size density header', run: function () { openSettings('xlsx'); } });
     list.push({ id: 'themeToggle', title: 'Toggle light / dark theme', kw: 'appearance color mode', run: toggleTheme });
-    list.push({ id: 'themeSystem', title: 'Theme: follow system', kw: 'automatic auto os', run: function () { setVal('general', 'theme', 'system'); announce('Theme follows system'); } });
+    list.push({ id: 'themeSystem', title: 'Theme: follow system', kw: 'automatic auto os', run: function () { selectSystem(); announce('Theme follows system'); } });
+    list.push({ id: 'palPicker', title: 'Color palette picker…', kw: 'appearance theme colors monokai solarized dracula nord github stock system', pick: PAL_PICK_TC });
+    list.push({ id: 'palNext', title: 'Next color palette', kw: 'appearance theme colors monokai solarized dracula nord github', run: function () { CMD.palNext(); } });
+    list.push({ id: 'palStock', title: 'Color palette: stock', kw: 'appearance theme colors default', run: function () { CMD.palStock(); } });
     list.push({ id: 'themeDark', title: 'Theme: dark', kw: 'appearance', run: function () { setVal('general', 'theme', 'dark'); } });
     list.push({ id: 'themeLight', title: 'Theme: light', kw: 'appearance', run: function () { setVal('general', 'theme', 'light'); } });
     list.push({ id: 'contrast', title: 'Accessibility: high contrast ' + (g.contrast === 'high' ? 'off' : 'on'), kw: 'contrast a11y', run: function () { setVal('general', 'contrast', g.contrast === 'high' ? 'normal' : 'high'); } });
@@ -1481,6 +1701,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
 
   function renderPalette() {
     var list = $('palList');
+    if (pk) { renderPick(); return; }
     palItems = filterCommands($('palInput').value);
     palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
     list.innerHTML = '';
@@ -1521,18 +1742,26 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function closePalette(silent) {
     if (!paletteOpen) return;
     paletteOpen = false;
+    resetPick();
     $('palette').hidden = true;
     if (!silent) restoreFocus(); else lockBackground(settingsOpen);
   }
   function runPalette(i) {
     var c = palItems[i];
+    if (pk) { pickEnter(false, i); return; }
+    if (c && c.pick) { startPick(c.pick); return; }   // asks which entries; keeps the palette open
     closePalette();
     if (c) setTimeout(function () { c.run(); }, 0);
   }
   $('palInput').addEventListener('input', function () { palSel = 0; renderPalette(); });
   $('palInput').addEventListener('keydown', function (e) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); if (palItems.length) { palSel = (palSel + 1) % palItems.length; markPalSel(); } }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); if (palItems.length) { palSel = (palSel + palItems.length - 1) % palItems.length; markPalSel(); } }
+    if (pk) {
+      if (e.key === 'Escape') { e.preventDefault(); closePick(); return; }
+      if (e.key === 'Enter') { e.preventDefault(); pickEnter(e.shiftKey, palSel); return; }
+      if (e.altKey && (e.key === '1' || e.key === '2') && pk.tc.pick.mode === 'compare') { e.preventDefault(); var pr = palItems[palSel]; if (pr) pickAssign(pr.id, e.key === '1' ? 'A' : 'B'); return; }
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (palItems.length) { palSel = (palSel + 1) % palItems.length; markPalSel(); previewPal(); } }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (palItems.length) { palSel = (palSel + palItems.length - 1) % palItems.length; markPalSel(); previewPal(); } }
     else if (e.key === 'Enter') { e.preventDefault(); runPalette(palSel); }
     else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
     else trapTab(e, $('palette'));
@@ -1563,7 +1792,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   var SCHEMA = {
     general: [
       { group: 'Appearance' },
-      { key: 'theme', type: 'seg', label: 'Theme', options: [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']], help: 'System follows your device’s light/dark setting.' },
+      { custom: 'themes' },
       { key: 'uiScale', type: 'seg', label: 'Interface size', options: [[90, '90%'], [100, '100%'], [110, '110%'], [125, '125%'], [150, '150%']], help: 'Scales everything, like browser zoom, but only for Dev Toolkit.' },
       { group: 'Accessibility' },
       { key: 'contrast', type: 'seg', label: 'Contrast', options: [['normal', 'Normal'], ['high', 'High']], help: 'High contrast brightens text and strengthens borders.' },
@@ -1571,7 +1800,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { group: 'Startup' },
       { key: 'splash', type: 'switch', label: 'Show the welcome screen when Dev Toolkit opens', help: 'Click anywhere (or press a key) to dismiss it. Takes effect the next time you open the page.' },
       { custom: 'install' },
-      { custom: 'storage' }
+      { custom: 'storage' },
+      { custom: 'io' }
     ],
     keys: [
       { custom: 'keys' }
@@ -1583,14 +1813,16 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { key: 'lineHeight', type: 'seg', label: 'Line spacing', options: [[1.3, 'Tight'], [1.5, 'Normal'], [1.7, 'Relaxed']] },
       { key: 'tabSize', type: 'seg', label: 'Tab width', options: [[2, '2'], [4, '4'], [8, '8']] },
       { group: 'Behavior' },
-      { key: 'wrap', type: 'switch', label: 'Wrap long lines by default', help: 'Applies to snippets you add from now on. You can still toggle it per snippet.' }
+      { key: 'wrap', type: 'switch', label: 'Wrap long lines by default', help: 'Applies to snippets you add from now on. You can still toggle it per snippet.' },
+      { custom: 'io' }
     ],
     json: [
       { group: 'Text' },
       { key: 'font', type: 'font', label: 'Font' },
       { key: 'size', type: 'range', label: 'Font size', min: 9, max: 24, step: 0.5, unit: 'px' },
       { group: 'Behavior' },
-      { key: 'expand', type: 'seg', label: 'Expanded levels for new files', options: [['all', 'All'], ['1', '1'], ['2', '2'], ['3', '3']], help: 'How deep the tree opens when you load a file. Deeper nodes start collapsed.' }
+      { key: 'expand', type: 'seg', label: 'Expanded levels for new files', options: [['all', 'All'], ['1', '1'], ['2', '2'], ['3', '3']], help: 'How deep the tree opens when you load a file. Deeper nodes start collapsed.' },
+      { custom: 'io' }
     ],
     xlsx: [
       { group: 'Text' },
@@ -1598,7 +1830,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { key: 'size', type: 'range', label: 'Font size', min: 9, max: 24, step: 0.5, unit: 'px' },
       { group: 'Table' },
       { key: 'density', type: 'seg', label: 'Row density', options: [['compact', 'Compact'], ['normal', 'Normal'], ['relaxed', 'Relaxed']] },
-      { key: 'header', type: 'switch', label: 'Treat the first row as a header', help: 'Default for newly opened CSV/XLSX files. You can still change it per file.' }
+      { key: 'header', type: 'switch', label: 'Treat the first row as a header', help: 'Default for newly opened CSV/XLSX files. You can still change it per file.' },
+      { custom: 'io' }
     ]
   };
 
@@ -1914,6 +2147,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       else if (spec.custom === 'install') { var ib = buildInstall(); if (ib) box.appendChild(ib); }
       else if (spec.custom === 'storage') box.appendChild(buildStorage());
       else if (spec.custom === 'keys') box.appendChild(buildKeys());
+      else if (spec.custom === 'io') box.appendChild(buildIo(section));
+      else if (spec.custom === 'themes') box.appendChild(buildThemes());
       else box.appendChild(buildControl(spec, section));
     });
     box.setAttribute('aria-labelledby', 'setnav-' + section);
@@ -2048,7 +2283,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // Safety net: Esc closes an open dialog even if keyboard focus ended up outside it.
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
-    if (palEditOpen) { e.preventDefault(); closePalEdit(); }
+    if (ioOpen) { e.preventDefault(); ioHide(); }
+    else if (palEditOpen) { e.preventDefault(); closePalEdit(); }
     else if (paletteOpen) { e.preventDefault(); closePalette(); }
     else if (settingsOpen) { e.preventDefault(); closeSettings(); }
   });
@@ -2077,6 +2313,473 @@ window.addEventListener('beforeinstallprompt', function (e) {
     }
     return null;
   }
+  /* =========================================================================
+     Import & export (settings and the data saved by the three tools)
+     The tools keep their data in IndexedDB ('dev_toolkit_v1'); this page can read and write the same database.
+     ========================================================================= */
+  var IO_TOOLS = ['code', 'json', 'xlsx'];
+  var IO_NAMES = { code: 'Code snippets', json: 'JSON / XML entries', xlsx: 'CSV / XLSX files' };
+  var IO_ONE = { code: 'snippet', json: 'entry', xlsx: 'file' };
+  var IO_FORMAT = 'dev-toolkit-export';
+  function idbOpen() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(new Error('Browser storage isn’t available here.')); return; }
+      var r = indexedDB.open('dev_toolkit_v1', 1);
+      r.onupgradeneeded = function () {
+        var db = r.result;
+        IO_TOOLS.forEach(function (t) { if (!db.objectStoreNames.contains('entries_' + t)) db.createObjectStore('entries_' + t, { keyPath: 'id' }); });
+        if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+      };
+      r.onsuccess = function () { resolve(r.result); };
+      r.onerror = function () { reject(r.error || new Error('Couldn’t open browser storage.')); };
+    });
+  }
+  function reqP(req) { return new Promise(function (res, rej) { req.onsuccess = function () { res(req.result); }; req.onerror = function () { rej(req.error); }; }); }
+  function txP(tx) { return new Promise(function (res, rej) { tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error); }; tx.onabort = function () { rej(tx.error || new Error('Storage write was cancelled.')); }; }); }
+  function idbReadTool(db, t) {   // records in their saved order
+    var tx = db.transaction(['entries_' + t, 'meta'], 'readonly');
+    return Promise.all([reqP(tx.objectStore('entries_' + t).getAll()), reqP(tx.objectStore('meta').get('order:' + t))]).then(function (r) {
+      var byId = {}, out = [];
+      (r[0] || []).forEach(function (e) { byId[e.id] = e; });
+      ((r[1] && r[1].ids) || []).forEach(function (id) { if (byId[id]) { out.push(byId[id]); delete byId[id]; } });
+      Object.keys(byId).forEach(function (id) { out.push(byId[id]); });
+      return out;
+    });
+  }
+  function flushFrames() {   // make sure edits still waiting to be saved are in the database first
+    return Promise.all(TOOLS.map(function (t) {
+      try { var f = toolFrame(t); if (f && f.contentWindow && f.contentWindow.DevStore) return f.contentWindow.DevStore.flushAll(); } catch (e) {}
+      return null;
+    }));
+  }
+  function ioCounts() {
+    return idbOpen().then(function (db) {
+      return Promise.all(IO_TOOLS.map(function (t) { return reqP(db.transaction('entries_' + t, 'readonly').objectStore('entries_' + t).count()); })).then(function (n) {
+        var o = {}; IO_TOOLS.forEach(function (t, i) { o[t] = n[i]; }); return o;
+      });
+    }).catch(function () { return {}; });
+  }
+  function ioDate() { return new Date().toISOString().slice(0, 10); }
+  function ioDownload(name, obj) {
+    var a = document.createElement('a'), url = URL.createObjectURL(new Blob([JSON.stringify(obj)], { type: 'application/json' }));
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1500);
+  }
+  function plural(n, word) { return n + ' ' + (n === 1 ? word : word === 'entry' ? 'entries' : word + 's'); }
+  // opts: { settings: bool, tools: [...], name: 'file name part' }
+  function ioExport(opts) {
+    return flushFrames().then(function () { return idbOpen(); }).then(function (db) {
+      return Promise.all((opts.tools || []).map(function (t) { return idbReadTool(db, t); }));
+    }).then(function (lists) {
+      var bundle = { __format: IO_FORMAT, version: 1, app: 'Dev Toolkit', exportedAt: new Date().toISOString(), contains: [] };
+      if (opts.settings) { bundle.settings = JSON.parse(JSON.stringify(settings)); bundle.contains.push('settings'); }
+      if ((opts.tools || []).length) { bundle.data = {}; opts.tools.forEach(function (t, i) { bundle.data[t] = lists[i]; bundle.contains.push(t); }); }
+      ioDownload('dev-toolkit-' + (opts.name || 'export') + '-' + ioDate() + '.json', bundle);
+      var bits = [];
+      if (opts.settings) bits.push('settings');
+      (opts.tools || []).forEach(function (t, i) { bits.push(plural(lists[i].length, IO_ONE[t])); });
+      toast('Exported ' + bits.join(', ') + '.');
+      return bundle;
+    }).catch(function (err) { toast('Couldn’t export: ' + ((err && err.message) || 'unknown error')); });
+  }
+  function ioParse(text) {   // accepts this app's export files and the older per-tool backups
+    var obj;
+    try { obj = JSON.parse(text); } catch (e) { return { error: 'That file isn’t valid JSON.' }; }
+    if (!obj || typeof obj !== 'object') return { error: 'That file doesn’t look like a Dev Toolkit export.' };
+    var out = { settings: null, data: {}, at: obj.exportedAt || obj.__exportedAt || null };
+    var src = null;
+    if (obj.__format === IO_FORMAT) { src = obj.data; if (obj.settings && typeof obj.settings === 'object') out.settings = obj.settings; }
+    else if (obj.indexedDB || obj.localStorage) {   // legacy backup written by the tools' own export button
+      src = obj.indexedDB;
+      try { var raw = obj.localStorage && obj.localStorage[SETTINGS_KEY]; if (raw) out.settings = JSON.parse(raw); } catch (e) {}
+    } else return { error: 'That file doesn’t look like a Dev Toolkit export.' };
+    IO_TOOLS.forEach(function (t) {
+      if (src && Array.isArray(src[t])) out.data[t] = src[t].filter(function (r) { return r && typeof r === 'object' && r.id != null; });
+    });
+    if (!out.settings && !Object.keys(out.data).length) return { error: 'There is nothing to import in that file.' };
+    return out;
+  }
+  function ioSig(rec) { var c = {}; Object.keys(rec).forEach(function (k) { if (k !== 'id' && k !== 'timeStr') c[k] = rec[k]; }); return JSON.stringify(c); }
+  function ioWriteTool(db, t, incoming, mode) {   // resolves { added, skipped }
+    return idbReadTool(db, t).then(function (existing) {
+      var out = incoming, skipped = 0;
+      if (mode === 'add') {
+        var sigs = {}, taken = {}, maxNum = 0;
+        existing.forEach(function (r) { sigs[ioSig(r)] = 1; taken[r.id] = 1; var n = /^e(\d+)$/.exec(String(r.id)); if (n) maxNum = Math.max(maxNum, +n[1]); });
+        incoming.forEach(function (r) { var n = /^e(\d+)$/.exec(String(r.id)); if (n) maxNum = Math.max(maxNum, +n[1]); });
+        out = [];
+        incoming.forEach(function (r) {
+          var sig = ioSig(r);
+          if (sigs[sig]) { skipped++; return; }
+          sigs[sig] = 1;
+          var rec = JSON.parse(JSON.stringify(r));
+          if (taken[rec.id]) { rec.id = t === 'code' ? 'entry_imp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : 'e' + (++maxNum); }
+          taken[rec.id] = 1;
+          out.push(rec);
+        });
+      }
+      var tx = db.transaction(['entries_' + t, 'meta'], 'readwrite'), os = tx.objectStore('entries_' + t);
+      if (mode === 'replace') os.clear();
+      out.forEach(function (r) { os.put(r); });
+      var ids = (mode === 'replace' ? [] : existing.map(function (r) { return r.id; })).concat(out.map(function (r) { return r.id; }));
+      tx.objectStore('meta').put({ key: 'order:' + t, ids: ids });
+      return txP(tx).then(function () { return { added: out.length, skipped: skipped }; });
+    });
+  }
+  // sel: { settings: bool, tools: [..], mode: 'add' | 'replace' }
+  function ioApply(parsed, sel) {
+    var tools = sel.tools.filter(function (t) { return parsed.data[t]; }), pre = Promise.resolve();
+    if (sel.mode === 'replace' && tools.length) pre = ioExport({ settings: false, tools: tools, name: 'backup-before-import' });   // safety copy of what is about to be replaced
+    return pre.then(function () { return flushFrames(); }).then(function () { return tools.length ? idbOpen() : null; }).then(function (db) {
+      var chain = Promise.resolve(), res = {};
+      tools.forEach(function (t) { chain = chain.then(function () { return ioWriteTool(db, t, parsed.data[t], sel.mode); }).then(function (r) { res[t] = r; }); });
+      return chain.then(function () { return res; });
+    }).then(function (res) {
+      if (sel.settings && parsed.settings) { settings = sanitize(parsed.settings); commit(); }
+      if (tools.length) resetPanes();   // every tool re-reads its data
+      var bits = [];
+      if (sel.settings && parsed.settings) bits.push('settings');
+      tools.forEach(function (t) {
+        var r = res[t]; bits.push(sel.mode === 'replace' ? plural(r.added, IO_ONE[t]) + ' (replaced)' : plural(r.added, IO_ONE[t]) + (r.skipped ? ' (' + r.skipped + ' already here, skipped)' : ''));
+      });
+      toast('Imported ' + (bits.join(', ') || 'nothing') + '.');
+    }).catch(function (err) { toast('Couldn’t import: ' + ((err && err.message) || 'unknown error')); });
+  }
+
+  /* ----- the export / import dialog ----- */
+  var ioOpen = false, ioGoFn = null, ioBackTo = null;
+  function ioShow(title, goLabel, goFn) {
+    $('ioTitle').textContent = title; $('ioGo').textContent = goLabel; ioGoFn = goFn;
+    if (!ioOpen) {
+      ioOpen = true; ioBackTo = document.activeElement;
+      if (paletteOpen) closePalette(true);
+      $('ioDlg').hidden = false;
+      if (settingsOpen) { var st = $('settings'); if ('inert' in st) st.inert = true; st.setAttribute('aria-hidden', 'true'); } else lockBackground(true);
+    }
+  }
+  function ioHide() {
+    if (!ioOpen) return;
+    ioOpen = false; ioGoFn = null;
+    $('ioDlg').hidden = true;
+    if (settingsOpen) { var st = $('settings'); if ('inert' in st) st.inert = false; st.setAttribute('aria-hidden', 'false'); }
+    else restoreFocus();
+    try { if (ioBackTo && document.contains(ioBackTo)) ioBackTo.focus(); } catch (e) {}
+  }
+  function ioRow(label, checked, disabled, countText) {
+    var cb = h('input', { type: 'checkbox' }); cb.checked = !!checked; cb.disabled = !!disabled;
+    var row = h('label', { class: 'io-row' + (disabled ? ' off' : '') }, [cb, h('span', { text: label }), h('span', { class: 'io-count', text: countText || '' })]);
+    return { row: row, cb: cb, count: row.querySelector('.io-count') };
+  }
+  function openIoExport() {   // "Export everything": choose what goes in the file
+    var body = $('ioBody'); body.innerHTML = '';
+    body.appendChild(h('p', {}, [h('b', { text: 'Choose what to export. ' }), 'The file is saved to your device; nothing is uploaded anywhere.']));
+    var rows = { settings: ioRow('Settings, shortcuts and palette order', true, false, '') };
+    body.appendChild(rows.settings.row);
+    IO_TOOLS.forEach(function (t) { rows[t] = ioRow(IO_NAMES[t], true, false, '…'); body.appendChild(rows[t].row); });
+    ioCounts().then(function (c) { IO_TOOLS.forEach(function (t) { if (c[t] != null) rows[t].count.textContent = c[t]; }); });
+    $('ioNote').textContent = '';
+    ioShow('Export everything', 'Export', function () {
+      var tools = IO_TOOLS.filter(function (t) { return rows[t].cb.checked; }), withSettings = rows.settings.cb.checked;
+      if (!tools.length && !withSettings) { $('ioNote').textContent = 'Tick at least one item.'; return; }
+      ioHide();
+      ioExport({ settings: withSettings, tools: tools, name: tools.length === IO_TOOLS.length && withSettings ? 'all' : (tools.length ? tools.join('-') : 'settings') });
+    });
+    $('ioGo').focus();
+  }
+  function pickImportFile(scope) {   // scope: 'all' | 'settings' | 'code' | 'json' | 'xlsx'
+    var inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.json,application/json';
+    inp.addEventListener('change', function () {
+      var f = inp.files && inp.files[0]; if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        var parsed = ioParse(String(rd.result));
+        if (parsed.error) { toast(parsed.error); return; }
+        openIoImport(parsed, scope, f.name);
+      };
+      rd.onerror = function () { toast('Couldn’t read that file.'); };
+      rd.readAsText(f);
+    });
+    inp.click();
+  }
+  function openIoImport(parsed, scope, fname) {
+    var body = $('ioBody'); body.innerHTML = '';
+    var wantSettings = scope === 'all' || scope === 'settings', wantTools = scope === 'all' ? IO_TOOLS : (IO_TOOLS.indexOf(scope) >= 0 ? [scope] : []);
+    var when = parsed.at ? ' (exported ' + new Date(parsed.at).toLocaleString() + ')' : '';
+    body.appendChild(h('p', {}, [h('b', { text: fname }), when + '. Choose what to import.']));
+    var rows = {}, any = false;
+    if (wantSettings) {
+      rows.settings = ioRow('Settings, shortcuts and palette order', !!parsed.settings, !parsed.settings, parsed.settings ? 'replaces yours' : 'not in this file');
+      body.appendChild(rows.settings.row); if (parsed.settings) any = true;
+    }
+    wantTools.forEach(function (t) {
+      var n = parsed.data[t] ? parsed.data[t].length : 0;
+      rows[t] = ioRow(IO_NAMES[t], n > 0, n === 0, n ? String(n) : 'not in this file');
+      body.appendChild(rows[t].row); if (n) any = true;
+    });
+    var modeBox = null;
+    if (wantTools.some(function (t) { return parsed.data[t] && parsed.data[t].length; })) {
+      modeBox = h('div', { class: 'io-mode', role: 'radiogroup', 'aria-label': 'How to import the data' });
+      var add = h('input', { type: 'radio', name: 'iomode', value: 'add' }), rep = h('input', { type: 'radio', name: 'iomode', value: 'replace' });
+      add.checked = true;
+      modeBox.appendChild(h('label', {}, [add, h('span', {}, ['Add to what I have', h('small', { text: 'Keeps your current items. Anything already here is skipped, so nothing is duplicated.' })])]));
+      modeBox.appendChild(h('label', {}, [rep, h('span', {}, ['Replace what I have', h('small', { text: 'Swaps your current items for the ones in the file. A backup of what you have now is downloaded first.' })])]));
+      body.appendChild(modeBox);
+    }
+    if (!any) body.appendChild(h('p', { text: scope === 'all' ? 'There is nothing to import in that file.' : 'That file has nothing of this kind.' }));
+    $('ioNote').textContent = '';
+    ioShow(scope === 'settings' ? 'Import settings' : scope === 'all' ? 'Import everything' : 'Import ' + IO_NAMES[scope], 'Import', function () {
+      var sel = { settings: !!(rows.settings && rows.settings.cb.checked && parsed.settings), tools: wantTools.filter(function (t) { return rows[t] && rows[t].cb.checked; }), mode: rep && rep.checked ? 'replace' : 'add' };
+      if (!sel.settings && !sel.tools.length) { $('ioNote').textContent = 'Tick at least one item.'; return; }
+      ioHide();
+      ioApply(parsed, sel);
+    });
+    $('ioGo').disabled = !any;
+    if (any) $('ioGo').focus(); else $('ioCancel').focus();
+  }
+  $('ioClose').addEventListener('click', ioHide);
+  $('ioCancel').addEventListener('click', ioHide);
+  $('ioGo').addEventListener('click', function () { if (ioGoFn) ioGoFn(); });
+  $('ioDlg').addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); ioHide(); } else trapTab(e, $('ioDlg')); });
+  $('ioDlg').addEventListener('mousedown', function (e) { if (e.target === $('ioDlg')) ioHide(); });
+
+  function buildThemes() {   // Settings → General → Appearance: follow-system switch + color palettes
+    var g = settings.general, box = h('div', { class: 'ctl', id: 'themesBox' }), mode = effectiveTheme(), cur = g.palette, sys = g.theme === 'system';
+    box.appendChild(h('div', { class: 'lbl', text: 'Theme' }));
+    var sysBtn = h('button', { type: 'button', id: 'sysTheme', class: sys ? 'on' : '', 'aria-pressed': sys ? 'true' : 'false', 'data-fk': 'general:system', text: 'System',
+      onclick: function () { if (!sys) { selectSystem(); announce('Following the system theme'); } } });
+    box.appendChild(h('div', { class: 'seg' }, [sysBtn]));
+    box.appendChild(h('p', { class: 'help', text: 'System follows your device’s light/dark setting, with the stock colors. Pick a palette below to choose the theme yourself; press System to come back.' }));
+    box.appendChild(h('div', { class: 'lbl', text: 'Color palette', style: 'margin-top:0.75rem' }));
+    var grid = h('div', { class: 'pal-grid', role: 'group', 'aria-label': 'Color palette' });
+    PALETTES.forEach(function (p) {
+      var isStock = p.id === 'stock', modes = isStock ? ['dark', 'light'] : Object.keys(p.variants), dual = modes.length > 1, on = cur === p.id;
+      var v = isStock ? (mode === 'light' ? { bg: '#ffffff', panel: '#f3f3f3', keyword: '#0000ff', string: '#a31515', func: '#795e26', accent: '#086bb3' } : { bg: '#1e1e1e', panel: '#252526', keyword: '#569cd6', string: '#ce9178', func: '#dcdcaa', accent: '#007acc' })
+        : (p.variants[mode] || p.variants[modes[0]]);
+      var sw = h('span', { class: 'pal-sw', 'aria-hidden': 'true' });
+      [v.bg, v.panel, v.keyword, v.string, v.func, v.accent].forEach(function (c) { sw.appendChild(h('i', { style: 'background:' + c })); });
+      var foot;
+      if (dual) {
+        foot = h('span', { class: 'pal-mode', role: 'group', 'aria-label': p.name + ' mode' }, ['dark', 'light'].map(function (m) {
+          var pressed = on && !sys && mode === m;
+          return h('button', { type: 'button', class: pressed ? 'on' : '', 'aria-pressed': pressed ? 'true' : 'false', 'data-fk': 'palette:' + p.id + ':' + m, text: m === 'dark' ? 'Dark' : 'Light',
+            onclick: function (e) { e.stopPropagation(); selectPalette(p.id, m); announce((isStock ? 'Stock' : p.name) + ', ' + m); } });
+        }));
+      } else foot = h('span', { class: 'pal-note', text: (modes[0] === 'dark' ? 'Dark' : 'Light') + ' only' + (on && !p.variants[mode] ? ' · stock in ' + mode + ' mode' : '') });
+      grid.appendChild(h('div', { class: 'pal-card' + (on ? ' on' : ''), role: 'button', tabindex: '0', 'aria-pressed': on ? 'true' : 'false', 'data-fk': 'palette:' + p.id,
+        title: isStock ? 'Stock colors' : on ? 'Click to go back to the stock colors' : 'Use ' + p.name,
+        onclick: function () { if (isStock) { if (!on) selectPalette('stock'); } else if (on) { selectPalette('stock'); announce('Stock colors'); } else { selectPalette(p.id); announce('Color palette: ' + p.name); } },
+        onkeydown: function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); e.currentTarget.click(); } } },
+        [sw, h('span', { class: 'pal-name', text: isStock ? 'Stock' : p.name }), foot]));
+    });
+    box.appendChild(grid);
+    box.appendChild(h('p', { class: 'help', text: 'Recolors the interface, the code editor and the JSON / table views. Click a palette again to go back to stock. A palette with only a dark or only a light version switches to that mode; if you switch back, that mode uses the stock colors.' }));
+    return box;
+  }
+  function buildIo(sec) {   // Export / import buttons at the bottom of a settings page
+    var box = h('div', { id: 'ioBox' }, [h('div', { class: 'grp', text: sec === 'general' ? 'Export & import' : 'Your data' })]);
+    var body = h('div', { class: 'ctl' }), btns = h('div', { class: 'io-btns' });
+    if (sec === 'general') {
+      body.appendChild(h('p', { class: 'help', style: 'margin-top:0', text: 'Move everything to another browser or computer, or keep a copy. One file can hold your settings and the data of all three tools.' }));
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Export everything…', onclick: openIoExport }));
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Import everything…', onclick: function () { pickImportFile('all'); } }));
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Export settings only', onclick: function () { ioExport({ settings: true, tools: [], name: 'settings' }); } }));
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Import settings only…', onclick: function () { pickImportFile('settings'); } }));
+      body.appendChild(btns);
+    } else {
+      var status = h('p', { class: 'help', style: 'margin-top:0', text: 'Your ' + IO_NAMES[sec].toLowerCase() + ' are saved in this browser.' });
+      body.appendChild(status);
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Export ' + IO_NAMES[sec] + '…', onclick: function () { ioExport({ settings: false, tools: [sec], name: sec }); } }));
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Import ' + IO_NAMES[sec] + '…', onclick: function () { pickImportFile(sec); } }));
+      body.appendChild(btns);
+      ioCounts().then(function (c) { if (c[sec] != null) status.textContent = plural(c[sec], IO_ONE[sec]) + ' saved in this browser. Importing can add to them or replace them.'; });
+    }
+    box.appendChild(body);
+    return box;
+  }
+
+  /* ---------- Driving the open tool (its window.DTAPI) ---------- */
+  var apiPending = {}, apiSeq = 0;
+  function apiCall(tool, method, args) {   // resolves with the result, or undefined when the tool can't be reached
+    return new Promise(function (resolve) {
+      var f = toolFrame(tool);
+      if (!f || !frameLoaded[tool]) { resolve(undefined); return; }
+      try {
+        var api = f.contentWindow.DTAPI;
+        if (api && typeof api[method] === 'function') { Promise.resolve(api[method].apply(api, args || [])).then(resolve, function () { resolve(undefined); }); return; }
+      } catch (e) { /* cross-origin (opened from disk): use messages */ }
+      var id = ++apiSeq;
+      apiPending[id] = resolve;
+      setTimeout(function () { if (apiPending[id]) { delete apiPending[id]; resolve(undefined); } }, 4000);
+      postTo(f, { __devToolkitCmd: 'api', method: method, args: args || [], id: id });
+    });
+  }
+  function runToolCmd(id) {
+    var tc = toolCmd(id), ct = active || 'code';
+    if (!tc) return;
+    if (tc.tools && tc.tools.indexOf(ct) < 0) { announce('“' + tc.label + '” isn’t available in ' + META[ct].short); return; }
+    if (!frameLoaded[ct]) { announce(META[ct].short + ' is still loading'); return; }
+    var pane = getInnerTab(ct);
+    if (tc.pane === 'viewer' && pane !== 'viewer') { announce('Open the Viewer tab of ' + META[ct].short + ' first'); return; }
+    if (tc.pane === 'compare' && pane !== 'compare') { announce('Open the Compare tab of ' + META[ct].short + ' first'); return; }
+    if (tc.pick) { startPick(tc); return; }
+    apiCall(ct, tc.call[0], tc.call.slice(1)).then(function (res) {
+      if (res === undefined || res === false || res === null) announce('Nothing to do here');
+      else announce(typeof res === 'string' ? res : (tc.say || 'Done'));
+    });
+  }
+
+  /* ---------- Picking entries inside the palette (copy / download / compare) ---------- */
+  var pk = null;   // { tc, ct, entries, checked, A, B }
+  function resetPick() {
+    if (pk && pk.tc.pick.mode === 'palette' && !pk.done && pk.orig) {   // closed without choosing: undo the live preview
+      settings.general.theme = pk.orig.theme; settings.general.palette = pk.orig.palette; settings = sanitize(settings); commit();
+    }
+    pk = null;
+    var hd = $('palPickHead'); if (hd) hd.hidden = true;
+    var inp = $('palInput'); if (inp) inp.placeholder = 'Type a command…';
+    setPalFoot(null);
+  }
+  function setPalFoot(mode) {
+    var k = function (t) { return '<span class="kbd">' + t + '</span>'; };
+    $('palFoot').innerHTML = mode === 'copy' ? '<span>' + k('↑') + ' ' + k('↓') + ' to move</span><span>' + k('Enter') + ' run</span><span>' + k('Shift+Enter') + ' tick</span><span>' + k('Esc') + ' back</span>'
+      : mode === 'compare' ? '<span>' + k('↑') + ' ' + k('↓') + ' to move</span><span>' + k('Enter') + ' next slot</span><span>' + k('Alt+1') + ' / ' + k('Alt+2') + ' A / B</span><span>' + k('Shift+Enter') + ' open Compare</span><span>' + k('Esc') + ' back</span>'
+      : mode === 'palette' ? '<span>' + k('↑') + ' ' + k('↓') + ' to move</span><span>' + k('Enter') + ' keep it</span><span>' + k('Esc') + ' cancel</span>'
+      : '<span>' + k('↑') + ' ' + k('↓') + ' to move</span><span>' + k('Enter') + ' to run</span><span>' + k('Esc') + ' to close</span>';
+  }
+  var PAL_PICK_TC = { id: 'palPicker', pick: { mode: 'palette', verb: 'Color palette' } };
+  // Applies the highlighted color palette right away so it can be judged while moving through the list.
+  function previewPal() {
+    if (!pk || pk.tc.pick.mode !== 'palette') return;
+    var r = palItems[palSel]; if (!r) return;
+    var parts = r.id.split(':');
+    if (r.id === 'system') selectSystem(); else selectPalette(parts[0], parts[1]);
+  }
+  function palPickEntries() {
+    var g = settings.general, rows = [{ id: 'system', name: 'System', info: 'stock colors, follows your device', cur: g.theme === 'system' && g.palette === 'stock' }];
+    PALETTES.forEach(function (p) {
+      var modes = p.id === 'stock' ? ['dark', 'light'] : Object.keys(p.variants), nm = p.id === 'stock' ? 'Stock' : p.name;
+      if (modes.length > 1) modes.forEach(function (m) { rows.push({ id: p.id + ':' + m, name: nm + ' – ' + (m === 'dark' ? 'Dark' : 'Light'), info: '', cur: g.palette === p.id && g.theme !== 'system' && effectiveTheme() === m }); });
+      else rows.push({ id: p.id, name: nm, info: modes[0] + ' only', cur: g.palette === p.id });
+    });
+    rows.forEach(function (r) { if (r.cur) r.info = (r.info ? r.info + ' · ' : '') + '✓ current'; });
+    return rows;
+  }
+  function startPick(tc) {   // works from the palette and from a shortcut
+    var ct = active || 'code', p = tc.pick;
+    if (p.mode === 'palette') {
+      if (!paletteOpen) openPalette();
+      pk = { tc: tc, ct: ct, entries: palPickEntries(), checked: {}, A: null, B: null, orig: { theme: settings.general.theme, palette: settings.general.palette } };
+      $('palInput').value = ''; $('palInput').placeholder = 'Filter color palettes…';
+      palSel = Math.max(0, pk.entries.map(function (e) { return !!e.cur; }).indexOf(true)); $('palPickHead').hidden = false; setPalFoot('palette'); renderPalette(); $('palInput').focus();
+      return;
+    }
+    apiCall(ct, 'list', []).then(function (list) {
+      list = Array.isArray(list) ? list : [];
+      if (!list.length) { closePalette(); announce('Nothing in ' + META[ct].short + ' yet: add something to the Viewer first'); return; }
+      if (list.length === 1 && p.mode === 'compare') { closePalette(); toast('Compare needs at least two entries. You only have one in ' + META[ct].short + '.'); return; }
+      if (list.length === 1) { closePalette(); doPick(tc, ct, p.mode === 'compare' ? { A: list[0].id, B: null } : [list[0].id], list); return; }
+      if (!paletteOpen) openPalette();
+      pk = { tc: tc, ct: ct, entries: list, checked: {}, A: null, B: null };
+      $('palInput').value = ''; $('palInput').placeholder = 'Filter ' + NOUN[ct] + '…';
+      palSel = 0; $('palPickHead').hidden = false;
+      setPalFoot(p.mode);
+      renderPalette();
+      $('palInput').focus();
+    });
+  }
+  function closePick() { resetPick(); $('palInput').value = ''; palSel = 0; renderPalette(); $('palInput').focus(); }
+  function pickName(id) { var e = pk.entries.filter(function (x) { return x.id === id; })[0]; return e ? e.name : '…'; }
+  function renderPick() {
+    var list = $('palList'), q = $('palInput').value.trim().toLowerCase(), mode = pk.tc.pick.mode;
+    var rows = pk.entries.filter(function (e) { return !q || (e.name + ' ' + e.info).toLowerCase().indexOf(q) >= 0; });
+    if (mode === 'copy' && !q) rows = [{ id: '*', name: 'All (' + pk.entries.length + ')', info: '' }].concat(rows);
+    palItems = rows;
+    palSel = Math.min(palSel, Math.max(0, rows.length - 1));
+    var nChecked = Object.keys(pk.checked).length;
+    $('palPickHead').innerHTML = mode === 'palette' ? '<b>Color palette</b> — moving through the list previews each one; Enter keeps it, Esc cancels.' : mode === 'compare'
+      ? '<b>Load into Compare</b> — set entries as A and B. A: <b></b> · B: <b></b>'
+      : '<b>' + esc(pk.tc.pick.verb) + '</b> — choose one or more' + (nChecked ? ' (' + nChecked + ' ticked)' : '');
+    if (mode === 'compare') { var bs = $('palPickHead').querySelectorAll('b'); bs[1].textContent = pk.A ? pickName(pk.A) : 'not set'; bs[2].textContent = pk.B ? pickName(pk.B) : 'not set'; }
+    list.innerHTML = '';
+    if (!rows.length) { list.appendChild(h('li', { class: 'pal-empty', role: 'presentation', text: 'No matches' })); return; }
+    rows.forEach(function (r, i) {
+      var kids = [];
+      if (mode === 'copy') {
+        var on = r.id === '*' ? nChecked === pk.entries.length : !!pk.checked[r.id];
+        kids.push(h('span', { class: 'pk-check', 'aria-hidden': 'true', 'data-tick': '1', text: on ? '☑' : '☐' }));
+      }
+      kids.push(h('span', { class: 'pk-name', text: r.name, title: r.name }));
+      if (r.info) kids.push(h('span', { class: 'pk-info', text: r.info }));
+      if (mode === 'compare') {
+        kids.push(h('span', { class: 'pk-slots' }, ['A', 'B'].map(function (sl) {
+          return h('button', { type: 'button', class: 'pk-slot' + (pk[sl] === r.id ? ' on' : ''), tabindex: '-1', text: sl, title: 'Use as ' + sl, 'aria-label': 'Use ' + r.name + ' as ' + sl,
+            onclick: function (ev) { ev.stopPropagation(); pickAssign(r.id, sl); } });
+        })));
+      }
+      var li = h('li', { class: 'pal-item', role: 'option', id: 'pal-' + i, 'aria-selected': i === palSel ? 'true' : 'false' }, kids);
+      li.addEventListener('mousemove', function () { if (palSel !== i) { palSel = i; markPalSel(); } });
+      li.addEventListener('click', function (ev) {
+        if (mode === 'copy' && ev.target && ev.target.getAttribute && ev.target.getAttribute('data-tick')) { pickToggle(r.id); return; }
+        pickEnter(false, i);
+      });
+      list.appendChild(li);
+    });
+    $('palInput').setAttribute('aria-activedescendant', 'pal-' + palSel);
+  }
+  function pickToggle(id) {
+    if (id === '*') { var all = Object.keys(pk.checked).length === pk.entries.length; pk.checked = {}; if (!all) pk.entries.forEach(function (e) { pk.checked[e.id] = 1; }); }
+    else if (pk.checked[id]) delete pk.checked[id]; else pk.checked[id] = 1;
+    renderPick();
+  }
+  function pickAssign(id, slot) {
+    if (id === '*') return;
+    var other = slot === 'A' ? 'B' : 'A';
+    if (pk[slot] === id) pk[slot] = null;
+    else { pk[slot] = id; if (pk[other] === id) pk[other] = null; }
+    if (pk.A && pk.B) { applyPickCompare(); return; }
+    renderPick();
+  }
+  function pickEnter(shift, i) {
+    var mode = pk.tc.pick.mode, r = palItems[i];
+    if (mode === 'palette') {
+      if (!r || shift) return;
+      var id = r.id, parts = id.split(':');
+      pk.done = true;
+      closePalette();
+      if (id === 'system') { selectSystem(); announce('Following the system theme'); }
+      else { selectPalette(parts[0], parts[1]); announce(id === 'stock:dark' || id === 'stock:light' ? 'Stock, ' + parts[1] : 'Color palette: ' + paletteById(parts[0]).name); }
+      return;
+    }
+    if (mode === 'compare') {
+      if (shift) { if (!pk.A && !pk.B && r && r.id !== '*') pk.A = r.id; applyPickCompare(); return; }
+      if (!r) return;
+      pickAssign(r.id, !pk.A ? 'A' : (!pk.B ? 'B' : (pk.A === r.id ? 'B' : 'A')));
+      return;
+    }
+    if (shift) { if (r) pickToggle(r.id); return; }
+    var ids = Object.keys(pk.checked);
+    if (!ids.length && r) ids = r.id === '*' ? pk.entries.map(function (e) { return e.id; }) : [r.id];
+    if (!ids.length) return;
+    var tc = pk.tc, ct = pk.ct, entries = pk.entries;
+    closePalette();
+    doPick(tc, ct, ids, entries);
+  }
+  function applyPickCompare() { var tc = pk.tc, ct = pk.ct, sl = { A: pk.A, B: pk.B }, entries = pk.entries; closePalette(); doPick(tc, ct, sl, entries); }
+  function doPick(tc, ct, sel, entries) {
+    var p = tc.pick;
+    if (p.mode === 'compare') {
+      if (!sel.A && !sel.B) return;
+      var chain = Promise.resolve();
+      ['A', 'B'].forEach(function (sl) { if (sel[sl]) chain = chain.then(function () { return apiCall(ct, 'compareLoad', [sel[sl], sl]); }); });
+      chain.then(function () { setInnerTab(ct, 'compare'); return sel.A && sel.B ? apiCall(ct, 'compareRun', []) : null; }).then(function () { announce('Loaded into Compare'); });
+      return;
+    }
+    apiCall(ct, p.api, [sel, p.arg]).then(function (ok) {
+      announce(ok === false || ok === undefined ? p.verb + ' didn’t work' : p.done + ' ' + sel.length + (sel.length === 1 ? ' entry' : ' entries'));
+    });
+  }
+
   var CMD = {
     shortcuts: function () { openSettings('keys'); },
     settingsCode: function () { openSettings('code'); },
@@ -2110,7 +2813,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
     },
     clearResults: function () { var ct = active || 'code'; if (frameLoaded[ct] && getInnerTab(ct) === 'compare') { callTool(ct, CLEAR_RESULTS[ct]); announce('Compare results cleared'); } else announce('Open the Compare tab to clear its results'); },
     themeToggle: function () { toggleTheme(); },
-    themeSystem: function () { setVal('general', 'theme', 'system'); announce('Theme follows system'); },
+    themeSystem: function () { selectSystem(); announce('Theme follows system'); },
+    palNext: function () { var ids = PALETTE_IDS, i = ids.indexOf(settings.general.palette), nx = paletteById(ids[(i + 1) % ids.length]); selectPalette(nx.id); announce(nx.id === 'stock' ? 'Stock colors' : 'Color palette: ' + nx.name); },
+    palStock: function () { selectPalette('stock'); announce('Stock colors'); },
     themeDark: function () { setVal('general', 'theme', 'dark'); announce('Theme: dark'); },
     themeLight: function () { setVal('general', 'theme', 'light'); announce('Theme: light'); },
     contrast: function () { setVal('general', 'contrast', settings.general.contrast === 'high' ? 'normal' : 'high'); announce('Contrast: ' + settings.general.contrast); },
@@ -2119,8 +2824,20 @@ window.addEventListener('beforeinstallprompt', function (e) {
     scaleDown: function () { stepScale(-1); },
     scaleReset: function () { stepScale(0); }
   };
+  TOOL_CMDS.forEach(function (tc) { CMD[tc.id] = function () { runToolCmd(tc.id); }; });
+  CMD.palPicker = function () { startPick(PAL_PICK_TC); };
+  CMD.exportAll = function () { openIoExport(); };
+  CMD.importAll = function () { pickImportFile('all'); };
+  CMD.exportSettings = function () { ioExport({ settings: true, tools: [], name: 'settings' }); };
+  CMD.importSettings = function () { pickImportFile('settings'); };
+  IO_TOOLS.forEach(function (t) {
+    var T = t.charAt(0).toUpperCase() + t.slice(1);
+    CMD['export' + T] = function () { ioExport({ settings: false, tools: [t], name: t }); };
+    CMD['import' + T] = function () { pickImportFile(t); };
+  });
+  KEY_DEFS.forEach(function (d) { if (d.group === G_IO) d.close = true; });
   function runShortcut(name) {
-    if (palEditOpen) return;
+    if (palEditOpen || ioOpen) return;
     if (name === 'palette') { paletteOpen ? closePalette() : openPalette(); }
     else if (name === 'settings') { settingsOpen ? closeSettings() : openSettings(); }
     else if (name === 'upload') { closePalette(); closeSettings(true); var ut = active || 'code'; if (frameLoaded[ut]) { pickFiles(ut); announce('Choose files to upload to ' + META[ut].short); } }
@@ -2141,7 +2858,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     }
   }
   document.addEventListener('keydown', function (e) {
-    if (palEditOpen) return;
+    if (palEditOpen || ioOpen) return;
     if (recording) { onRecordKey(e); return; }
     var s = shortcutFor(e);
     if (!s) return;
@@ -2182,6 +2899,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       if (s) runShortcut(s);
     } else if (d.__devToolkit === 'themeToggle') toggleTheme();
     else if (d.__devToolkit === 'reloadAll') resetPanes();
+    else if (d.__devToolkit === 'reply') { var apiCb = apiPending[d.id]; if (apiCb) { delete apiPending[d.id]; apiCb(d.ok ? d.result : undefined); } }
   });
 
   /* =========================================================================

@@ -318,6 +318,25 @@
     };
     DT.post = function (msg) { if (!embedded) return; try { window.parent.postMessage(msg, TARGET); } catch (e) {} };
     DT.onChange = function (fn) { DT._l.push(fn); };
+    // Color palette chosen in Settings (CSS variables prepared by the shell, plus token colors for Monaco).
+    var palNames = [];
+    DT.palette = null;
+    DT.applyPalette = function (p) {
+        palNames.forEach(function (n) { root.style.removeProperty(n); });
+        palNames = [];
+        DT.palette = (p && p.vars) ? p : null;
+        if (DT.palette) Object.keys(p.vars).forEach(function (n) { root.style.setProperty(n, p.vars[n]); palNames.push(n); });
+    };
+    var monoFlip = 0;
+    // Name of the Monaco theme to use right now: the palette's, or the stock light / dark one.
+    DT.monacoTheme = function () {
+        var light = root.getAttribute('data-theme') === 'light', p = DT.palette;
+        if (!p || !p.mono || !window.monaco || !monaco.editor) return light ? 'vs' : 'vs-dark';
+        var name = 'dt-pal-' + (monoFlip = 1 - monoFlip), rules = [];
+        Object.keys(p.mono.rules).forEach(function (t) { rules.push({ token: t, foreground: p.mono.rules[t] }); });
+        try { monaco.editor.defineTheme(name, { base: light ? 'vs' : 'vs-dark', inherit: true, rules: rules, colors: p.mono.colors }); return name; }
+        catch (e) { return light ? 'vs' : 'vs-dark'; }
+    };
     // After importing a backup every tool has to re-read storage.
     DT.reloadAll = function () {
         if (embedded) { DT.post({ __devToolkit: 'reloadAll' }); setTimeout(function () { location.reload(); }, 600); }
@@ -333,8 +352,9 @@
         else if (TOOL === 'xlsx') addEntry(name, 'csv', [makeSheet('Sample', parseDelimited(String(text), ','), dtHeaderDefault())]);
     };
 
-    function apply(s) {
+    function apply(s, palette) {
         DT.settings = (s && typeof s === 'object') ? s : {};
+        if (palette !== undefined) DT.applyPalette(palette);
         var g = DT.settings.general || {}, t = DT.sec();
         root.setAttribute('data-hc', g.contrast === 'high' ? '1' : '0');
         if (g.motion === 'reduce' || g.motion === 'full') root.setAttribute('data-motion', g.motion);
@@ -356,7 +376,7 @@
         if (!IS_FILE && e.origin !== location.origin) return;
         var d = e.data;
         if (!d || typeof d !== 'object') return;
-        if (d.__devToolkitSettings) apply(d.settings);
+        if (d.__devToolkitSettings) apply(d.settings, d.palette || null);
         else if (d.__devToolkitCmd === 'export' && typeof window.exportLocalStorageBackup === 'function') window.exportLocalStorageBackup();
         else if (d.__devToolkitCmd === 'focusInput') {
             var ta = document.querySelector('#viewer-pane.active textarea');
@@ -370,6 +390,11 @@
         else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults',
              'toggleLayout', 'toggleViewerLayout', 'toggleCompareDiffMode', 'toggleEditorDiffMode'].indexOf(d.fn) >= 0 && typeof window[d.fn] === 'function') {
             window[d.fn]();
+        }
+        else if (d.__devToolkitCmd === 'api' && typeof d.method === 'string' && d.method !== 'tool' && window.DTAPI && typeof window.DTAPI[d.method] === 'function') {
+            Promise.resolve().then(function () { return window.DTAPI[d.method].apply(window.DTAPI, Array.isArray(d.args) ? d.args : []); })
+                .then(function (result) { DT.post({ __devToolkit: 'reply', id: d.id, ok: true, result: result }); },
+                      function (err) { DT.post({ __devToolkit: 'reply', id: d.id, ok: false, error: String(err) }); });
         }
         else if (d.__devToolkitCmd === 'addSample' && typeof d.text === 'string') DT.addSample(d.text, d.name || 'Sample');
         else if (d.__devToolkitCmd === 'uploadFiles' && d.files && d.files.length) {
@@ -2191,17 +2216,23 @@
     // *Data() core, shared by the Viewer's per-entry actions and the Compare tab's
     // per-panel actions below, which just supply that shape from a different source
     // (activeSheetData() for an entry, panelDisplayData() for a compare panel).
-    function copyAsCsvData(sheetData, btn) {
+    function csvTextOf(sheetData) {
         const { headers, rows, hasHeader } = sheetData;
         const lines = [];
         if (hasHeader) lines.push(headers.map(csvEscapeField).join(','));
         rows.forEach(r => lines.push(headers.map((_, i) => csvEscapeField(r[i])).join(',')));
-        navigator.clipboard.writeText(lines.join('\r\n')).then(() => flashIcon(btn));
+        return lines.join('\r\n');
+    }
+    function copyAsCsvData(sheetData, btn) {
+        navigator.clipboard.writeText(csvTextOf(sheetData)).then(() => flashIcon(btn));
     }
     function copyAsCsv(entryId, btn) { copyAsCsvData(activeSheetData(entryId), btn); }
     function copyPanelAsCsv(panelId, btn) { copyAsCsvData(panelDisplayDataResolved(panelId), btn); }
 
     function copyAsJsonData(sheetData, btn) {
+        navigator.clipboard.writeText(jsonTextOf(sheetData)).then(() => flashIcon(btn));
+    }
+    function jsonTextOf(sheetData) {
         const { headers, rows, hasHeader } = sheetData;
         let out;
         if (hasHeader) {
@@ -2213,12 +2244,15 @@
         } else {
             out = rows.map(r => r.map(v => isDateVal(v) ? formatDate(v) : v));
         }
-        navigator.clipboard.writeText(JSON.stringify(out, null, 2)).then(() => flashIcon(btn));
+        return JSON.stringify(out, null, 2);
     }
     function copyAsJson(entryId, btn) { copyAsJsonData(activeSheetData(entryId), btn); }
     function copyPanelAsJson(panelId, btn) { copyAsJsonData(panelDisplayDataResolved(panelId), btn); }
 
     function copyAsMarkdownData(sheetData, btn) {
+        navigator.clipboard.writeText(markdownTextOf(sheetData)).then(() => flashIcon(btn));
+    }
+    function markdownTextOf(sheetData) {
         const { headers, rows, hasHeader } = sheetData;
         const esc = s => String(s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
         const lines = [];
@@ -2226,7 +2260,7 @@
         lines.push('| ' + cols.map(esc).join(' | ') + ' |');
         lines.push('| ' + cols.map(() => '---').join(' | ') + ' |');
         rows.forEach(r => lines.push('| ' + cols.map((_, i) => esc(displayValue(r[i]))).join(' | ') + ' |'));
-        navigator.clipboard.writeText(lines.join('\n')).then(() => flashIcon(btn));
+        return lines.join('\n');
     }
     function copyAsMarkdown(entryId, btn) { copyAsMarkdownData(activeSheetData(entryId), btn); }
     function copyPanelAsMarkdown(panelId, btn) { copyAsMarkdownData(panelDisplayDataResolved(panelId), btn); }
@@ -3396,6 +3430,138 @@
         });
     }
 
+
+    /* =========================================================================
+       DTAPI — programmatic API used by the shell's command palette
+       ========================================================================= */
+    (function () {
+        const PANEL = { A: 'compareLeft', B: 'compareRight' };
+        const entryOf = id => postedEntries.find(e => String(e.id) === String(id));
+        const idList = ids => (Array.isArray(ids) ? ids : []).map(String);
+        const safe = (fn, fallback) => { try { const r = fn(); return r === undefined ? fallback : r; } catch (e) { console.error(e); return fallback; } };
+
+        async function writeClipboard(text) {
+            try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+                document.body.appendChild(ta); ta.select();
+                const ok = document.execCommand('copy');
+                ta.remove();
+                return !!ok;
+            } catch (e) { return false; }
+        }
+
+        let diffCursor = -1;
+        function stepDiff(dir) {
+            const lines = Array.from(document.querySelectorAll('#compareResults .diff-line'));
+            if (!lines.length) return false;
+            // side-by-side view lists changed rows twice (left+right); use the left column only
+            const seen = new Set(), uniq = [];
+            lines.forEach(l => { if (!seen.has(l.onclick)) { seen.add(l.onclick); uniq.push(l); } });
+            const list = uniq.length ? uniq : lines;
+            diffCursor = diffCursor < 0 ? (dir > 0 ? 0 : list.length - 1) : (diffCursor + dir + list.length) % list.length;
+            const target = list[diffCursor];
+            if (target.onclick) target.onclick();
+            try { target.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+            return true;
+        }
+
+        window.DTAPI = {
+            tool: 'xlsx',
+            list() {
+                return safe(() => postedEntries.slice().reverse().map(e => {
+                    const sheets = e.sheets || [];
+                    const rows = sheets.reduce((m, s) => Math.max(m, s.hasHeader ? s.allRows.length - 1 : s.allRows.length), 0);
+                    const info = String(e.type || '').toUpperCase() + (sheets.length > 1 ? ' · ' + sheets.length + ' sheets' : '') + ' · ' + rows.toLocaleString('en-US') + ' row' + (rows === 1 ? '' : 's');
+                    return { id: String(e.id), name: entryDisplayName(e), info };
+                }), []);
+            },
+            async copy(ids, kind) {
+                try {
+                    const build = { csv: csvTextOf, json: jsonTextOf, markdown: markdownTextOf }[kind];
+                    if (!build) return false;
+                    const parts = [];
+                    for (const id of idList(ids)) { const e = entryOf(id); if (e) parts.push(build(activeSheetData(e.id))); }
+                    if (!parts.length) return false;
+                    return await writeClipboard(parts.join('\n\n'));
+                } catch (e) { console.error(e); return false; }
+            },
+            save(ids, kind) {
+                return safe(() => {
+                    if (kind !== 'csv' && kind !== 'xlsx') return false;
+                    if (kind === 'xlsx' && typeof XLSX === 'undefined') return false;
+                    const found = idList(ids).map(entryOf).filter(Boolean);
+                    if (!found.length) return false;
+                    found.forEach((e, i) => setTimeout(() => {
+                        try { kind === 'csv' ? saveAsCsv(e.id) : saveAsXlsx(e.id); } catch (err) { console.error(err); }
+                    }, i * 300));
+                    return true;
+                }, false);
+            },
+            compareLoad(id, slot) {
+                return safe(() => {
+                    const e = entryOf(id), panel = PANEL[slot];
+                    if (!e || !panel) return false;
+                    loadIntoComparePanel(e.id, panel);
+                    return true;
+                }, false);
+            },
+            compareSwap() {
+                return safe(() => {
+                    const t = comparePanels.compareLeft;
+                    comparePanels.compareLeft = comparePanels.compareRight;
+                    comparePanels.compareRight = t;
+                    renderComparePanel('compareLeft');
+                    renderComparePanel('compareRight');
+                    const res = document.getElementById('compareResults');
+                    if (res && res.querySelector('.diff-summary, div[style]')) runCompare(); else clearCompareResults();
+                    return true;
+                }, false);
+            },
+            compareReset() { return safe(() => { resetCompareSection(); return true; }, false); },
+            compareClearResults() { return safe(() => { clearCompareResults(); return true; }, false); },
+            compareRun() { return safe(() => { runCompare(); diffCursor = -1; return true; }, false); },
+            compareToggle(option) {
+                return safe(() => {
+                    if (option === 'view') {
+                        toggleCompareDiffMode();
+                        return 'Compare view: ' + (isCompareSideMode ? 'side-by-side' : 'list');
+                    }
+                    if (option === 'header') {
+                        const on = !(comparePanels.compareLeft.hasHeader && comparePanels.compareRight.hasHeader);
+                        toggleComparePanelHeader('compareLeft', on);
+                        toggleComparePanelHeader('compareRight', on);
+                        ['compareLeftHeaderToggle', 'compareRightHeaderToggle'].forEach(id => { const c = document.getElementById(id); if (c) c.checked = on; });
+                        return 'Compare header row: ' + (on ? 'on' : 'off');
+                    }
+                    return null;
+                }, null);
+            },
+            compareNext() { return safe(() => stepDiff(1), false); },
+            comparePrev() { return safe(() => stepDiff(-1), false); },
+            expandAll() { return safe(() => { setAllCollapse(false); return true; }, false); },
+            collapseAll() { return safe(() => { setAllCollapse(true); return true; }, false); },
+            focusSearch() {
+                return safe(() => {
+                    const inp = Array.from(document.querySelectorAll('#container .entry .search-inline')).find(i => i.offsetParent !== null);
+                    if (!inp) return false;
+                    inp.focus(); inp.select();
+                    return true;
+                }, false);
+            },
+            toggleHeader(ids) {
+                return safe(() => {
+                    const list = idList(ids);
+                    const targets = (list.length ? list.map(entryOf) : postedEntries).filter(Boolean);
+                    if (!targets.length) return false;
+                    targets.forEach(e => toggleEntryHeader(e.id, !e.sheets[e.activeSheet].hasHeader));
+                    return true;
+                }, false);
+            },
+            toggleLayout() { return safe(() => { toggleLayout(); return true; }, false); }
+        };
+    })();
 
     /* =========================================================================
        Init
