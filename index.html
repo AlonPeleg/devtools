@@ -321,6 +321,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
     white-space: nowrap;
   }
   .pal-item[aria-selected="true"] kbd { background: rgba(255,255,255,0.18); color: #fff; border-color: rgba(255,255,255,0.35); }
+  .pal-group { padding: 0.5rem 0.625rem 0.1875rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-dim); cursor: default; }
+  .pal-group:first-child { padding-top: 0.25rem; }
   .pal-empty { padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8125rem; }
   .pal-foot { padding: 0.375rem 0.75rem; border-top: 1px solid var(--bar-border); font-size: 0.6875rem; color: var(--text-dim); display: flex; gap: 1rem; }
 
@@ -368,6 +370,32 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .key-head { position: sticky; top: 0; z-index: 2; background: var(--bar-bg); padding-bottom: 0.25rem; }
   .key-group { margin-top: 0.75rem; }
   .key-group[hidden], .key-row[hidden], .key-none[hidden] { display: none; }
+  .ord-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .ord-row select.field { width: auto; min-width: 11rem; }
+  #palEdit { z-index: 1100; }
+  #palEdit .dialog { width: 52rem; height: min(38rem, calc(100vh - 2rem)); }
+  .pe-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; padding: 0.75rem; }
+  .pe-col { min-height: 0; overflow-y: auto; border: 1px solid var(--bar-border); border-radius: 6px; background: var(--bg); padding: 0 0.375rem 0.5rem; }
+  .pe-head { position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 0.5rem 0.25rem 0.375rem; margin-bottom: 0.125rem; font-size: 0.75rem; font-weight: 700; color: var(--text-bright); border-bottom: 1px solid var(--bar-border); }
+  .pe-grp { padding: 0.625rem 0.25rem 0.1875rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-dim); }
+  .pe-row { display: flex; align-items: center; gap: 0.25rem; border-radius: 4px; font-size: 0.8125rem; border: 1px solid transparent; }
+  .pe-row:hover { background: var(--hover); }
+  .pe-mine .pe-row { cursor: grab; }
+  .pe-row.dragging { opacity: 0.4; }
+  .pe-row.over-top { border-top-color: var(--accent-strong); }
+  .pe-row.over-bottom { border-bottom-color: var(--accent-strong); }
+  .pe-handle { color: var(--text-dim); user-select: none; letter-spacing: -2px; flex: 0 0 auto; padding-left: 0.375rem; }
+  .pe-pick { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 0.5rem; text-align: left; background: transparent; border: none; color: var(--text); font: inherit; cursor: pointer; padding: 0.375rem 0.375rem; border-radius: 4px; }
+  .pe-pick:focus-visible, .pe-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; }
+  .pe-title { flex: 1 1 auto; min-width: 0; }
+  .pe-act { flex: 0 0 auto; width: 1.25rem; text-align: center; color: var(--text-dim); opacity: 0; }
+  .pe-row:hover .pe-act, .pe-pick:focus-visible .pe-act { opacity: 1; color: var(--text-bright); }
+  .pe-btn { background: transparent; border: none; color: var(--text-dim); cursor: pointer; border-radius: 3px; padding: 0.125rem 0.375rem; font-size: 0.8125rem; line-height: 1.2; flex: 0 0 auto; }
+  .pe-btn:hover:not(:disabled) { background: var(--hover); color: var(--text-bright); }
+  .pe-btn:disabled { opacity: 0.3; cursor: default; }
+  .pe-empty { padding: 0.75rem 0.5rem; font-size: 0.75rem; color: var(--text-dim); line-height: 1.4; }
+  @media (max-width: 760px) { .pe-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } }
+  #palEdit .dlg-foot .btn { white-space: nowrap; }
   .key-btn.unset { color: var(--text-dim); font-style: italic; }
   .grp { margin: 0 0 0.25rem; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.4px; color: var(--text-dim); padding: 0.25rem 0 0.375rem; border-bottom: 1px solid var(--bar-border); }
   .grp:not(:first-child) { margin-top: 1rem; }
@@ -558,6 +586,25 @@ window.addEventListener('beforeinstallprompt', function (e) {
   </div>
 </div>
 
+<!-- Customise the command palette (custom order) -->
+<div id="palEdit" class="overlay center" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="peTitle">
+    <div class="dlg-head">
+      <h2 id="peTitle">Customize the command palette</h2>
+      <button id="peClose" class="icon-btn" type="button" aria-label="Close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="pe-body" id="peBody"></div>
+    <div class="dlg-foot">
+      <span>Click to add or remove. Drag in your palette to reorder.</span>
+      <span class="spacer"></span>
+      <button id="peReset" class="btn" type="button">Reset to essentials</button>
+      <button id="peDone" class="btn primary" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -658,6 +705,18 @@ window.addEventListener('beforeinstallprompt', function (e) {
     { id: 'settingsXlsx', group: G_SET, label: 'Settings: CSV / XLSX Viewer', def: '', run: 'settingsXlsx' },
     { id: 'shortcuts', group: G_SET, label: 'Open these keyboard shortcuts', def: '', run: 'shortcuts' }
   ];
+  // How the command palette is arranged by default ("By type"): what matters most first, then the current tool.
+  var PAL_TYPE = [
+    ['General', ['shortcuts', 'settings']],
+    ['Navigate', ['tab1', 'tab2', 'tab3', 'switchInner']],
+    ['This tool', ['upload', 'toggleView', 'fontUp', 'fontDown', 'fontReset', 'addSample', 'addSampleLong', 'ocr', 'clearAll', 'clearResults']],
+    ['Appearance', ['themeToggle', 'themeSystem', 'themeDark', 'themeLight', 'contrast', 'motion', 'scaleUp', 'scaleDown', 'scaleReset']],
+    ['Settings pages', ['settingsCode', 'settingsJson', 'settingsXlsx']],
+    ['App', ['backup', 'install', 'github']]
+  ];
+  var MIN_PAL_ORDER = ['shortcuts', 'tab1', 'tab2', 'tab3'];   // what a new or empty custom palette shows
+  var DEFAULT_PAL_ORDER = [];   // every command that can appear in the palette, by type
+  PAL_TYPE.forEach(function (g) { g[1].forEach(function (id) { DEFAULT_PAL_ORDER.push(id); }); });
   var KEY_RE = /^Mod(\+Shift)?(\+Alt)?\+(?!Control|Shift|Alt|Meta|OS)[A-Za-z0-9]{1,20}$/;
   var KEY_RESERVED = ['Mod+KeyC', 'Mod+KeyV', 'Mod+KeyX', 'Mod+KeyA', 'Mod+KeyZ', 'Mod+KeyY', 'Mod+Shift+KeyZ'];   // copy, paste, cut, select all, undo, redo
   var KEY_NAMES = { Comma: ',', Period: '.', Slash: '/', Semicolon: ';', Quote: '\'', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Minus: '-', Equal: '=', Backquote: '`',
@@ -685,6 +744,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   var DEFAULTS = {
     general: { theme: 'system', uiScale: 100, motion: 'system', contrast: 'normal', splash: true },
     keys: DEFAULT_KEYS,
+    palette: { sort: 'none', order: null },   // order: null = not customised yet
     code: { font: 'default', customFont: '', size: 12, lineHeight: 1.5, tabSize: 4, wrap: false },
     json: { font: 'default', customFont: '', size: 11, expand: 'all' },
     xlsx: { font: 'default', customFont: '', size: 11.5, density: 'normal', header: true }
@@ -703,6 +763,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
         splash: g.splash !== false
       },
       keys: {},
+      palette: { sort: pick((raw.palette || {}).sort, ['none', 'type', 'alpha', 'custom'], 'none'), order: null },
       code: {
         font: pick(c.font, FONT_IDS, 'default'), customFont: cleanFontText(c.customFont),
         size: num(c.size, 9, 24, 12), lineHeight: pick(Number(c.lineHeight), [1.3, 1.5, 1.7], 1.5),
@@ -719,6 +780,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       }
     };
     TOOLS.forEach(function (t) { out[t].fontStack = stackFor(out[t]); });   // tools read the resolved stack directly
+    var po = (raw.palette || {}).order;
+    if (Array.isArray(po)) out.palette.order = po.filter(function (id, i) { return DEFAULT_PAL_ORDER.indexOf(id) >= 0 && po.indexOf(id) === i; });
     var used = {};
     KEY_DEFS.forEach(function (d) {   // an invalid, reserved or duplicate binding falls back to the default
       var v = kraw[d.id];
@@ -1374,15 +1437,35 @@ window.addEventListener('beforeinstallprompt', function (e) {
       var f = document.querySelector('#pane-' + active + ' iframe');
       if (f) postTo(f, { __devToolkitCmd: 'export' });
     } });
-    list.push({ id: 'shortcuts', title: 'Keyboard shortcuts: view and change', kw: 'keys help hotkeys keybindings rebind customize shortcuts', run: function () { openSettings('keys'); } });
+    list.push({ id: 'shortcuts', title: 'Show keyboard shortcuts', kw: 'keys help hotkeys keybindings rebind customize shortcuts', run: function () { openSettings('keys'); } });
     if (canInstall()) list.push({ id: 'install', title: 'Install Dev Toolkit as an app', kw: 'pwa desktop app window download', run: runInstall });
     list.push({ id: 'github', title: 'Star Dev Toolkit on GitHub', kw: 'github repo support', run: function () { window.open(REPO_URL, '_blank', 'noopener'); } });
     list.forEach(function (c) { if (c.id && settings.keys[c.id]) c.hint = comboLabel(settings.keys[c.id]); });   // a bound shortcut replaces the hint
     return list;
   }
 
+  // Orders (and, for a custom order, filters) the commands: by type, alphabetical or the user's own list.
+  function arrangePalette(all) {
+    var mode = settings.palette.sort, byId = {}, out = [];
+    all.forEach(function (c) { if (c.id) byId[c.id] = c; });
+    if (mode === 'none') {
+      out = all.slice();   // the palette's natural order, exactly as it was before sorting existed
+    } else if (mode === 'alpha') {
+      out = all.slice().sort(function (a, b) { return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }); });
+    } else if (mode === 'custom') {
+      var ord = settings.palette.order;
+      (ord && ord.length ? ord : MIN_PAL_ORDER).forEach(function (id) { if (byId[id]) out.push(byId[id]); });
+    } else {
+      PAL_TYPE.forEach(function (g) {
+        var label = g[0] === 'This tool' ? 'This tool: ' + META[active || 'code'].short : g[0];
+        g[1].forEach(function (id) { if (byId[id]) { byId[id].group = label; out.push(byId[id]); } });
+      });
+    }
+    return out;
+  }
+
   function filterCommands(q) {
-    var all = commandList();
+    var all = arrangePalette(commandList());
     q = q.trim().toLowerCase();
     if (!q) return all;
     var toks = q.split(/\s+/);
@@ -1406,7 +1489,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
       $('palInput').removeAttribute('aria-activedescendant');
       return;
     }
+    var showGroups = settings.palette.sort === 'type' && !$('palInput').value.trim(), lastGroup = null;
     palItems.forEach(function (c, i) {
+      if (showGroups && c.group !== lastGroup) { lastGroup = c.group; list.appendChild(h('li', { class: 'pal-group', role: 'presentation', text: c.group })); }
       var li = h('li', { class: 'pal-item', role: 'option', id: 'pal-' + i, 'aria-selected': i === palSel ? 'true' : 'false' }, [
         h('span', { text: c.title }), c.hint ? h('kbd', { text: c.hint }) : null
       ]);
@@ -1417,7 +1502,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     $('palInput').setAttribute('aria-activedescendant', 'pal-' + palSel);
   }
   function markPalSel() {
-    Array.prototype.forEach.call($('palList').children, function (li, i) { li.setAttribute('aria-selected', i === palSel ? 'true' : 'false'); });
+    Array.prototype.forEach.call($('palList').querySelectorAll('.pal-item'), function (li, i) { li.setAttribute('aria-selected', i === palSel ? 'true' : 'false'); });
     var el = $('pal-' + palSel);
     if (el) { $('palInput').setAttribute('aria-activedescendant', el.id); el.scrollIntoView({ block: 'nearest' }); }
   }
@@ -1677,6 +1762,18 @@ window.addEventListener('beforeinstallprompt', function (e) {
     var box = h('div', { id: 'keysBox' });
     var filter = h('input', { class: 'field key-filter', type: 'search', placeholder: 'Filter shortcuts…', 'aria-label': 'Filter shortcuts', value: keyFilter, autocomplete: 'off', spellcheck: 'false' });
     filter.addEventListener('input', function () { keyFilter = filter.value; applyKeyFilter(); });
+    var sortSel = h('select', { class: 'field', id: 'palSortSel', 'aria-label': 'Command palette order', 'data-fk': focusKey('palette', 'sort') },
+      [['none', 'No sorting (default)'], ['type', 'By type'], ['alpha', 'Alphabetical'], ['custom', 'Custom']].map(function (o) { var op = h('option', { value: o[0], text: o[1] }); if (settings.palette.sort === o[0]) op.selected = true; return op; }));
+    sortSel.addEventListener('change', function () { setVal('palette', 'sort', sortSel.value); });
+    var ordKids = [sortSel];
+    if (settings.palette.sort === 'custom') ordKids.push(h('button', { type: 'button', class: 'btn', 'data-fk': focusKey('palette', 'customize'), text: 'Customize the palette…', onclick: openPalEdit }));
+    box.appendChild(h('div', { class: 'ctl' }, [
+      h('label', { for: 'palSortSel', text: 'Command palette order' }),
+      h('div', { class: 'ord-row' }, ordKids),
+      h('p', { class: 'help', text: settings.palette.sort === 'none' ? 'The palette’s original order: tools, view and font commands, then settings, appearance and app commands.'
+        : settings.palette.sort === 'type' ? 'Grouped by purpose: settings first, then moving between tools, then commands for the tool you’re in.'
+        : settings.palette.sort === 'alpha' ? 'All commands, A to Z.' : 'Your own palette: pick the commands you want from the full list and drag them into the order you like. A new one starts with just the essentials.' })
+    ]));
     box.appendChild(h('div', { class: 'key-head' }, [
       h('p', { class: 'help', style: 'margin:0.5rem 0', text: 'Every command has a slot here. Click a shortcut (or double-click its row), then press the new combination: it needs ' + MOD + ' plus a key. Esc cancels, Backspace removes it, ↺ restores the original.' }),
       filter,
@@ -1706,6 +1803,106 @@ window.addEventListener('beforeinstallprompt', function (e) {
     setTimeout(applyKeyFilter, 0);
     return box;
   }
+
+  /* ---------- Customise the command palette ---------- */
+  var palEditOpen = false, peDrag = null;
+  function customOrder() { return (settings.palette.order || MIN_PAL_ORDER).slice(); }
+  function setOrder(arr, focusKey) {
+    settings.palette.order = arr; settings = sanitize(settings);
+    commit({ keepControls: true });
+    renderPalEdit(focusKey);
+  }
+  function renderPalEdit(focusKey) {
+    var body = $('peBody'), order = customOrder();
+    var oldM = body.querySelector('.pe-mine'), oldA = body.querySelector('.pe-all');
+    var sm = oldM ? oldM.scrollTop : 0, sa = oldA ? oldA.scrollTop : 0;
+    body.innerHTML = '';
+    function kbdFor(id) { return settings.keys[id] ? h('kbd', { class: 'kbd', text: comboLabel(settings.keys[id]) }) : null; }
+    function btn(txt, label, key, fn, disabled) { return h('button', { type: 'button', class: 'pe-btn', text: txt, 'aria-label': label, title: label, 'data-pe': key, disabled: disabled, onclick: fn }); }
+
+    /* the custom palette, in order; click a command to send it back to the full list */
+    var mine = h('div', { class: 'pe-col pe-mine' }, [h('div', { class: 'pe-head', text: 'Your palette (' + order.length + ')' })]);
+    if (!order.length) mine.appendChild(h('div', { class: 'pe-empty', text: 'Nothing here yet. Click a command on the left to add it. While this is empty, the palette shows just the essentials (keyboard shortcuts and the tab switchers).' }));
+    order.forEach(function (id, i) {
+      var d = defOf(id);
+      var pick = h('button', { type: 'button', class: 'pe-pick', 'data-pe': 'rm:' + id, title: 'Remove from your palette', 'aria-label': 'Remove “' + d.label + '” from your palette',
+        onclick: function () { setOrder(customOrder().filter(function (x) { return x !== id; }), 'add:' + id); } },
+        [h('span', { class: 'pe-title', text: d.label }), kbdFor(id), h('span', { class: 'pe-act', 'aria-hidden': 'true', text: '✕' })]);
+      var row = h('div', { class: 'pe-row', draggable: 'true', 'data-id': id }, [
+        h('span', { class: 'pe-handle', 'aria-hidden': 'true', text: '⋮⋮' }), pick,
+        btn('↑', 'Move “' + d.label + '” up', 'up:' + id, function () { var o = customOrder(); o.splice(i, 1); o.splice(i - 1, 0, id); setOrder(o, 'up:' + id); }, i === 0),
+        btn('↓', 'Move “' + d.label + '” down', 'down:' + id, function () { var o = customOrder(); o.splice(i, 1); o.splice(i + 1, 0, id); setOrder(o, 'down:' + id); }, i === order.length - 1)
+      ]);
+      row.addEventListener('dragstart', function (e) { peDrag = id; row.classList.add('dragging'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (err) {} });
+      row.addEventListener('dragend', function () { peDrag = null; Array.prototype.forEach.call(mine.querySelectorAll('.pe-row'), function (r) { r.classList.remove('dragging', 'over-top', 'over-bottom'); }); });
+      row.addEventListener('dragover', function (e) {
+        if (!peDrag || peDrag === id) return;
+        e.preventDefault();
+        var r = row.getBoundingClientRect(), before = e.clientY < r.top + r.height / 2;
+        row.classList.toggle('over-top', before); row.classList.toggle('over-bottom', !before);
+      });
+      row.addEventListener('dragleave', function () { row.classList.remove('over-top', 'over-bottom'); });
+      row.addEventListener('drop', function (e) {
+        if (!peDrag || peDrag === id) return;
+        e.preventDefault();
+        var r = row.getBoundingClientRect(), before = e.clientY < r.top + r.height / 2;
+        var o = customOrder().filter(function (x) { return x !== peDrag; });
+        o.splice(o.indexOf(id) + (before ? 0 : 1), 0, peDrag);
+        var moved = peDrag; peDrag = null;
+        setOrder(o, 'up:' + moved);
+      });
+      mine.appendChild(row);
+    });
+
+    /* every command that isn't in the palette yet, grouped by type; click one to add it */
+    var all = h('div', { class: 'pe-col pe-all' }, [h('div', { class: 'pe-head', text: 'All commands' })]);
+    var any = false;
+    PAL_TYPE.forEach(function (g) {
+      var ids = g[1].filter(function (id) { return order.indexOf(id) < 0; });
+      if (!ids.length) return;
+      any = true;
+      all.appendChild(h('div', { class: 'pe-grp', text: g[0] === 'This tool' ? 'This tool (whichever is open)' : g[0] }));
+      ids.forEach(function (id) {
+        var d = defOf(id);
+        all.appendChild(h('div', { class: 'pe-row' }, [h('button', { type: 'button', class: 'pe-pick', 'data-pe': 'add:' + id, title: 'Add to your palette', 'aria-label': 'Add “' + d.label + '” to your palette',
+          onclick: function () { setOrder(customOrder().concat(id), 'rm:' + id); } },
+          [h('span', { class: 'pe-title', text: d.label }), kbdFor(id), h('span', { class: 'pe-act', 'aria-hidden': 'true', text: '+' })])]));
+      });
+    });
+    if (!any) all.appendChild(h('div', { class: 'pe-empty', text: 'Every command is in your palette.' }));
+
+    body.appendChild(all); body.appendChild(mine);   // all commands on the mine, your palette on the all
+    mine.scrollTop = sm; all.scrollTop = sa;
+    if (focusKey) {
+      var el = body.querySelector('[data-pe="' + focusKey + '"]');
+      if (el && !el.disabled) { el.focus(); if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); }
+      else { var alt = body.querySelector('.pe-pick, .pe-btn:not(:disabled)'); if (alt) alt.focus(); }
+    }
+  }
+  function openPalEdit() {
+    if (palEditOpen) return;
+    if (settings.palette.order == null) { settings.palette.order = MIN_PAL_ORDER.slice(); settings = sanitize(settings); commit({ keepControls: true }); }
+    palEditOpen = true;
+    $('palEdit').hidden = false;
+    var st = $('settings'); if ('inert' in st) st.inert = true; st.setAttribute('aria-hidden', 'true');
+    renderPalEdit();
+    $('peClose').focus();
+  }
+  function closePalEdit() {
+    if (!palEditOpen) return;
+    palEditOpen = false;
+    $('palEdit').hidden = true;
+    var st = $('settings'); if ('inert' in st) st.inert = false; st.setAttribute('aria-hidden', 'false');
+    var b = document.querySelector('[data-fk="' + focusKey('palette', 'customize') + '"]'); if (b) b.focus();
+  }
+  $('peClose').addEventListener('click', closePalEdit);
+  $('peDone').addEventListener('click', closePalEdit);
+  $('peReset').addEventListener('click', function () { setOrder(MIN_PAL_ORDER.slice()); });
+  $('palEdit').addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); closePalEdit(); }
+    else trapTab(e, $('palEdit'));
+  });
+  $('palEdit').addEventListener('mousedown', function (e) { if (e.target === $('palEdit')) closePalEdit(); });
 
   function renderControls() {
     recording = null;
@@ -1851,12 +2048,14 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // Safety net: Esc closes an open dialog even if keyboard focus ended up outside it.
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
-    if (paletteOpen) { e.preventDefault(); closePalette(); }
+    if (palEditOpen) { e.preventDefault(); closePalEdit(); }
+    else if (paletteOpen) { e.preventDefault(); closePalette(); }
     else if (settingsOpen) { e.preventDefault(); closeSettings(); }
   });
   $('resetSection').addEventListener('click', function () {
     if (!confirm('Reset the “' + SECTIONS.filter(function (s) { return s[0] === section; })[0][1] + '” settings to their defaults?')) return;
     settings[section] = JSON.parse(JSON.stringify(DEFAULTS[section]));
+    if (section === 'keys') settings.palette = JSON.parse(JSON.stringify(DEFAULTS.palette));   // the palette order lives on the same page
     settings = sanitize(settings); commit();
   });
   $('resetAll').addEventListener('click', function () {
@@ -1921,6 +2120,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     scaleReset: function () { stepScale(0); }
   };
   function runShortcut(name) {
+    if (palEditOpen) return;
     if (name === 'palette') { paletteOpen ? closePalette() : openPalette(); }
     else if (name === 'settings') { settingsOpen ? closeSettings() : openSettings(); }
     else if (name === 'upload') { closePalette(); closeSettings(true); var ut = active || 'code'; if (frameLoaded[ut]) { pickFiles(ut); announce('Choose files to upload to ' + META[ut].short); } }
@@ -1941,6 +2141,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     }
   }
   document.addEventListener('keydown', function (e) {
+    if (palEditOpen) return;
     if (recording) { onRecordKey(e); return; }
     var s = shortcutFor(e);
     if (!s) return;

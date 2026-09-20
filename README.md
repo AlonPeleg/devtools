@@ -169,6 +169,8 @@ On macOS, use <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd>. The palette button in t
 | <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> | Indent or outdent in the paste boxes (multi-line selections work as a block). Press <kbd>Esc</kbd> then <kbd>Tab</kbd> to move on to the next control |
 | <kbd>Esc</kbd> | Close a dialog |
 
+**Command palette order.** At the top of **Settings → Keyboard shortcuts**, choose how the palette is arranged: **No sorting** (default: the palette’s original order), **By type** (settings first, then moving between tools, then commands for the tool you’re in, then appearance, settings pages and app commands, under small headings), **Alphabetical**, or **Custom**. With Custom, **Customize the palette…** opens a two-column editor: **All commands** (grouped by type) on the left, **Your palette** on the right. Click a command on the left to add it; click one on the right to send it back; drag in your palette (or use the arrows) to reorder. A new or empty custom palette shows just the essentials (keyboard shortcuts and the tab switchers). **Reset this section** restores No sorting.
+
 Shortcuts use the physical key, so they also work with non-Latin keyboard layouts. Some browsers reserve <kbd>Ctrl</kbd>+number for switching browser tabs; if yours does, use the palette or click the tabs.
 
 ---
