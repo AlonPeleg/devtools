@@ -439,18 +439,20 @@
     DT.post({ __devToolkit: 'hello', tool: TOOL, version: 2 });
 
     // Keys pressed while a tool has focus never reach the shell, so shortcut keys are forwarded to it.
+    // The shell's (rebindable) shortcuts arrive with the settings, in DT.settings.keys.
     if (embedded) {
+        var DEFAULT_KEYS = ['Mod+KeyK', 'Mod+Shift+KeyP', 'Mod+Digit1', 'Mod+Digit2', 'Mod+Digit3', 'Mod+KeyO', 'Mod+Comma'];
         window.addEventListener('keydown', function (e) {
             var primary = isMac ? e.metaKey : e.ctrlKey;
-            if (!primary || e.altKey) return;
-            var c = e.code || '', k = (e.key || '').toLowerCase();
+            if (!primary || (isMac ? e.ctrlKey : e.metaKey)) return;
+            if (e.getModifierState && e.getModifierState('AltGraph')) return;
+            var c = e.code || '';
+            if (!c || /^(Control|Shift|Alt|Meta|OS)/.test(c)) return;
+            var combo = 'Mod' + (e.shiftKey ? '+Shift' : '') + (e.altKey ? '+Alt' : '') + '+' + c.replace(/^Numpad(\d)$/, 'Digit$1');
+            var keys = DT.settings && DT.settings.keys;
+            var bound = keys ? Object.keys(keys).map(function (id) { return keys[id]; }) : DEFAULT_KEYS;
             var inMonaco = !!(e.target && e.target.closest && e.target.closest('.monaco-editor'));
-            var hit = false;
-            if (c === 'KeyK' || k === 'k') hit = !inMonaco;                 // Monaco uses Ctrl+K as a chord prefix
-            else if ((c === 'KeyP' || k === 'p') && e.shiftKey) hit = inMonaco;   // palette fallback while typing in Monaco
-            else if (!e.shiftKey && (c === 'Comma' || k === ',')) hit = true;
-            else if (!e.shiftKey && /^(Digit|Numpad)[123]$/.test(c)) hit = true;
-            else if (!e.shiftKey && (c === 'KeyO' || k === 'o')) hit = true;   // upload files
+            var hit = bound.indexOf(combo) >= 0 && !(combo === 'Mod+KeyK' && inMonaco);   // Monaco uses Ctrl+K as a chord prefix
             if (!hit) return;
             e.preventDefault(); e.stopPropagation();
             DT.post({ __devToolkit: 'key', key: e.key, code: c, ctrl: e.ctrlKey, meta: e.metaKey, alt: e.altKey, shift: e.shiftKey });

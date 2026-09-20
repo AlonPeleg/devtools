@@ -153,7 +153,9 @@ Open it, press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type `add sample`, and press Enter 
 
 ## Keyboard shortcuts
 
-On macOS, use <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd>.
+On macOS, use <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd>. The palette button in the top bar shows the current palette shortcut.
+
+**You can change the shortcuts, and give any command one:** the section lists every command, grouped as General, Tools, Current tool (acts on whichever tool is open: view toggle, font size, samples, OCR, clear), Appearance and Settings pages, with a filter box. Most start with no shortcut (“Not set”). open **Settings → Keyboard shortcuts**, click a shortcut (or double-click its row) and press the new combination (**Backspace** removes it). Every shortcut needs <kbd>Ctrl</kbd> (<kbd>⌘</kbd>) plus a key; a combination already in use, or kept for copy/paste/undo, is refused. **↺** restores one shortcut and **Reset this section** restores them all. The table below lists the defaults.
 
 | Shortcut | What it does |
 |---|---|
@@ -213,7 +215,8 @@ Open them with the gear icon, <kbd>Ctrl</kbd>+<kbd>,</kbd>, or the palette. Chan
 
 | Section | Options |
 |---|---|
-| **General** | Theme (system / dark / light), interface size (90-150%), contrast, animations, welcome screen on/off (you can also switch it off right on the welcome screen with **Don’t show this page again**), install as an app, storage meter and "protect my data", keyboard shortcut list |
+| **General** | Theme (system / dark / light), interface size (90-150%), contrast, animations, welcome screen on/off (you can also switch it off right on the welcome screen with **Don’t show this page again**), install as an app, storage meter and "protect my data" |
+| **Keyboard shortcuts** | Rebind or remove any shortcut and assign one to any palette command (per shortcut or all at once) |
 | **Code Viewer** | Font, font size, line spacing, tab width, wrap long lines by default |
 | **JSON / XML** | Font, font size, how many tree levels open by default |
 | **CSV / XLSX** | Font, font size, row density, treat the first row as a header by default |

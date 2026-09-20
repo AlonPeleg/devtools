@@ -224,6 +224,13 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   .icon-btn:hover { background: var(--hover); color: var(--tab-fg-active); }
   .icon-btn svg { width: 1rem; height: 1rem; display: block; }
+  .palette-btn {
+    display: flex; align-items: center; gap: 0.5rem; margin-right: 0.375rem;
+    background: transparent; border: 1px solid var(--bar-border); border-radius: 4px; cursor: pointer;
+    color: var(--tab-fg); font: inherit; font-size: 0.75rem; padding: 0.1875rem 0.375rem 0.1875rem 0.625rem;
+  }
+  .palette-btn:hover { background: var(--hover); color: var(--tab-fg-active); }
+  .palette-btn svg { width: 0.875rem; height: 0.875rem; display: block; flex: 0 0 auto; }
 
   /* ---------- Panes ---------- */
   #panes { position: relative; flex: 1 1 auto; min-height: 0; background: var(--bg); overflow: hidden; }
@@ -342,7 +349,26 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .dlg-foot { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1rem; border-top: 1px solid var(--bar-border); font-size: 0.75rem; color: var(--text-dim); }
   .dlg-foot .spacer { flex: 1; }
 
-  #installBox, #storageBox, #shortcutsBox { margin-top: 1rem; }
+  #installBox, #storageBox { margin-top: 1rem; }
+  .set-main.no-preview { grid-template-columns: minmax(0, 1fr); }
+  .set-main.no-preview .set-preview-col { display: none; }
+  .key-list { list-style: none; margin: 0; padding: 0; }
+  .key-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.4375rem 0; border-bottom: 1px solid var(--bar-border); font-size: 0.8125rem; }
+  .key-ctl { display: flex; align-items: center; gap: 0.375rem; flex: 0 0 auto; }
+  .key-btn { cursor: pointer; min-width: 4.5rem; text-align: center; font: inherit; font-family: var(--font-mono); font-size: 0.6875rem; }
+  .key-btn:hover { border-color: var(--focus); color: var(--text-bright); }
+  .key-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .key-btn.recording { border-color: var(--accent-strong); color: var(--text-bright); box-shadow: 0 0 0 1px var(--accent-strong); }
+  .key-fixed { min-width: 4.5rem; text-align: center; display: inline-block; }
+  .key-reset { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.875rem; line-height: 1; padding: 0.125rem 0.25rem; border-radius: 3px; }
+  .key-reset:hover { background: var(--hover); color: var(--text-bright); }
+  .ctl .key-msg, .key-head .key-msg { min-height: 1.4em; color: #d9822b; margin: 0.375rem 0 0; }
+  #keysBox .help { font-size: 0.6875rem; color: var(--text-dim); line-height: 1.4; margin: 0.375rem 0 0; }
+  #keysBox .key-head .key-msg { color: #d9822b; }
+  .key-head { position: sticky; top: 0; z-index: 2; background: var(--bar-bg); padding-bottom: 0.25rem; }
+  .key-group { margin-top: 0.75rem; }
+  .key-group[hidden], .key-row[hidden], .key-none[hidden] { display: none; }
+  .key-btn.unset { color: var(--text-dim); font-style: italic; }
   .grp { margin: 0 0 0.25rem; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.4px; color: var(--text-dim); padding: 0.25rem 0 0.375rem; border-bottom: 1px solid var(--bar-border); }
   .grp:not(:first-child) { margin-top: 1rem; }
   .ctl { padding: 0.625rem 0 0.125rem; }
@@ -423,6 +449,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
   @media (max-width: 760px) {
     .tab .full { display: none; }
     .tab .short { display: inline; }
+    .palette-btn .pb-text, .palette-btn .kbd { display: none; }
+    .palette-btn { border: none; padding: 0.375rem; margin-right: 0; }
     .tab { padding: 0.625rem 0.75rem; }
     .dlg-foot > span:first-child { display: none; }
     .dlg-foot .btn { white-space: nowrap; }
@@ -439,6 +467,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     .set-nav { flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--bar-border); }
     .set-nav button { white-space: nowrap; }
     .set-main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 12rem) minmax(0, 1fr); overflow: hidden; }
+    .set-main.no-preview { grid-template-rows: minmax(0, 1fr); }
     .set-preview-col { order: -1; }
     .overlay { padding-top: 4vh; }
   }
@@ -454,6 +483,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
       <button class="tab" role="tab" id="tab-xlsx" aria-controls="pane-xlsx" data-tool="xlsx" title="CSV / XLSX Viewer (Ctrl+3)" aria-label="CSV / XLSX Viewer"><span class="dot"></span><span class="full">CSV / XLSX Viewer</span><span class="short">CSV / XLSX</span></button>
     </nav>
     <div class="bar-actions">
+      <button id="paletteBtn" class="palette-btn" type="button" aria-haspopup="dialog" title="Open the command palette" aria-label="Open the command palette">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l4 3.5-4 3.5M8.5 12H13"/></svg>
+        <span class="pb-text">Command palette</span><kbd class="kbd" id="paletteKbd">Ctrl+K</kbd>
+      </button>
       <a id="githubLink" class="icon-btn" href="https://github.com/AlonPeleg/devtools" target="_blank" rel="noopener noreferrer" title="GitHub repo — a star helps a lot" aria-label="Dev Toolkit on GitHub (opens in a new tab)">
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
       </a>
@@ -506,7 +539,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     </div>
     <div class="dlg-body">
       <div class="set-nav" role="tablist" aria-label="Settings sections" id="setNav"></div>
-      <div class="set-main">
+      <div class="set-main" id="setMain">
         <div class="set-controls" id="setControls" role="tabpanel"></div>
         <div class="set-preview-col">
           <h3 class="set-preview-title">Preview</h3>
@@ -549,7 +582,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // Pages opened straight from disk (file://) have no usable origin, so origin checks would drop every message.
   var IS_FILE = location.protocol === 'file:' || SELF_ORIGIN === 'null';
   var TARGET = IS_FILE ? '*' : SELF_ORIGIN;
-  var BUILD = '2026-09-19.3';   // appended to the tool URLs so a cached older copy is never used with this page
+  var BUILD = '2026-09-20.1';   // appended to the tool URLs so a cached older copy is never used with this page
 
   // 'bundled' fonts ship with Dev Toolkit (fonts/ folder) and work everywhere; 'local' fonts are proprietary or
   // platform fonts, so they are only offered when they are actually installed on this device.
@@ -585,8 +618,73 @@ window.addEventListener('beforeinstallprompt', function (e) {
     return names.map(function (n) { return '"' + n + '"'; }).join(', ') + ', ' + DEFAULT_STACK;
   }
 
+  // Rebindable shortcuts. A binding is 'Mod[+Shift][+Alt]+<KeyboardEvent.code>'; Mod is Ctrl (⌘ on a Mac).
+  // Physical key codes keep them working on non-Latin keyboard layouts.
+  // Every command can have a shortcut. def '' means none by default. run is what runShortcut() dispatches;
+  // close: true closes an open palette / settings dialog first (for commands that act on a tool).
+  var G_GEN = 'General', G_TOOLS = 'Tools', G_CUR = 'Current tool (whichever is open)', G_LOOK = 'Appearance', G_SET = 'Settings pages';
+  var KEY_DEFS = [
+    { id: 'palette', group: G_GEN, label: 'Open the command palette', def: 'Mod+KeyK', run: 'palette' },
+    { id: 'paletteEditor', group: G_GEN, label: 'Open the command palette while typing in the code editor', def: 'Mod+Shift+KeyP', run: 'palette' },
+    { id: 'backup', group: G_GEN, label: 'Back up my data (export from the current tool)', def: '', run: 'backup', close: true },
+    { id: 'install', group: G_GEN, label: 'Install Dev Toolkit as an app', def: '', run: 'install' },
+    { id: 'github', group: G_GEN, label: 'Open Dev Toolkit on GitHub', def: '', run: 'github' },
+    { id: 'tab1', group: G_TOOLS, label: 'Go to Code Viewer & Compare', def: 'Mod+Digit1', run: 'tab:code' },
+    { id: 'tab2', group: G_TOOLS, label: 'Go to JSON / XML Viewer & Compare', def: 'Mod+Digit2', run: 'tab:json' },
+    { id: 'tab3', group: G_TOOLS, label: 'Go to CSV / XLSX Viewer', def: 'Mod+Digit3', run: 'tab:xlsx' },
+    { id: 'switchInner', group: G_TOOLS, label: 'Switch between the Viewer and Compare tabs', def: '', run: 'switchInner', close: true },
+    { id: 'upload', group: G_TOOLS, label: 'Upload files to the current tool', def: 'Mod+KeyO', run: 'upload' },
+    { id: 'toggleView', group: G_CUR, label: 'Toggle the view (list / grid, or list / side-by-side in Compare)', def: '', run: 'toggleView', close: true },
+    { id: 'fontUp', group: G_CUR, label: 'Font size: larger', def: '', run: 'fontUp', close: true },
+    { id: 'fontDown', group: G_CUR, label: 'Font size: smaller', def: '', run: 'fontDown', close: true },
+    { id: 'fontReset', group: G_CUR, label: 'Font size: reset', def: '', run: 'fontReset', close: true },
+    { id: 'addSample', group: G_CUR, label: 'Add a sample (Viewer)', def: '', run: 'addSample', close: true },
+    { id: 'addSampleLong', group: G_CUR, label: 'Add a long sample (Viewer)', def: '', run: 'addSampleLong', close: true },
+    { id: 'ocr', group: G_CUR, label: 'Add code from a screenshot (OCR, Code Viewer)', def: '', run: 'ocr', close: true },
+    { id: 'clearAll', group: G_CUR, label: 'Clear everything (Viewer: all entries; Compare: both panels and results)', def: '', run: 'clearAll', close: true },
+    { id: 'clearResults', group: G_CUR, label: 'Clear the compare results only', def: '', run: 'clearResults', close: true },
+    { id: 'themeToggle', group: G_LOOK, label: 'Toggle light / dark theme', def: '', run: 'themeToggle' },
+    { id: 'themeSystem', group: G_LOOK, label: 'Theme: follow system', def: '', run: 'themeSystem' },
+    { id: 'themeDark', group: G_LOOK, label: 'Theme: dark', def: '', run: 'themeDark' },
+    { id: 'themeLight', group: G_LOOK, label: 'Theme: light', def: '', run: 'themeLight' },
+    { id: 'contrast', group: G_LOOK, label: 'Accessibility: turn high contrast on / off', def: '', run: 'contrast' },
+    { id: 'motion', group: G_LOOK, label: 'Accessibility: reduce animations on / off', def: '', run: 'motion' },
+    { id: 'scaleUp', group: G_LOOK, label: 'Interface size: larger', def: '', run: 'scaleUp' },
+    { id: 'scaleDown', group: G_LOOK, label: 'Interface size: smaller', def: '', run: 'scaleDown' },
+    { id: 'scaleReset', group: G_LOOK, label: 'Interface size: reset to 100%', def: '', run: 'scaleReset' },
+    { id: 'settings', group: G_SET, label: 'Open settings', def: 'Mod+Comma', run: 'settings' },
+    { id: 'settingsCode', group: G_SET, label: 'Settings: Code Viewer', def: '', run: 'settingsCode' },
+    { id: 'settingsJson', group: G_SET, label: 'Settings: JSON / XML Viewer', def: '', run: 'settingsJson' },
+    { id: 'settingsXlsx', group: G_SET, label: 'Settings: CSV / XLSX Viewer', def: '', run: 'settingsXlsx' },
+    { id: 'shortcuts', group: G_SET, label: 'Open these keyboard shortcuts', def: '', run: 'shortcuts' }
+  ];
+  var KEY_RE = /^Mod(\+Shift)?(\+Alt)?\+(?!Control|Shift|Alt|Meta|OS)[A-Za-z0-9]{1,20}$/;
+  var KEY_RESERVED = ['Mod+KeyC', 'Mod+KeyV', 'Mod+KeyX', 'Mod+KeyA', 'Mod+KeyZ', 'Mod+KeyY', 'Mod+Shift+KeyZ'];   // copy, paste, cut, select all, undo, redo
+  var KEY_NAMES = { Comma: ',', Period: '.', Slash: '/', Semicolon: ';', Quote: '\'', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Minus: '-', Equal: '=', Backquote: '`',
+    ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Space: 'Space', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete' };
+  function keyLabel(code) {
+    var m = /^Key([A-Z])$/.exec(code) || /^Digit(\d)$/.exec(code);
+    return m ? m[1] : (KEY_NAMES[code] || code);
+  }
+  function comboLabel(c) {
+    return String(c).split('+').map(function (p) { return p === 'Mod' ? MOD : p === 'Alt' ? (isMac ? '⌥' : 'Alt') : p === 'Shift' ? 'Shift' : keyLabel(p); }).join('+');
+  }
+  // The binding a key event represents ('Mod+Shift+KeyP'), or null when it isn't a Ctrl/⌘ combination.
+  function comboOf(e) {
+    var primary = isMac ? e.metaKey : e.ctrlKey;
+    if (!primary || (isMac ? e.ctrlKey : e.metaKey)) return null;
+    if (e.getModifierState && e.getModifierState('AltGraph')) return null;   // AltGr types characters on many layouts
+    var code = e.code || '';
+    if (!code || /^(Control|Shift|Alt|Meta|OS)/.test(code)) return null;
+    code = code.replace(/^Numpad(\d)$/, 'Digit$1');
+    return 'Mod' + (e.shiftKey ? '+Shift' : '') + (e.altKey ? '+Alt' : '') + '+' + code;
+  }
+  var DEFAULT_KEYS = {};
+  KEY_DEFS.forEach(function (d) { DEFAULT_KEYS[d.id] = d.def; });
+
   var DEFAULTS = {
     general: { theme: 'system', uiScale: 100, motion: 'system', contrast: 'normal', splash: true },
+    keys: DEFAULT_KEYS,
     code: { font: 'default', customFont: '', size: 12, lineHeight: 1.5, tabSize: 4, wrap: false },
     json: { font: 'default', customFont: '', size: 11, expand: 'all' },
     xlsx: { font: 'default', customFont: '', size: 11.5, density: 'normal', header: true }
@@ -594,7 +692,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
 
   function sanitize(raw) {
     raw = raw && typeof raw === 'object' ? raw : {};
-    var g = raw.general || {}, c = raw.code || {}, j = raw.json || {}, x = raw.xlsx || {};
+    var g = raw.general || {}, c = raw.code || {}, j = raw.json || {}, x = raw.xlsx || {}, kraw = raw.keys || {};
     var out = {
       v: 1,
       general: {
@@ -604,6 +702,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
         contrast: pick(g.contrast, ['normal', 'high'], 'normal'),
         splash: g.splash !== false
       },
+      keys: {},
       code: {
         font: pick(c.font, FONT_IDS, 'default'), customFont: cleanFontText(c.customFont),
         size: num(c.size, 9, 24, 12), lineHeight: pick(Number(c.lineHeight), [1.3, 1.5, 1.7], 1.5),
@@ -620,6 +719,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
       }
     };
     TOOLS.forEach(function (t) { out[t].fontStack = stackFor(out[t]); });   // tools read the resolved stack directly
+    var used = {};
+    KEY_DEFS.forEach(function (d) {   // an invalid, reserved or duplicate binding falls back to the default
+      var v = kraw[d.id];
+      if (v !== '' && (typeof v !== 'string' || !KEY_RE.test(v) || KEY_RESERVED.indexOf(v) >= 0 || used[v])) v = d.def;   // '' = unassigned
+      out.keys[d.id] = v; if (v) used[v] = true;
+    });
     return out;
   }
 
@@ -692,8 +797,17 @@ window.addEventListener('beforeinstallprompt', function (e) {
     var label = 'Theme: ' + (g.theme === 'system' ? 'System (' + theme + ')' : theme) + '. Switch to ' + other + '.';
     $('themeToggleBtn').title = label;
     $('themeToggleBtn').setAttribute('aria-label', label);
+    applyKeyHints();
   }
-
+  // Shows the current bindings in the tab tooltips, the settings button and the palette button.
+  function keyHint(id) { var v = settings.keys[id]; return v ? comboLabel(v) : ''; }
+  function applyKeyHints() {
+    TOOLS.forEach(function (t, i) { var k = keyHint('tab' + (i + 1)); $('tab-' + t).title = META[t].title + (k ? ' (' + k + ')' : ''); });
+    var sk = keyHint('settings'), pk = keyHint('palette');
+    $('settingsBtn').title = 'Settings' + (sk ? ' (' + sk + ')' : '');
+    $('paletteKbd').textContent = pk; $('paletteKbd').hidden = !pk;
+    $('paletteBtn').title = 'Open the command palette' + (pk ? ' (' + pk + ')' : '');
+  }
   function frames() {
     var out = [];
     TOOLS.forEach(function (t) { var f = document.querySelector('#pane-' + t + ' iframe'); if (f && f.contentWindow) out.push(f); });
@@ -1191,78 +1305,79 @@ window.addEventListener('beforeinstallprompt', function (e) {
   /* =========================================================================
      Command palette
      ========================================================================= */
+  var NOUN = { code: 'snippets', json: 'entries', xlsx: 'files' };
+  var CLEAR_PANELS = { code: 'resetCompareSection', json: 'clearEditorCompareAll', xlsx: 'resetCompareSection' };      // both panels + results
+  var CLEAR_RESULTS = { code: 'clearCompareResults', json: 'clearEditorCompareResults', xlsx: 'clearCompareResults' };   // results area only
+  var TOGGLE_VIEWER = { code: 'toggleLayout', json: 'toggleViewerLayout', xlsx: 'toggleLayout' };
+  var TOGGLE_COMPARE = { code: 'toggleCompareDiffMode', json: 'toggleEditorDiffMode', xlsx: 'toggleCompareDiffMode' };
   var palSel = 0, palItems = [];
   function commandList() {
     var g = settings.general, list = [];
     TOOLS.forEach(function (t, i) {
-      list.push({ title: 'Go to ' + META[t].title, kw: t + ' ' + META[t].kw + ' tab switch open', hint: MOD + '+' + (i + 1), run: function () { goTo(t, { focusInput: true, viewer: true }); } });
+      list.push({ id: 'tab' + (i + 1), title: 'Go to ' + META[t].title, kw: t + ' ' + META[t].kw + ' tab switch open', run: function () { goTo(t, { focusInput: true, viewer: true }); } });
     });
     var ct = active || 'code', cm = META[ct], pane = getInnerTab(ct), csz = settings[ct].size, dsz = DEFAULTS[ct].size;
-    var NOUN = { code: 'snippets', json: 'entries', xlsx: 'files' };
-    var CLEAR_PANELS = { code: 'resetCompareSection', json: 'clearEditorCompareAll', xlsx: 'resetCompareSection' };      // both panels + results
-    var CLEAR_RESULTS = { code: 'clearCompareResults', json: 'clearEditorCompareResults', xlsx: 'clearCompareResults' };   // results area only
     function fmtSize(n) { return (Math.round(n * 10) / 10) + 'px'; }
-    list.push({ title: pane === 'viewer' ? 'Show the Compare tab (' + cm.short + ')' : 'Show the Viewer tab (' + cm.short + ')', kw: 'compare viewer tab diff switch inner',
+    list.push({ id: 'switchInner', title: pane === 'viewer' ? 'Show the Compare tab (' + cm.short + ')' : 'Show the Viewer tab (' + cm.short + ')', kw: 'compare viewer tab diff switch inner',
       run: function () { var to = pane === 'viewer' ? 'compare' : 'viewer'; setInnerTab(ct, to); if (to === 'viewer') focusToolInput(ct); } });
-    var TOGGLE_VIEWER = { code: 'toggleLayout', json: 'toggleViewerLayout', xlsx: 'toggleLayout' };
-    var TOGGLE_COMPARE = { code: 'toggleCompareDiffMode', json: 'toggleEditorDiffMode', xlsx: 'toggleCompareDiffMode' };
     var tdoc = toolDoc(ct);   // (only readable when the tool is same-origin; then the hint shows the current view)
     if (pane === 'viewer') {
       var cont = tdoc && tdoc.getElementById('container'), isGrid = cont ? cont.classList.contains('grid-view') : null;
-      list.push({ title: 'Toggle view: list / grid (' + cm.short + ')', kw: 'layout stack line grid switch cards columns',
+      list.push({ id: 'toggleView', title: 'Toggle view: list / grid (' + cm.short + ')', kw: 'layout stack line grid switch cards columns',
         hint: isGrid === null ? '' : (isGrid ? 'grid → list' : 'list → grid'),
         run: function () { callTool(ct, TOGGLE_VIEWER[ct]); announce('View toggled'); } });
     } else {
       var sideEl = tdoc && tdoc.getElementById(ct === 'json' ? 'editorViewHalfSide' : 'compareViewHalfSide'), isSide = sideEl ? sideEl.classList.contains('active') : null;
-      list.push({ title: 'Toggle view: compare results, list / side-by-side (' + cm.short + ')', kw: 'layout diff results side by side split switch',
+      list.push({ id: 'toggleView', title: 'Toggle view: compare results, list / side-by-side (' + cm.short + ')', kw: 'layout diff results side by side split switch',
         hint: isSide === null ? '' : (isSide ? 'side-by-side → list' : 'list → side-by-side'),
         run: function () { callTool(ct, TOGGLE_COMPARE[ct]); announce('Compare view toggled'); } });
     }
-    if (csz < 24) list.push({ title: 'Font size: larger (' + cm.short + ')', kw: 'text bigger increase zoom', hint: fmtSize(csz) + ' → ' + fmtSize(csz + 1),
+    if (csz < 24) list.push({ id: 'fontUp', title: 'Font size: larger (' + cm.short + ')', kw: 'text bigger increase zoom', hint: fmtSize(csz) + ' → ' + fmtSize(csz + 1),
       run: function () { setVal(ct, 'size', Math.min(24, csz + 1)); announce('Font size ' + fmtSize(settings[ct].size)); } });
-    if (csz > 9) list.push({ title: 'Font size: smaller (' + cm.short + ')', kw: 'text decrease shrink zoom', hint: fmtSize(csz) + ' → ' + fmtSize(csz - 1),
+    if (csz > 9) list.push({ id: 'fontDown', title: 'Font size: smaller (' + cm.short + ')', kw: 'text decrease shrink zoom', hint: fmtSize(csz) + ' → ' + fmtSize(csz - 1),
       run: function () { setVal(ct, 'size', Math.max(9, csz - 1)); announce('Font size ' + fmtSize(settings[ct].size)); } });
-    if (csz !== dsz) list.push({ title: 'Font size: reset (' + cm.short + ')', kw: 'text default', hint: fmtSize(dsz),
+    if (csz !== dsz) list.push({ id: 'fontReset', title: 'Font size: reset (' + cm.short + ')', kw: 'text default', hint: fmtSize(dsz),
       run: function () { setVal(ct, 'size', dsz); announce('Font size ' + fmtSize(dsz)); } });
-    list.push({ title: 'Upload file(s) to ' + cm.short + ' (' + UPLOAD[ct].hint.replace(/\s+/g, ' ') + ')', kw: 'open import load browse file picker add', hint: MOD + '+O',
+    list.push({ id: 'upload', title: 'Upload file(s) to ' + cm.short + ' (' + UPLOAD[ct].hint.replace(/\s+/g, ' ') + ')', kw: 'open import load browse file picker add', 
       run: function () { pickFiles(ct); } });
-    if (ct === 'code') list.push({ title: 'Add code from a screenshot (OCR)', kw: 'ocr image picture screenshot read text scan photo', hint: 'image → text',
+    if (ct === 'code') list.push({ id: 'ocr', title: 'Add code from a screenshot (OCR)', kw: 'ocr image picture screenshot read text scan photo', hint: 'image → text',
       run: function () { pickFiles('code', 'image/*'); } });
     if (pane === 'viewer') {
-      list.push({ title: 'Add sample to ' + cm.short, kw: 'example demo test data try dummy', hint: SAMPLE_INFO[ct][0],
+      list.push({ id: 'addSample', title: 'Add sample to ' + cm.short, kw: 'example demo test data try dummy', hint: SAMPLE_INFO[ct][0],
         run: function () { addSample(ct, false); announce('Added a sample to ' + cm.short); } });
-      list.push({ title: 'Add sample (long) to ' + cm.short, kw: 'example demo test data try dummy big large', hint: SAMPLE_INFO[ct][1],
+      list.push({ id: 'addSampleLong', title: 'Add sample (long) to ' + cm.short, kw: 'example demo test data try dummy big large', hint: SAMPLE_INFO[ct][1],
         run: function () { addSample(ct, true); announce('Added a long sample to ' + cm.short); } });
     }
     if (pane === 'viewer') {
-      list.push({ title: 'Clear all ' + NOUN[ct] + ' (' + cm.short + ')', kw: 'delete remove empty wipe reset list',
+      list.push({ id: 'clearAll', title: 'Clear all ' + NOUN[ct] + ' (' + cm.short + ')', kw: 'delete remove empty wipe reset list',
         run: function () { if (confirm('Clear all ' + NOUN[ct] + ' in ' + cm.short + '?\n\nThey are removed from this browser and can’t be undone.')) { callTool(ct, 'clearAllEntries'); announce('Cleared all ' + NOUN[ct]); } } });
     } else {
-      list.push({ title: 'Clear all — both compare panels and the results (' + cm.short + ')', kw: 'delete remove empty wipe reset panels',
+      list.push({ id: 'clearAll', title: 'Clear all — both compare panels and the results (' + cm.short + ')', kw: 'delete remove empty wipe reset panels',
         run: function () { callTool(ct, CLEAR_PANELS[ct]); announce('Compare panels and results cleared'); } });
-      list.push({ title: 'Clear compare — results only (' + cm.short + ')', kw: 'delete remove empty results diff output',
+      list.push({ id: 'clearResults', title: 'Clear compare — results only (' + cm.short + ')', kw: 'delete remove empty results diff output',
         run: function () { callTool(ct, CLEAR_RESULTS[ct]); announce('Compare results cleared'); } });
     }
-    list.push({ title: 'Open settings', kw: 'preferences options', hint: MOD + '+,', run: function () { openSettings('general'); } });
-    list.push({ title: 'Settings: Code Viewer (font, size, tabs, wrap)', kw: 'code font size line height tab wrap', run: function () { openSettings('code'); } });
-    list.push({ title: 'Settings: JSON / XML Viewer (font, size, expand)', kw: 'json xml font size expand levels', run: function () { openSettings('json'); } });
-    list.push({ title: 'Settings: CSV / XLSX Viewer (font, density, header)', kw: 'csv xlsx sheet font size density header', run: function () { openSettings('xlsx'); } });
-    list.push({ title: 'Toggle light / dark theme', kw: 'appearance color mode', run: toggleTheme });
-    list.push({ title: 'Theme: follow system', kw: 'automatic auto os', run: function () { setVal('general', 'theme', 'system'); announce('Theme follows system'); } });
-    list.push({ title: 'Theme: dark', kw: 'appearance', run: function () { setVal('general', 'theme', 'dark'); } });
-    list.push({ title: 'Theme: light', kw: 'appearance', run: function () { setVal('general', 'theme', 'light'); } });
-    list.push({ title: 'Accessibility: high contrast ' + (g.contrast === 'high' ? 'off' : 'on'), kw: 'contrast a11y', run: function () { setVal('general', 'contrast', g.contrast === 'high' ? 'normal' : 'high'); } });
-    list.push({ title: 'Accessibility: reduce animations ' + (g.motion === 'reduce' ? '(use system setting)' : 'on'), kw: 'motion a11y blink', run: function () { setVal('general', 'motion', g.motion === 'reduce' ? 'system' : 'reduce'); } });
-    list.push({ title: 'Interface size: larger', kw: 'zoom text bigger scale', run: function () { stepScale(1); } });
-    list.push({ title: 'Interface size: smaller', kw: 'zoom text smaller scale', run: function () { stepScale(-1); } });
-    list.push({ title: 'Interface size: reset to 100%', kw: 'zoom text scale default', run: function () { stepScale(0); } });
-    list.push({ title: 'Back up my data (export from ' + META[active || 'code'].short + ')', kw: 'export download save backup', run: function () {
+    list.push({ id: 'settings', title: 'Open settings', kw: 'preferences options', run: function () { openSettings('general'); } });
+    list.push({ id: 'settingsCode', title: 'Settings: Code Viewer (font, size, tabs, wrap)', kw: 'code font size line height tab wrap', run: function () { openSettings('code'); } });
+    list.push({ id: 'settingsJson', title: 'Settings: JSON / XML Viewer (font, size, expand)', kw: 'json xml font size expand levels', run: function () { openSettings('json'); } });
+    list.push({ id: 'settingsXlsx', title: 'Settings: CSV / XLSX Viewer (font, density, header)', kw: 'csv xlsx sheet font size density header', run: function () { openSettings('xlsx'); } });
+    list.push({ id: 'themeToggle', title: 'Toggle light / dark theme', kw: 'appearance color mode', run: toggleTheme });
+    list.push({ id: 'themeSystem', title: 'Theme: follow system', kw: 'automatic auto os', run: function () { setVal('general', 'theme', 'system'); announce('Theme follows system'); } });
+    list.push({ id: 'themeDark', title: 'Theme: dark', kw: 'appearance', run: function () { setVal('general', 'theme', 'dark'); } });
+    list.push({ id: 'themeLight', title: 'Theme: light', kw: 'appearance', run: function () { setVal('general', 'theme', 'light'); } });
+    list.push({ id: 'contrast', title: 'Accessibility: high contrast ' + (g.contrast === 'high' ? 'off' : 'on'), kw: 'contrast a11y', run: function () { setVal('general', 'contrast', g.contrast === 'high' ? 'normal' : 'high'); } });
+    list.push({ id: 'motion', title: 'Accessibility: reduce animations ' + (g.motion === 'reduce' ? '(use system setting)' : 'on'), kw: 'motion a11y blink', run: function () { setVal('general', 'motion', g.motion === 'reduce' ? 'system' : 'reduce'); } });
+    list.push({ id: 'scaleUp', title: 'Interface size: larger', kw: 'zoom text bigger scale', run: function () { stepScale(1); } });
+    list.push({ id: 'scaleDown', title: 'Interface size: smaller', kw: 'zoom text smaller scale', run: function () { stepScale(-1); } });
+    list.push({ id: 'scaleReset', title: 'Interface size: reset to 100%', kw: 'zoom text scale default', run: function () { stepScale(0); } });
+    list.push({ id: 'backup', title: 'Back up my data (export from ' + META[active || 'code'].short + ')', kw: 'export download save backup', run: function () {
       var f = document.querySelector('#pane-' + active + ' iframe');
       if (f) postTo(f, { __devToolkitCmd: 'export' });
     } });
-    list.push({ title: 'Show keyboard shortcuts', kw: 'keys help hotkeys', run: function () { openSettings('general', 'shortcuts'); } });
-    if (canInstall()) list.push({ title: 'Install Dev Toolkit as an app', kw: 'pwa desktop app window download', run: runInstall });
-    list.push({ title: 'Star Dev Toolkit on GitHub', kw: 'github repo support', run: function () { window.open(REPO_URL, '_blank', 'noopener'); } });
+    list.push({ id: 'shortcuts', title: 'Keyboard shortcuts: view and change', kw: 'keys help hotkeys keybindings rebind customize shortcuts', run: function () { openSettings('keys'); } });
+    if (canInstall()) list.push({ id: 'install', title: 'Install Dev Toolkit as an app', kw: 'pwa desktop app window download', run: runInstall });
+    list.push({ id: 'github', title: 'Star Dev Toolkit on GitHub', kw: 'github repo support', run: function () { window.open(REPO_URL, '_blank', 'noopener'); } });
+    list.forEach(function (c) { if (c.id && settings.keys[c.id]) c.hint = comboLabel(settings.keys[c.id]); });   // a bound shortcut replaces the hint
     return list;
   }
 
@@ -1342,7 +1457,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   /* =========================================================================
      Settings dialog
      ========================================================================= */
-  var SECTIONS = [['general', 'General'], ['code', 'Code Viewer'], ['json', 'JSON / XML'], ['xlsx', 'CSV / XLSX']];
+  var SECTIONS = [['general', 'General'], ['keys', 'Keyboard shortcuts'], ['code', 'Code Viewer'], ['json', 'JSON / XML'], ['xlsx', 'CSV / XLSX']];
   var section = 'general';
   var pendingScroll = null;
   var fontCache = {};
@@ -1371,8 +1486,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { group: 'Startup' },
       { key: 'splash', type: 'switch', label: 'Show the welcome screen when Dev Toolkit opens', help: 'Click anywhere (or press a key) to dismiss it. Takes effect the next time you open the page.' },
       { custom: 'install' },
-      { custom: 'storage' },
-      { custom: 'shortcuts' }
+      { custom: 'storage' }
+    ],
+    keys: [
+      { custom: 'keys' }
     ],
     code: [
       { group: 'Text' },
@@ -1507,23 +1624,91 @@ window.addEventListener('beforeinstallprompt', function (e) {
     return box;
   }
 
-  function buildShortcuts() {
-    var box = h('div', { id: 'shortcutsBox' }, [h('div', { class: 'grp', text: 'Keyboard shortcuts' })]);
-    var dl = h('dl', { class: 'kv' });
-    [
-      [MOD + '+K', 'Open the command palette'],
-      [MOD + '+Shift+P', 'Command palette while typing in the code editor'],
-      [MOD + '+1 / 2 / 3', 'Switch between the tools'],
-      [MOD + '+O', 'Upload files to the current tool'],
-      [MOD + '+,', 'Open settings'],
-      ['Esc', 'Close a dialog']
-    ].forEach(function (r) { dl.appendChild(h('dt', { text: r[1] })); dl.appendChild(h('dd', {}, [h('kbd', { class: 'kbd', text: r[0] })])); });
-    box.appendChild(h('div', { class: 'ctl' }, [dl,
-      h('p', { class: 'help', text: 'Some browsers reserve Ctrl/⌘ + number for their own tabs. If that’s the case, use the command palette or click a tab.' })]));
+  /* ---------- Keyboard shortcuts (rebindable) ---------- */
+  var recording = null;   // { id, btn } while waiting for the user to press a new combination
+  var keyFilter = '';
+  function keyMsg(text) { var m = $('keyMsg'); if (m) m.textContent = text || ''; }
+  function stopRecording() { if (!recording) return; recording = null; renderControls(); }
+  function defOf(id) { return KEY_DEFS.filter(function (d) { return d.id === id; })[0]; }
+  function trySetKey(id, combo) {   // combo '' = remove the shortcut
+    if (combo) {
+      var clash = KEY_DEFS.filter(function (d) { return d.id !== id && settings.keys[d.id] === combo; })[0];
+      if (clash) { keyMsg('“' + comboLabel(combo) + '” is already used for “' + clash.label + '”. Choose another, or change that one first.'); return false; }
+      if (KEY_RESERVED.indexOf(combo) >= 0) { keyMsg('“' + comboLabel(combo) + '” is kept for copy, paste, cut, select all and undo. Choose another.'); return false; }
+    }
+    recording = null;
+    setVal('keys', id, combo);
+    announce(defOf(id).label + ': ' + (combo ? comboLabel(combo) : 'no shortcut'));
+    return true;
+  }
+  function startRecording(id, btn) {
+    if (recording && recording.id === id) return;
+    recording = { id: id, btn: btn };
+    btn.textContent = 'Press keys…';
+    btn.classList.add('recording');
+    keyMsg('Press the new shortcut. Esc cancels, Backspace removes the shortcut.');
+    btn.focus();
+    btn.addEventListener('blur', function () { if (recording && recording.btn === btn) stopRecording(); }, { once: true });
+  }
+  function onRecordKey(e) {   // called from the global keydown handler while a row is recording
+    var bare = !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey;
+    if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) { stopRecording(); return; }   // let Tab move focus away
+    e.preventDefault(); e.stopPropagation();
+    if (e.key === 'Escape') { stopRecording(); return; }
+    if (bare && (e.key === 'Backspace' || e.key === 'Delete')) { trySetKey(recording.id, ''); return; }
+    if (/^(Control|Shift|Alt|Meta|AltGraph|OS)$/.test(e.key)) return;   // wait for the actual key
+    var combo = comboOf(e);
+    if (!combo) { keyMsg('Include ' + MOD + ' in the shortcut, for example ' + MOD + '+K.'); return; }
+    trySetKey(recording.id, combo);
+  }
+  function applyKeyFilter() {
+    var q = keyFilter.trim().toLowerCase(), any = false;
+    Array.prototype.forEach.call(document.querySelectorAll('#keysBox .key-group'), function (g) {
+      var shown = 0;
+      Array.prototype.forEach.call(g.querySelectorAll('.key-row'), function (r) {
+        var ok = !q || q.split(/\s+/).every(function (t) { return r.getAttribute('data-text').indexOf(t) >= 0; });
+        r.hidden = !ok; if (ok) shown++;
+      });
+      g.hidden = !shown; if (shown) any = true;
+    });
+    var none = document.querySelector('#keysBox .key-none'); if (none) none.hidden = any;
+  }
+  function buildKeys() {
+    var box = h('div', { id: 'keysBox' });
+    var filter = h('input', { class: 'field key-filter', type: 'search', placeholder: 'Filter shortcuts…', 'aria-label': 'Filter shortcuts', value: keyFilter, autocomplete: 'off', spellcheck: 'false' });
+    filter.addEventListener('input', function () { keyFilter = filter.value; applyKeyFilter(); });
+    box.appendChild(h('div', { class: 'key-head' }, [
+      h('p', { class: 'help', style: 'margin:0.5rem 0', text: 'Every command has a slot here. Click a shortcut (or double-click its row), then press the new combination: it needs ' + MOD + ' plus a key. Esc cancels, Backspace removes it, ↺ restores the original.' }),
+      filter,
+      h('p', { class: 'help key-msg', id: 'keyMsg', role: 'status', 'aria-live': 'polite' })
+    ]));
+    var groups = [];
+    KEY_DEFS.forEach(function (d) { if (groups.indexOf(d.group) < 0) groups.push(d.group); });
+    groups.forEach(function (g) {
+      var list = h('ul', { class: 'key-list', 'aria-label': g });
+      KEY_DEFS.filter(function (d) { return d.group === g; }).forEach(function (d) {
+        var cur = settings.keys[d.id], txt = cur ? comboLabel(cur) : 'Not set';
+        var btn = h('button', { type: 'button', class: 'kbd key-btn' + (cur ? '' : ' unset'), 'data-fk': focusKey('keys', d.id), text: txt,
+          'aria-label': d.label + ': ' + (cur ? txt : 'no shortcut') + '. Press Enter, then the new shortcut.' });
+        btn.addEventListener('click', function () { startRecording(d.id, btn); });
+        var reset = cur === d.def ? null : h('button', { type: 'button', class: 'key-reset', text: '↺', title: 'Reset to ' + (d.def ? comboLabel(d.def) : 'no shortcut'),
+          'aria-label': 'Reset “' + d.label + '” to ' + (d.def ? comboLabel(d.def) : 'no shortcut'), onclick: function () { trySetKey(d.id, d.def); } });
+        var li = h('li', { class: 'key-row', 'data-text': (g + ' ' + d.label + ' ' + txt).toLowerCase() }, [h('span', { text: d.label }), h('span', { class: 'key-ctl' }, [reset, btn])]);
+        li.addEventListener('dblclick', function () { startRecording(d.id, btn); });
+        list.appendChild(li);
+      });
+      box.appendChild(h('div', { class: 'key-group' }, [h('div', { class: 'grp', text: g }), list]));
+    });
+    box.appendChild(h('div', { class: 'key-group' }, [h('div', { class: 'grp', text: 'Dialogs' }),
+      h('ul', { class: 'key-list' }, [h('li', { class: 'key-row', 'data-text': 'dialogs close a dialog esc' }, [h('span', { text: 'Close a dialog' }), h('span', { class: 'key-ctl' }, [h('kbd', { class: 'kbd key-fixed', title: 'This one can’t be changed', text: 'Esc' })])])])]));
+    box.appendChild(h('p', { class: 'help key-none', text: 'No shortcut matches that filter.', hidden: true }));
+    box.appendChild(h('p', { class: 'help', text: 'Some browsers keep certain combinations for themselves (for example ' + MOD + '+T, ' + MOD + '+W and often ' + MOD + '+number), so the page never sees them. If a key doesn’t register, pick another or use the command palette. Commands under “Current tool” act on whichever tool you’re in.' }));
+    setTimeout(applyKeyFilter, 0);
     return box;
   }
 
   function renderControls() {
+    recording = null;
     var box = $('setControls'), focusFk = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-fk');
     var scrollTop = box.scrollTop;
     box.innerHTML = '';
@@ -1531,7 +1716,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       if (spec.group) box.appendChild(h('div', { class: 'grp', text: spec.group }));
       else if (spec.custom === 'install') { var ib = buildInstall(); if (ib) box.appendChild(ib); }
       else if (spec.custom === 'storage') box.appendChild(buildStorage());
-      else if (spec.custom === 'shortcuts') box.appendChild(buildShortcuts());
+      else if (spec.custom === 'keys') box.appendChild(buildKeys());
       else box.appendChild(buildControl(spec, section));
     });
     box.setAttribute('aria-labelledby', 'setnav-' + section);
@@ -1589,6 +1774,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
 
   function renderPreview() {
     var pv = $('setPreview'), note = $('setPreviewNote'), s = settings, scale = s.general.uiScale / 100;
+    $('setMain').classList.toggle('no-preview', section === 'keys');
+    if (section === 'keys') return;
     var sec = s[section] || {};
     pv.removeAttribute('style');
     if (section !== 'general') {
@@ -1653,6 +1840,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   $('settingsBtn').addEventListener('click', function () { openSettings(); });
   $('themeToggleBtn').addEventListener('click', toggleTheme);
+  $('paletteBtn').addEventListener('click', openPalette);
   $('setClose').addEventListener('click', function () { closeSettings(); });
   $('setDone').addEventListener('click', function () { closeSettings(); });
   $('settings').addEventListener('mousedown', function (e) { if (e.target === $('settings')) closeSettings(); });
@@ -1680,20 +1868,67 @@ window.addEventListener('beforeinstallprompt', function (e) {
      Keyboard shortcuts (also forwarded from inside the tool frames)
      ========================================================================= */
   function shortcutFor(e, inMonaco) {
-    var primary = isMac ? e.metaKey : e.ctrlKey;
-    if (!primary || e.altKey) return null;
-    var k = (e.key || '').toLowerCase(), c = e.code || '';   // e.code keeps shortcuts working on non-Latin keyboard layouts
-    if (c === 'KeyK' || k === 'k') return inMonaco ? null : 'palette';   // Monaco uses Ctrl+K as a chord prefix (Ctrl+Shift+K deletes a line)
-    if (e.shiftKey && (c === 'KeyP' || k === 'p')) return 'palette';
-    if (!e.shiftKey && (k === ',' || c === 'Comma')) return 'settings';
-    if (!e.shiftKey && (c === 'KeyO' || k === 'o')) return 'upload';
-    if (!e.shiftKey) { var i = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(c); if (i >= 0) return 'tab:' + TOOLS[i % 3]; }
+    var combo = comboOf(e);
+    if (!combo) return null;
+    for (var i = 0; i < KEY_DEFS.length; i++) {
+      var d = KEY_DEFS[i];
+      if (settings.keys[d.id] !== combo) continue;
+      if (combo === 'Mod+KeyK' && inMonaco) return null;   // Monaco uses Ctrl+K as a chord prefix (Ctrl+Shift+K deletes a line)
+      return d.run;
+    }
     return null;
   }
+  var CMD = {
+    shortcuts: function () { openSettings('keys'); },
+    settingsCode: function () { openSettings('code'); },
+    settingsJson: function () { openSettings('json'); },
+    settingsXlsx: function () { openSettings('xlsx'); },
+    backup: function () { var f = document.querySelector('#pane-' + (active || 'code') + ' iframe'); if (f) postTo(f, { __devToolkitCmd: 'export' }); },
+    install: function () { if (canInstall()) runInstall(); else announce('Dev Toolkit is already installed, or this browser can’t install it'); },
+    github: function () { window.open(REPO_URL, '_blank', 'noopener'); },
+    switchInner: function () {
+      var ct = active || 'code'; if (!frameLoaded[ct]) return;
+      var to = getInnerTab(ct) === 'viewer' ? 'compare' : 'viewer';
+      setInnerTab(ct, to); focusActivePane(); if (to === 'viewer') focusToolInput(ct);
+      announce(META[ct].short + ': ' + (to === 'viewer' ? 'Viewer' : 'Compare') + ' tab');
+    },
+    toggleView: function () {
+      var ct = active || 'code'; if (!frameLoaded[ct]) return;
+      if (getInnerTab(ct) === 'viewer') { callTool(ct, TOGGLE_VIEWER[ct]); announce('View toggled'); }
+      else { callTool(ct, TOGGLE_COMPARE[ct]); announce('Compare view toggled'); }
+    },
+    fontUp: function () { var ct = active || 'code'; setVal(ct, 'size', Math.min(24, settings[ct].size + 1)); announce('Font size ' + settings[ct].size + 'px'); },
+    fontDown: function () { var ct = active || 'code'; setVal(ct, 'size', Math.max(9, settings[ct].size - 1)); announce('Font size ' + settings[ct].size + 'px'); },
+    fontReset: function () { var ct = active || 'code'; setVal(ct, 'size', DEFAULTS[ct].size); announce('Font size ' + settings[ct].size + 'px'); },
+    addSample: function () { var ct = active || 'code'; if (frameLoaded[ct] && getInnerTab(ct) === 'viewer') { addSample(ct, false); announce('Added a sample to ' + META[ct].short); } else announce('Open the Viewer tab to add a sample'); },
+    addSampleLong: function () { var ct = active || 'code'; if (frameLoaded[ct] && getInnerTab(ct) === 'viewer') { addSample(ct, true); announce('Added a long sample to ' + META[ct].short); } else announce('Open the Viewer tab to add a sample'); },
+    ocr: function () { if ((active || 'code') === 'code' && frameLoaded.code) pickFiles('code', 'image/*'); else announce('Reading code from a screenshot is only in the Code Viewer'); },
+    clearAll: function () {
+      var ct = active || 'code'; if (!frameLoaded[ct]) return;
+      if (getInnerTab(ct) === 'viewer') {
+        if (confirm('Clear all ' + NOUN[ct] + ' in ' + META[ct].short + '?\n\nThey are removed from this browser and can’t be undone.')) { callTool(ct, 'clearAllEntries'); announce('Cleared all ' + NOUN[ct]); }
+      } else { callTool(ct, CLEAR_PANELS[ct]); announce('Compare panels and results cleared'); }
+    },
+    clearResults: function () { var ct = active || 'code'; if (frameLoaded[ct] && getInnerTab(ct) === 'compare') { callTool(ct, CLEAR_RESULTS[ct]); announce('Compare results cleared'); } else announce('Open the Compare tab to clear its results'); },
+    themeToggle: function () { toggleTheme(); },
+    themeSystem: function () { setVal('general', 'theme', 'system'); announce('Theme follows system'); },
+    themeDark: function () { setVal('general', 'theme', 'dark'); announce('Theme: dark'); },
+    themeLight: function () { setVal('general', 'theme', 'light'); announce('Theme: light'); },
+    contrast: function () { setVal('general', 'contrast', settings.general.contrast === 'high' ? 'normal' : 'high'); announce('Contrast: ' + settings.general.contrast); },
+    motion: function () { setVal('general', 'motion', settings.general.motion === 'reduce' ? 'system' : 'reduce'); announce('Animations: ' + settings.general.motion); },
+    scaleUp: function () { stepScale(1); },
+    scaleDown: function () { stepScale(-1); },
+    scaleReset: function () { stepScale(0); }
+  };
   function runShortcut(name) {
     if (name === 'palette') { paletteOpen ? closePalette() : openPalette(); }
     else if (name === 'settings') { settingsOpen ? closeSettings() : openSettings(); }
     else if (name === 'upload') { closePalette(); closeSettings(true); var ut = active || 'code'; if (frameLoaded[ut]) { pickFiles(ut); announce('Choose files to upload to ' + META[ut].short); } }
+    else if (CMD[name]) {
+      var kd = KEY_DEFS.filter(function (d) { return d.run === name; })[0];
+      if (kd && kd.close) { closePalette(); closeSettings(true); }
+      CMD[name]();
+    }
     else if (name.indexOf('tab:') === 0) { var t = name.slice(4);
       closePalette(); closeSettings(true);
       if (t === active && frameLoaded[t]) {   // already in this tool: flip between its Viewer and Compare tabs
@@ -1706,6 +1941,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     }
   }
   document.addEventListener('keydown', function (e) {
+    if (recording) { onRecordKey(e); return; }
     var s = shortcutFor(e);
     if (!s) return;
     e.preventDefault();
