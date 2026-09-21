@@ -132,20 +132,28 @@ Open it, press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type `add sample`, and press Enter 
 
 <table>
   <tr>
-    <td width="50%"><b>Code viewer</b><br><img src="docs/code-viewer.png" alt="Code viewer with a highlighted JavaScript snippet"></td>
+    <td width="50%"><b>Code viewer</b><br><img src="docs/code-viewer.png" alt="Code viewer with two highlighted snippets"></td>
     <td width="50%"><b>Compare (side by side)</b><br><img src="docs/compare.png" alt="Two code panels and a side-by-side diff"></td>
   </tr>
   <tr>
-    <td><b>JSON / XML viewer</b><br><img src="docs/json-viewer.png" alt="JSON shown as a collapsible tree"></td>
-    <td><b>CSV / XLSX viewer</b><br><img src="docs/sheets-viewer.png" alt="A CSV file shown as a table"></td>
+    <td width="50%"><b>JSON / XML viewer</b><br><img src="docs/json-viewer.png" alt="JSON shown as a collapsible tree with a minimap"></td>
+    <td width="50%"><b>CSV / XLSX viewer</b><br><img src="docs/sheets-viewer.png" alt="A CSV file shown as a table"></td>
   </tr>
   <tr>
-    <td><b>Command palette</b><br><img src="docs/command-palette.png" alt="The command palette listing commands for the current tool"></td>
-    <td><b>Settings with live preview</b><br><img src="docs/settings.png" alt="The settings dialog showing the code viewer options and a preview"></td>
+    <td width="50%"><b>Command palette</b><br><img src="docs/command-palette.png" alt="The command palette with search results"></td>
+    <td width="50%"><b>Color palettes in Settings</b><br><img src="docs/settings.png" alt="Settings General page with the color palette cards and a live preview"></td>
   </tr>
   <tr>
-    <td><b>Reading code from a screenshot (OCR)</b><br><img src="docs/ocr.png" alt="The OCR dialog with a screenshot on the left and the recognized code on the right"></td>
-    <td><b>Light theme</b><br><img src="docs/json-viewer-light.png" alt="JSON viewer in the light theme"></td>
+    <td width="50%"><b>Color palette picker (live preview)</b><br><img src="docs/palette-picker.png" alt="The palette picker listing System and each color palette"></td>
+    <td width="50%"><b>Keyboard shortcuts and aliases</b><br><img src="docs/shortcuts.png" alt="Settings keyboard shortcuts page with the Alias column"></td>
+  </tr>
+  <tr>
+    <td width="50%"><b>Compare button: pick two entries</b><br><img src="docs/compare-pick.png" alt="JSON viewer waiting for two entries to be clicked"></td>
+    <td width="50%"><b>Add a sample by language</b><br><img src="docs/sample-language.png" alt="The sample by language picker with Short and Long"></td>
+  </tr>
+  <tr>
+    <td width="50%"><b>Reading code from a screenshot (OCR)</b><br><img src="docs/ocr.png" alt="The OCR dialog with a screenshot on the left and the recognized code on the right"></td>
+    <td width="50%"><b>Light theme</b><br><img src="docs/json-viewer-light.png" alt="JSON viewer in the light theme"></td>
   </tr>
 </table>
 
@@ -354,6 +362,7 @@ devtools/
 ├── code.html               Code Viewer & Compare
 ├── json.html               JSON / XML Viewer & Compare
 ├── xlsx.html               CSV / XLSX Viewer & Compare
+├── samples.js              Sample data (code, JSON and table templates) used by the sample commands
 ├── manifest.json           Web app manifest (name, colours, icons) for "Install app"
 ├── sw.js                   Tiny service worker that only enables installing; caches nothing
 ├── fonts/                  Included fonts (.woff2) and their licenses
@@ -372,6 +381,7 @@ devtools/
 
 - **Talking to the tools.** The shell and the tool pages exchange `postMessage` messages (all prefixed `__devToolkit`). The shell sends theme, settings and commands; the tools report their state (for example, which sub-tab is showing) and forward shortcut keys. When the pages share an origin, the shell also listens for keys and calls tool functions directly, so it keeps working even if a tool page is out of date.
 - **A small runtime in every tool page** (`window.DT`) applies the settings as CSS variables, forwards shortcuts, and exposes the hooks the palette uses (clear, toggle view, upload, add sample).
+- **Sample data** lives in `samples.js`, loaded by the shell with `<script src="samples.js" defer>`; the random JSON, table and code samples are built from it, with no network needed.
 - **Storage.** A small IndexedDB layer in each tool page saves one record per item, writes only what changed, and never blocks the UI. It shows a visible warning if a write fails, and it migrates data from the older `localStorage` format automatically.
 - **Settings** live in one `localStorage` key, read by the tool pages before they first paint, so there is no flash of the wrong theme.
 - **Page versions.** The shell loads each tool with a `?v=<build>` suffix so a browser can never pair a new shell with an old cached tool page. If a tool page does not answer at all, a notice explains what to re-upload.
@@ -401,7 +411,7 @@ Browsers and GitHub Pages cache files for a few minutes. Wait a minute or two, t
 <details>
 <summary><b>A red "Some Dev Toolkit files are out of date" notice appears.</b></summary>
 
-One of the tool pages did not respond to the shell, which usually means an old copy is being used. Make sure `index.html`, `code.html`, `json.html` and `xlsx.html` were all uploaded together, then hard-refresh.
+One of the tool pages did not respond to the shell, which usually means an old copy is being used. Make sure `index.html`, `code.html`, `json.html`, `xlsx.html` and `samples.js` were all uploaded together, then hard-refresh.
 </details>
 
 <details>
@@ -446,7 +456,7 @@ Not promises, just things that would fit:
 - Shareable links for small snippets
 - Column statistics and quick charts for tables
 - A "Utilities" tab (Base64, JWT decoder, timestamps, regex tester)
-- More palette commands (Compare now, Swap panels, and others)
+- More palette commands (Swap panels, Copy a diff, and others) and more color palettes
 
 ## Contributing
 
