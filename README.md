@@ -179,6 +179,8 @@ Shortcuts use the physical key, so they also work with non-Latin keyboard layout
 
 Type to filter, use the arrow keys to move, and press Enter to run. The list changes with the tool and the sub-tab you are on.
 
+**How search ranks results.** An alias you typed exactly comes first (for example `cmp` for *Load entries into Compare*, `dl` for download, `exp` / `imp` for export / import, `pal` for the palette picker; each shows as a small "alias" tag). Then commands whose title has your words at the start of a word, then anywhere in the title, then hidden keywords, which are labelled "matched …" so you can see why they appear. Commands you run more often win ties. Set your own alias (one per command) in Settings → Keyboard shortcuts.
+
 **Always available**
 
 - Go to Code, JSON/XML or CSV/XLSX
@@ -200,6 +202,8 @@ Type to filter, use the arrow keys to move, and press Enter to run. The list cha
 - **Compare button** (left of the view toggle on every tool): press it, click two entries, and you land on the Compare tab with both loaded and compared. Esc cancels.
 - Font size: larger / smaller / reset
 - **Add sample** and **Add sample (long)**: a ready-made snippet, JSON object or table to play with. The long versions are about 500 lines of code, 400 JSON records, and 1,000 spreadsheet rows
+  JSON and CSV/XLSX samples are **random each time** (no internet needed): one of 8 short templates (config, users, products, orders, log events, books, weather, tasks) or 4 long ones (users, products, orders, events) for JSON, and 8 short tables (employees, sales, inventory, transactions, tasks, students, flights, weather) or 4 long ones for XLSX, filled with random values.
+- **Add a sample by language…** (Code Viewer): pick a language from the list, choose **Short** or **Long** (Tab switches), press Enter. Short picks one of 4 hand-written snippets at random; long picks one of 2 generated files (150+ lines) that come out different every time. Shift+Enter adds and keeps the list open. The language is set on the entry. The sample text lives in `samples.js`, so upload it together with the other files.
 - **Clear all** (asks for confirmation first)
 
 **On a Compare tab**

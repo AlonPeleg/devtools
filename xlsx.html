@@ -669,7 +669,7 @@
     /* ---------- Focus mode ---------- */
     #focus-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 30px; }
     #focus-overlay.active { display: flex; }
-    .entry.focused-entry { width: min(1200px, 94vw); max-height: 90vh; box-shadow: 0 10px 50px rgba(0,0,0,0.7); }
+    .entry.focused-entry { position: fixed; inset: 0; margin: auto; height: fit-content; z-index: 9001; width: min(1200px, 94vw); max-height: 90vh; box-shadow: 0 10px 50px rgba(0,0,0,0.7); }
     .focus-close-btn { position: absolute; top: 18px; right: 22px; z-index: 9001; background: var(--input-bg); color: var(--text); border: none; width: 28px; height: 28px; border-radius: 50%; font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .focus-close-btn:hover { background: #48484b; }
 
@@ -849,10 +849,10 @@
         <div class="tab-link" data-tab="compare-pane" onclick="switchTab('compare-pane', this)">Compare</div>
         <div class="storage-io-bar">
             <button class="btn-global-icon" id="storageExportBtn" title="Export local storage to a file" onclick="exportLocalStorageBackup()">
-                <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+                <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M6.5 2.5h-3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/><path d="M6 8h7.5M11 5.5L13.5 8 11 10.5"/></svg>
             </button>
             <button class="btn-global-icon" id="storageImportBtn" title="Import local storage from a file" onclick="document.getElementById('storageImportInput').click()">                
-                <svg viewBox="0 0 16 16"><path d="M8.75 1v6.63l1.94-1.94 1.06 1.06L8 10.5 4.25 6.75l1.06-1.06L7.25 7.63V1h1.5zM2 12h12v2.5H2V12z"/></svg>
+                <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M9.5 2.5h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3"/><path d="M2.5 8H10M7.5 5.5L10 8l-2.5 2.5"/></svg>
             </button>
             <input type="file" id="storageImportInput" accept=".json,application/json" style="display:none" onchange="importLocalStorageBackup(this)">
         </div>
@@ -879,7 +879,7 @@
                         <svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg>
                     </button>
                     <button class="btn-global-icon" title="Upload CSV/TSV/JSON/XLSX file(s)" onclick="document.getElementById('fileInput').click()">
-                        <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+                        <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M8 10V2.5M5 5.5l3-3 3 3M2.5 10v3a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/></svg>
                     </button>
                     <input type="file" id="fileInput" accept=".csv,.tsv,.txt,.json,.xlsx,.xls" multiple style="display:none" onchange="handleFileUpload(this.files)">
                     <button class="btn btn-secondary btn-iconbtn" title="Clear All" onclick="clearAllEntries()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
@@ -2233,28 +2233,21 @@
     /* =========================================================================
        Focus mode
        ========================================================================= */
-    let focusPlaceholder = null;
 
     function focusEntry(btn) {
         const entry = btn.closest('.entry');
         const overlay = document.getElementById('focus-overlay');
-        focusPlaceholder = document.createComment('focus-placeholder');
-        entry.parentNode.insertBefore(focusPlaceholder, entry);
+        /* The entry is lifted out of the flow with position:fixed instead of being re-parented:
+           moving a 1000-row table between parents forced a full style recalc of every cell. */
         entry.classList.add('focused-entry');
-        overlay.appendChild(entry);
         overlay.classList.add('active');
         document.body.style.overflow = 'hidden';
     }
 
     function closeFocusEntry() {
         const overlay = document.getElementById('focus-overlay');
-        const entry = overlay.querySelector('.entry.focused-entry');
-        if (entry && focusPlaceholder) {
-            entry.classList.remove('focused-entry');
-            focusPlaceholder.parentNode.insertBefore(entry, focusPlaceholder);
-            focusPlaceholder.remove();
-            focusPlaceholder = null;
-        }
+        const entry = document.querySelector('.entry.focused-entry');
+        if (entry) entry.classList.remove('focused-entry');
         overlay.classList.remove('active');
         document.body.style.overflow = '';
     }

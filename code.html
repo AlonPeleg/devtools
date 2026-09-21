@@ -355,8 +355,8 @@
     };
 
     // Adds text as a new entry in this tool's Viewer (used by the palette's "Add sample" commands).
-    DT.addSample = function (text, name) {
-        if (TOOL === 'code') addEntryAndRender(text, { name: name });
+    DT.addSample = function (text, name, lang) {
+        if (TOOL === 'code') addEntryAndRender(text, lang && LANGS[lang] ? { name: name, override: lang } : { name: name });
         else if (TOOL === 'json') processInput(String(text).trim(), name);
         else if (TOOL === 'xlsx') addEntry(name, 'csv', [makeSheet('Sample', parseDelimited(String(text), ','), dtHeaderDefault())]);
     };
@@ -407,7 +407,7 @@
                     function (err) { DT.post({ __devToolkit: 'reply', id: apiId, ok: false, error: String(err) }); });
             } catch (err) { DT.post({ __devToolkit: 'reply', id: apiId, ok: false, error: String(err) }); }
         }
-        else if (d.__devToolkitCmd === 'addSample' && typeof d.text === 'string') DT.addSample(d.text, d.name || 'Sample');
+        else if (d.__devToolkitCmd === 'addSample' && typeof d.text === 'string') DT.addSample(d.text, d.name || 'Sample', d.lang);
         else if (d.__devToolkitCmd === 'uploadFiles' && d.files && d.files.length) {
             var upload = TOOL === 'json' ? window.handleJsonFileUpload : window.handleFileUpload;
             if (typeof upload === 'function') upload(d.files);
@@ -603,6 +603,10 @@
     .split-toggle-half { padding: 6px 9px; display: flex; align-items: center; color: var(--text); opacity: 0.6; }
     .split-toggle:hover .split-toggle-half:not(.active) { opacity: 0.85; background: #48484b; }
     .split-toggle-half.active { background: var(--accent); color: #fff; opacity: 1; }
+    /* one toggle for collapse all / expand all: the chevrons turn 90 degrees */
+    .fold-toggle svg { transition: transform 0.2s ease; }
+    .fold-toggle.is-collapsed svg { transform: rotate(-90deg); }
+    html[data-motion="reduce"] .fold-toggle svg { transition: none; }
     .btn-global-icon { background: transparent; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px; opacity: 0.75; color: var(--text); }
     .btn-global-icon:hover { background: var(--hover-bg); opacity: 1; }
     .btn-global-icon svg { width: 15px; height: 15px; fill: currentColor; }
@@ -1062,10 +1066,10 @@
         <div class="tab-link" data-tab="compare-pane" onclick="switchTab('compare-pane', this)">Compare</div>
         <div class="storage-io-bar">
             <button class="btn-global-icon" id="storageExportBtn" title="Export local storage to a file" onclick="exportLocalStorageBackup()">
-                <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+                <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M6.5 2.5h-3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/><path d="M6 8h7.5M11 5.5L13.5 8 11 10.5"/></svg>
             </button>
             <button class="btn-global-icon" id="storageImportBtn" title="Import local storage from a file" onclick="document.getElementById('storageImportInput').click()">                
-                <svg viewBox="0 0 16 16"><path d="M8.75 1v6.63l1.94-1.94 1.06 1.06L8 10.5 4.25 6.75l1.06-1.06L7.25 7.63V1h1.5zM2 12h12v2.5H2V12z"/></svg>
+                <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M9.5 2.5h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3"/><path d="M2.5 8H10M7.5 5.5L10 8l-2.5 2.5"/></svg>
             </button>
             <input type="file" id="storageImportInput" accept=".json,application/json" style="display:none" onchange="importLocalStorageBackup(this)">
         </div>
@@ -1091,7 +1095,7 @@
                         <svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg>
                     </button>
                     <button class="btn-global-icon" title="Upload code file(s)" onclick="document.getElementById('fileInput').click()">
-                        <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+                        <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M8 10V2.5M5 5.5l3-3 3 3M2.5 10v3a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/></svg>
                     </button>
                     <input type="file" id="fileInput" multiple style="display:none" onchange="handleFileUpload(this.files)">
                     <button class="btn btn-secondary btn-iconbtn" title="Clear All" onclick="clearAllEntries()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
@@ -1141,7 +1145,7 @@
                         <div class="actions">
                             <div class="btn-icon" title="Copy raw text" onclick="copyPanelRaw('compareLeft', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
                             <div class="btn-icon" title="Copy as Markdown code fence" onclick="copyPanelFence('compareLeft', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 2 8 5 12"/><polyline points="11 4 14 8 11 12"/></svg></div>
-                            <div class="btn-icon" title="Download as file" onclick="downloadPanel('compareLeft')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.25 1.5h1.5v6h2l-2.75 3-2.75-3h2v-6z"/><path d="M2 12h12v2.5H2V12z"/></svg></div>
+                            <div class="btn-icon" title="Download as file" onclick="downloadPanel('compareLeft')"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M8 2.5V10M5 7l3 3 3-3M2.5 10v3a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/></svg></div>
                             <div class="btn-icon" title="Save this panel as a new snippet in Viewer" style="color:#4ec9b0" onclick="savePanelToViewer('compareLeft', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l4.5 4.5-1.06 1.06L8.75 2.87V10h-1.5V2.87L4.56 5.56 3.5 4.5 8 0zM1 12h14v1.5H1V12z"/></svg></div>
                         </div>
                         <div class="btn-delete" title="Clear Panel A" onclick="clearComparePanel('compareLeft')">×</div>
@@ -1150,9 +1154,8 @@
                         <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleComparePanelWrap('compareLeft', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                         <div class="btn-icon mode-toggle" title="Switch to plain text editor" onclick="toggleComparePanelMode('compareLeft', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
                         <div class="fold-controls">
-                          <div class="btn-icon format-entry-btn" title="Format / beautify this panel" onclick="formatComparePanel('compareLeft', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.2 4.8L14 7l-4.8 1.2L8 13l-1.2-4.8L2 7l4.8-1.2L8 1z"/></svg></div>
-                          <div class="btn-icon" title="Collapse all functions / blocks" onclick="collapseAllComparePanel('compareLeft')">▸▸</div>
-                          <div class="btn-icon" title="Expand all functions / blocks" onclick="expandAllComparePanel('compareLeft')">▾▾</div>
+                          <div class="btn-icon format-entry-btn" title="Format / beautify this panel" onclick="formatComparePanel('compareLeft', this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></div>
+                          <div class="btn-icon fold-toggle" title="Collapse all functions / blocks" data-tc="Collapse all functions / blocks" data-te="Expand all functions / blocks" onclick="toggleFoldBtn(this,'collapseAllComparePanel','expandAllComparePanel','compareLeft')"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 4.5L8 9l4.5-4.5M3.5 8.5L8 13l4.5-4.5"/></svg></div>
                         </div>
                     </div>
                     <div class="content" id="compareLeftContentBox">
@@ -1171,7 +1174,7 @@
                         <div class="actions">
                             <div class="btn-icon" title="Copy raw text" onclick="copyPanelRaw('compareRight', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
                             <div class="btn-icon" title="Copy as Markdown code fence" onclick="copyPanelFence('compareRight', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 2 8 5 12"/><polyline points="11 4 14 8 11 12"/></svg></div>
-                            <div class="btn-icon" title="Download as file" onclick="downloadPanel('compareRight')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.25 1.5h1.5v6h2l-2.75 3-2.75-3h2v-6z"/><path d="M2 12h12v2.5H2V12z"/></svg></div>
+                            <div class="btn-icon" title="Download as file" onclick="downloadPanel('compareRight')"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M8 2.5V10M5 7l3 3 3-3M2.5 10v3a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/></svg></div>
                             <div class="btn-icon" title="Save this panel as a new snippet in Viewer" style="color:#4ec9b0" onclick="savePanelToViewer('compareRight', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l4.5 4.5-1.06 1.06L8.75 2.87V10h-1.5V2.87L4.56 5.56 3.5 4.5 8 0zM1 12h14v1.5H1V12z"/></svg></div>
                         </div>
                         <div class="btn-delete" title="Clear Panel B" onclick="clearComparePanel('compareRight')">×</div>
@@ -1180,9 +1183,8 @@
                         <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleComparePanelWrap('compareRight', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                         <div class="btn-icon mode-toggle" title="Switch to plain text editor" onclick="toggleComparePanelMode('compareRight', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
                         <div class="fold-controls">
-                          <div class="btn-icon format-entry-btn" title="Format / beautify this panel" onclick="formatComparePanel('compareRight', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.2 4.8L14 7l-4.8 1.2L8 13l-1.2-4.8L2 7l4.8-1.2L8 1z"/></svg></div>
-                          <div class="btn-icon" title="Collapse all functions / blocks" onclick="collapseAllComparePanel('compareRight')">▸▸</div>
-                          <div class="btn-icon" title="Expand all functions / blocks" onclick="expandAllComparePanel('compareRight')">▾▾</div>
+                          <div class="btn-icon format-entry-btn" title="Format / beautify this panel" onclick="formatComparePanel('compareRight', this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></div>
+                          <div class="btn-icon fold-toggle" title="Collapse all functions / blocks" data-tc="Collapse all functions / blocks" data-te="Expand all functions / blocks" onclick="toggleFoldBtn(this,'collapseAllComparePanel','expandAllComparePanel','compareRight')"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 4.5L8 9l4.5-4.5M3.5 8.5L8 13l4.5-4.5"/></svg></div>
                         </div>
                     </div>
                     <div class="content" id="compareRightContentBox">
@@ -2302,10 +2304,9 @@ function buildEntryHtml(item) {
         <span class="dims-tag">${lines} line${lines === 1 ? '' : 's'} · ${chars} chars</span>
         <span class="time-tag">${item.timeStr}</span>
         <div class="actions">
-          <div class="btn-icon" title="Send to Compare panel..." onclick="showLoadTargetMenu(event,'${item.id}')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3l6 5-6 5V3zm7 0l6 5-6 5V3z"/></svg></div>
           <div class="btn-icon" title="Copy raw code" onclick="copyEntryRaw('${item.id}', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg></div>
           <div class="btn-icon" title="Copy as Markdown code fence" onclick="copyEntryFence('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 2 8 5 12"/><polyline points="11 4 14 8 11 12"/></svg></div>
-          <div class="btn-icon" title="Download as file" onclick="downloadEntry('${item.id}')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.25 1.5h1.5v6h2l-2.75 3-2.75-3h2v-6z"/><path d="M2 12h12v2.5H2V12z"/></svg></div>
+          <div class="btn-icon" title="Download as file" onclick="downloadEntry('${item.id}')"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M8 2.5V10M5 7l3 3 3-3M2.5 10v3a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/></svg></div>
           <div class="btn-icon btn-edit-toggle${item.mode === 'edit' ? ' toggle-active' : ''}" title="${item.mode === 'edit' ? 'Done editing — back to view' : 'Edit this snippet'}" onclick="toggleEntryEditMode('${item.id}')"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.28 1.72a1 1 0 0 1 1.41 0l1.59 1.59a1 1 0 0 1 0 1.41l-8.5 8.5-3.5 1 1-3.5 8.5-8.5z"/></svg></div>
           <div class="btn-icon btn-focus" title="Focus (maximize)" onclick="focusEntry(this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg></div>
         </div>
@@ -2323,9 +2324,8 @@ function buildEntryBodyHtml(item) {
         <div class="fold-controls">
           <div class="btn-icon wrap-toggle${item.wrap ? ' toggle-active' : ''}" title="Wrap long lines" onclick="toggleEntryWrapBtn('${item.id}', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
           <div class="btn-icon minimap-toggle${item.minimap ? ' toggle-active' : ''}" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
-          <div class="btn-icon format-entry-btn" title="Format / beautify this snippet" onclick="formatEntry('${item.id}', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.2 4.8L14 7l-4.8 1.2L8 13l-1.2-4.8L2 7l4.8-1.2L8 1z"/></svg></div>
-          <div class="btn-icon" title="Collapse all functions / blocks" onclick="collapseAllFolds('${item.id}')">▸▸</div>
-          <div class="btn-icon" title="Expand all functions / blocks" onclick="expandAllFolds('${item.id}')">▾▾</div>
+          <div class="btn-icon format-entry-btn" title="Format / beautify this snippet" onclick="formatEntry('${item.id}', this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></div>
+          <div class="btn-icon fold-toggle" title="Collapse all functions / blocks" data-tc="Collapse all functions / blocks" data-te="Expand all functions / blocks" onclick="toggleFoldBtn(this,'collapseAllFolds','expandAllFolds','${item.id}')"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 4.5L8 9l4.5-4.5M3.5 8.5L8 13l4.5-4.5"/></svg></div>
         </div>
       </div>
       <div class="content-row">
@@ -2341,9 +2341,8 @@ function buildEntryBodyHtml(item) {
         <div class="fold-controls">
           <div class="btn-icon wrap-toggle${item.wrap ? ' toggle-active' : ''}" title="Wrap long lines" onclick="toggleEntryWrapBtn('${item.id}', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
           <div class="btn-icon minimap-toggle${item.minimap ? ' toggle-active' : ''}" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${item.id}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
-          <div class="btn-icon format-entry-btn" title="Format / beautify this snippet" onclick="formatEntry('${item.id}', this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.2 4.8L14 7l-4.8 1.2L8 13l-1.2-4.8L2 7l4.8-1.2L8 1z"/></svg></div>
-          <div class="btn-icon" title="Collapse all functions / blocks / labels" onclick="collapseAllFolds('${item.id}')">▸▸</div>
-          <div class="btn-icon" title="Expand all functions / blocks / labels" onclick="expandAllFolds('${item.id}')">▾▾</div>
+          <div class="btn-icon format-entry-btn" title="Format / beautify this snippet" onclick="formatEntry('${item.id}', this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></div>
+          <div class="btn-icon fold-toggle" title="Collapse all functions / blocks / labels" data-tc="Collapse all functions / blocks / labels" data-te="Expand all functions / blocks / labels" onclick="toggleFoldBtn(this,'collapseAllFolds','expandAllFolds','${item.id}')"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 4.5L8 9l4.5-4.5M3.5 8.5L8 13l4.5-4.5"/></svg></div>
         </div>
       </div>
       <div class="content-row">
@@ -5516,6 +5515,12 @@ init();
         return true;
     }
 })();
+
+function toggleFoldBtn(btn, collapseFn, expandFn, arg) {
+    const collapsed = btn.classList.toggle('is-collapsed');
+    btn.title = collapsed ? (btn.dataset.te || 'Expand all') : (btn.dataset.tc || 'Collapse all');
+    try { (window[collapsed ? collapseFn : expandFn])(arg); } catch (e) { console.error(e); }
+}
 </script>
 </body>
 </html>

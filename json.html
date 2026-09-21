@@ -540,7 +540,11 @@
         .btn { border: none; padding: 3px 8px; cursor: pointer; border-radius: 2px; font-size: 11px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
         .btn-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
         .btn:hover { filter: brightness(1.2); }
-        .btn-global-icon { background: transparent; border: none; cursor: pointer; padding: 3px; display: flex; align-items: center; border-radius: 3px; opacity: 0.8; }
+    /* one toggle for collapse all / expand all: the chevrons turn 90 degrees */
+    .fold-toggle svg { transition: transform 0.2s ease; }
+    .fold-toggle.is-collapsed svg { transform: rotate(-90deg); }
+    html[data-motion="reduce"] .fold-toggle svg { transition: none; }
+        .btn-global-icon { background: transparent; border: none; cursor: pointer; padding: 3px; display: flex; align-items: center; border-radius: 3px; opacity: 0.8; color: var(--vscode-foreground); }
         .btn-global-icon:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
         .btn-global-icon svg { width: 15px; height: 15px; fill: var(--vscode-foreground); }
         .storage-io-bar { margin-left: auto; display: flex; align-items: center; gap: 2px; padding-right: 8px; }
@@ -605,13 +609,14 @@
 
         /* ---------- Minimap (VS Code-style; one toggle per snippet, off by default, only offered
            while that snippet is focused/maximized — see .entry.focused-entry rules below) ---------- */
-        .minimap { width: 0; flex: 0 0 auto; overflow: hidden; position: relative; background: var(--vscode-editor-background); cursor: pointer; }
-        .entry.focused-entry .minimap.mm-visible { width: 150px; border-left: 1px solid var(--vscode-panel-border); }
+        .minimap { width: 0; flex: 0 0 auto; overflow: hidden; position: relative; background: transparent; cursor: pointer; }
+        .entry.focused-entry .minimap.mm-visible { width: 180px; border-left: 1px solid var(--vscode-panel-border); }
         .minimap-canvas { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .minimap-canvas-blur { filter: blur(0.35px); opacity: 0.82; }
-        .minimap-canvas-sharp { clip-path: inset(0 0 100% 0); }
-        .minimap-viewport { position: absolute; left: 0; right: 0; top: 0; height: 20px; border: 1px solid rgba(255,255,255,0.5); box-sizing: border-box; pointer-events: none; }
-        .minimap:hover .minimap-viewport { border-color: rgba(255,255,255,0.75); }
+        .minimap-canvas { image-rendering: auto; }
+        .minimap-viewport { position: absolute; left: 0; right: 0; top: 0; height: 20px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.07); box-sizing: border-box; pointer-events: none; }
+        .minimap:hover .minimap-viewport { border-color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.12); }
+        html[data-theme="light"] .minimap-viewport { border-color: rgba(0,0,0,0.22); background: rgba(0,0,0,0.05); }
+        html[data-theme="light"] .minimap:hover .minimap-viewport { border-color: rgba(0,0,0,0.4); background: rgba(0,0,0,0.11); }
         /* The minimap (and its toggle) only ever appears once a snippet is focused/maximized. */
         .entry:not(.focused-entry) .minimap { display: none; }
         .entry:not(.focused-entry) .minimap-toggle { display: none; }
@@ -622,6 +627,11 @@
         .highlight-flash { animation: diff-flash 1.2s ease-out; }
 
         .json-node { margin: 0; position: relative; }
+        /* Very large trees (tens of thousands of rows): let the browser skip layout/style of off-screen
+           subtrees (class set by dtMarkBigTree once the tree has been laid out once, so their real
+           sizes are remembered). Switched off (cv-off) while the minimap measures every row. */
+        .content.cv-big .json-node.cv { content-visibility: auto; contain-intrinsic-size: auto 400px; }
+        .content.cv-big.cv-off .json-node.cv { content-visibility: visible; }
         .json-tree { padding-left: 12px; border-left: 1px solid #404040; margin-left: 4px; }
         .toggle { cursor: pointer; width: 12px; height: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; color: #808080; }
         .toggle::before { content: '▼'; }
@@ -805,10 +815,10 @@
         <div class="tab-link" onclick="switchTab('editor-pane', this)">Edit &amp; Compare</div>
         <div class="storage-io-bar">
             <button class="btn-global-icon" id="storageExportBtn" title="Export local storage to a file" onclick="exportLocalStorageBackup()">
-                <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+                <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M6.5 2.5h-3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/><path d="M6 8h7.5M11 5.5L13.5 8 11 10.5"/></svg>
             </button>
             <button class="btn-global-icon" id="storageImportBtn" title="Import local storage from a file" onclick="document.getElementById('storageImportInput').click()">                
-                <svg viewBox="0 0 16 16"><path d="M8.75 1v6.63l1.94-1.94 1.06 1.06L8 10.5 4.25 6.75l1.06-1.06L7.25 7.63V1h1.5zM2 12h12v2.5H2V12z"/></svg>
+                <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M9.5 2.5h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3"/><path d="M2.5 8H10M7.5 5.5L10 8l-2.5 2.5"/></svg>
             </button>
             <input type="file" id="storageImportInput" accept=".json,application/json" style="display:none" onchange="importLocalStorageBackup(this)">
         </div>
@@ -838,7 +848,7 @@
                         <svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg>
                     </button>
                     <button class="btn-global-icon" title="Upload JSON/XML file(s)" onclick="document.getElementById('jsonFileInput').click()">
-                        <svg viewBox="0 0 16 16"><path d="M8 1.5l3.75 3.75-1.06 1.06L8.75 4.37V10h-1.5V4.37L5.31 6.31 4.25 5.25 8 1.5zM2 12h12v2.5H2V12z"/></svg>
+                        <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M8 10V2.5M5 5.5l3-3 3 3M2.5 10v3a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/></svg>
                     </button>
                     <input type="file" id="jsonFileInput" accept=".json,.xml,application/json,text/xml" multiple style="display:none" onchange="handleJsonFileUpload(this.files)">
                     <button class="btn btn-secondary btn-iconbtn" title="Clear All" onclick="clearAllEntries()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
@@ -1290,7 +1300,7 @@
             // Focusing changes the entry's (and so the minimap's) box size outside the normal
             // render path. The ResizeObserver on the minimap element catches this too, but doing
             // it here as well means it's correct on the very next frame rather than just eventually.
-            requestAnimationFrame(() => refreshMinimapForEntryId(entry.dataset.entryId));
+            requestAnimationFrame(() => renderMinimapIfStale(findEntry(entry.dataset.entryId)));
         }
 
         function closeFocusEntry() {
@@ -2146,8 +2156,7 @@
                     <span class="type-badge" style="background:${type === 'json' ? '#4ec9b0' : '#569cd6'}">${type}</span>
                     <input type="text" class="name-input" placeholder="Name entry..." value="${savedName}" oninput="updateEntryName(this)">
                     <div class="actions">
-                        <button class="btn-global-icon" title="Collapse All Nodes" onclick="setEntryTreeCollapse(this, true)"><svg viewBox="0 0 16 16"><path d="M9 9H5V5h4v4zm5-7H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
-                        <button class="btn-global-icon" title="Expand All Nodes" onclick="setEntryTreeCollapse(this, false)"><svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
+                        <button class="btn-global-icon fold-toggle" title="Collapse all nodes" data-tc="Collapse all nodes" data-te="Expand all nodes" onclick="entryFoldToggle(this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 4.5L8 9l4.5-4.5M3.5 8.5L8 13l4.5-4.5"/></svg></button>
                         <div class="btn-icon minimap-toggle" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${entryId}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
                         <div class="btn-icon btn-convert" title="Copy as ${type === 'json' ? 'XML' : 'JSON'}">${type === 'json' ? xmlIconSvg : jsonIconSvg}</div>
                         <div class="btn-icon btn-minify" title="Copy Minified (Unbeautified)">${minifyIconSvg}</div>
@@ -2165,8 +2174,7 @@
                 <div class="content-row">
                     <div class="content" id="content-${entryId}" onscroll="handleEntryScroll('${entryId}')"></div>
                     <div class="minimap" id="minimap-${entryId}" onmousedown="minimapPointerDown(event,'${entryId}')" title="Minimap — click or drag to jump">
-                        <canvas class="minimap-canvas minimap-canvas-blur" id="minimap-canvas-blur-${entryId}"></canvas>
-                        <canvas class="minimap-canvas minimap-canvas-sharp" id="minimap-canvas-sharp-${entryId}"></canvas>
+                        <canvas class="minimap-canvas" id="minimap-canvas-${entryId}"></canvas>
                         <div class="minimap-viewport" id="minimap-viewport-${entryId}"></div>
                     </div>
                 </div>`;
@@ -2232,6 +2240,7 @@
             dtApplyExpand(contentArea);
             document.getElementById('container').prepend(entry);
             applyMinimapForEntry(findEntry(entryId));
+            dtMarkBigTree(contentArea);
 
             if (saveToStorage) {
                 saveEntriesToStorage();
@@ -2252,6 +2261,29 @@
                 }
                 if (depth >= limit) node.classList.add('collapsed');
             });
+        }
+
+        // Big trees get content-visibility:auto on the children of their long lists, but only after
+        // the tree has been laid out once (it may be added while the tab is hidden, so wait until it
+        // has a size): each such child's real height is then pinned via contain-intrinsic-size so the
+        // scroll height / scrollbar stay accurate. Small documents are untouched.
+        function dtMarkBigTree(content) {
+            if (content.querySelectorAll('.json-node').length < 1500 || !('ResizeObserver' in window)) return;
+            const ro = new ResizeObserver(() => {
+                if (!content.isConnected || !content.clientHeight) return;
+                ro.disconnect();
+                requestAnimationFrame(() => {
+                    if (!content.isConnected || !content.clientHeight) return;
+                    const marks = [];
+                    content.querySelectorAll('.json-tree').forEach(tree => {
+                        if (tree.childElementCount < 30) return;
+                        for (const n of tree.children) if (n.classList.contains('json-node')) marks.push([n, n.offsetHeight]);
+                    });
+                    marks.forEach(([n, h]) => { n.classList.add('cv'); if (h > 0) n.style.containIntrinsicSize = 'auto ' + h + 'px'; });
+                    content.classList.add('cv-big');
+                });
+            });
+            ro.observe(content);
         }
 
         function findEntry(id) { return postedEntries.find(e => e.id === id); }
@@ -2491,45 +2523,48 @@
            color is each bit of their text" has to be derived by walking that tree and reading each
            row's real rendered position — see collectMinimapRows / tokensFromRowElement below.
            ========================================================================= */
-        const MINIMAP_WIDTH = 150;
-        const MINIMAP_CHAR_W = 1.6;
+        const MINIMAP_WIDTH = 180;
+        const MINIMAP_CHAR_W = 1.8;
         // Same fixed-scale-and-pan design as the code viewer: every row gets the same small,
         // fixed-height slice regardless of how long the JSON/XML is, and once the tree is taller
         // than the visible minimap box it pans in sync with scrolling instead of being squeezed to
         // fit — squeezing is what makes a long minimap collapse into an unreadable smear.
-        const MINIMAP_SCALE = 0.14;
+        const MINIMAP_SCALE = 0.15;
 
-        // Maps this viewer's own syntax-color classes to the color their minimap bar should use.
-        // Reusing the SAME classes/colors the real tree already renders with (rather than a
-        // separate token model) means the minimap always matches exactly, for both JSON and XML,
-        // with no risk of drifting out of sync with the actual highlighter.
-        const MINIMAP_JSON_COLORS = {
-            key: '#9cdcfe',
-            string: '#ce9178',
-            number: '#b5cea8',
-            boolean: '#569cd6',
-            null: '#569cd6',
-            'xml-tag': '#569cd6',
-            'xml-attr': '#9cdcfe',
-            'xml-text': '#cccccc'
-        };
-        const MINIMAP_KNOWN_CLASSES = Object.keys(MINIMAP_JSON_COLORS);
+        // Token classes this viewer's tree renders with. The minimap reads their REAL computed colors
+        // (see getMinimapPalette) instead of hardcoding hex values, so it follows the light/dark
+        // theme and any user color palette (--tok-* custom properties), exactly like the tree.
+        const MINIMAP_KNOWN_CLASSES = ['key', 'string', 'number', 'boolean', 'null', 'xml-tag', 'xml-attr'];
 
         // Walks up from a text node's parent looking for the nearest ancestor carrying one of the
-        // known token classes (same "nearest colored span wins" rule the browser itself renders
-        // with), stopping at the row element (a .header-line or .footer) so a match/search-highlight
-        // span nested inside, say, a .string still resolves to that string's color rather than
-        // falling all the way through to the row's own default.
-        function minimapColorForEl(el) {
+        // known token classes, stopping at the row element (a .header-line or .footer) so a
+        // search-highlight span nested inside a .string still resolves to that string's color.
+        // Returns '' for uncolored text (punctuation, braces, xml text): drawn in the default color.
+        function minimapClassForEl(el) {
             let node = el;
             while (node && node.nodeType === 1) {
                 for (const cls of MINIMAP_KNOWN_CLASSES) {
-                    if (node.classList.contains(cls)) return MINIMAP_JSON_COLORS[cls];
+                    if (node.classList.contains(cls)) return cls;
                 }
                 if (node.classList.contains('header-line') || node.classList.contains('footer')) break;
                 node = node.parentElement;
             }
-            return '#cccccc';
+            return '';
+        }
+
+        // Reads each class's computed color from a throwaway probe element inside the entry's own
+        // content box, so whatever CSS rule currently wins (theme, palette var, fallback) is used.
+        function getMinimapPalette(contentEl) {
+            const palette = { '': getComputedStyle(contentEl).color || '#cccccc' };
+            MINIMAP_KNOWN_CLASSES.forEach(cls => {
+                const probe = document.createElement('span');
+                probe.className = cls;
+                probe.style.display = 'none';
+                contentEl.appendChild(probe);
+                palette[cls] = getComputedStyle(probe).color || palette[''];
+                probe.remove();
+            });
+            return palette;
         }
 
         function tokensFromRowElement(rowEl) {
@@ -2537,9 +2572,30 @@
             const walker = document.createTreeWalker(rowEl, NodeFilter.SHOW_TEXT, null, false);
             let n;
             while ((n = walker.nextNode())) {
-                if (n.nodeValue) tokens.push({ text: n.nodeValue, color: minimapColorForEl(n.parentElement) });
+                if (n.nodeValue) tokens.push({ text: n.nodeValue, cls: minimapClassForEl(n.parentElement) });
+            }
+            // A collapsed node shows a " ... }" / " ... ]" suffix via CSS ::after, which isn't a text node.
+            const p = rowEl.parentElement;
+            if (rowEl.classList.contains('header-line') && p && p.classList.contains('collapsed') && p.classList.contains('json-node')) {
+                tokens.push({ text: p.classList.contains('is-array') ? ' ... ]' : ' ... }', cls: '' });
             }
             return tokens;
+        }
+
+        // x (in real CSS px, from the start of the content box) where a row's first text node starts:
+        // tree indentation is CSS padding/margin (not whitespace text), so without this every row
+        // would start at the left edge and the minimap would lose the code-shaped indentation.
+        function rowTextLeft(rowEl, originLeft) {
+            const walker = document.createTreeWalker(rowEl, NodeFilter.SHOW_TEXT, null, false);
+            let n;
+            while ((n = walker.nextNode())) {
+                if (n.nodeValue) {
+                    const r = document.createRange();
+                    r.setStart(n, 0); r.setEnd(n, 1);
+                    return r.getBoundingClientRect().left - originLeft;
+                }
+            }
+            return rowEl.getBoundingClientRect().left - originLeft;
         }
 
         // Collects every currently-VISIBLE row (a .header-line, and a .footer where the node isn't
@@ -2568,39 +2624,62 @@
             return rows;
         }
 
-        // Shared drawing routine for both the blurred background canvas and the sharp foreground
-        // canvas (see renderMinimap) — kept as one function so they can never drift out of sync.
-        function drawMinimapContent(ctx, rows, cssWidth, cssHeight) {
-            ctx.clearRect(0, 0, cssWidth, cssHeight);
-            const NON_WHITESPACE = /\S+/g;
-            rows.forEach(row => {
-                const y = row.top;
-                // See the code viewer's identical comment: no floor up to a full 1px here, since
-                // once a JSON tree has more rows than the minimap has pixels for, each row's true
-                // proportional height is a fraction of a pixel, and forcing every one of those up
-                // to 1px would stack overlapping alpha into an unreadable smear.
-                const h = Math.min(Math.max(row.height, 0.15), 2);
-                let x = 0;
-                for (const t of row.tokens) {
-                    const tokenW = t.text.length * MINIMAP_CHAR_W;
-                    if (x < cssWidth) {
-                        NON_WHITESPACE.lastIndex = 0;
-                        let m;
-                        while ((m = NON_WHITESPACE.exec(t.text))) {
-                            const runX = x + m.index * MINIMAP_CHAR_W;
-                            if (runX >= cssWidth) break;
-                            const runW = Math.min(m[0].length * MINIMAP_CHAR_W, cssWidth - runX);
-                            if (runW > 0.4) {
-                                ctx.globalAlpha = t.color !== '#cccccc' ? 0.85 : 0.55;
-                                ctx.fillStyle = t.color;
-                                ctx.fillRect(runX, y, runW, h);
-                            }
+        // Glyph renderer (same look as the code viewer's minimap): real monospace glyphs are drawn
+        // tiny onto a supersampled offscreen band and downscaled with smoothing onto a canvas whose
+        // backing store is device-pixel sized, so it is crisp at any devicePixelRatio. Bands keep the
+        // offscreen canvas small no matter how long the document is.
+        const MINIMAP_MAX_CANVAS_PX = 8192; // browsers cap canvas height (~32767); long docs lower the backing scale, not the CSS size
+        const MINIMAP_SUPERSAMPLE = 3;
+        const MINIMAP_BAND = 480; // css px of map per offscreen band
+        const MINIMAP_HAS_NON_WS = /\S/;
+        const MINIMAP_FONT_FAMILY = "Consolas, 'SF Mono', Menlo, 'Courier New', monospace";
+        function paintMinimapBlocks(ctx, rows, cssWidth, tileTop, tileH, palette, realCharW, s) {
+            const ss = MINIMAP_SUPERSAMPLE;
+            const probe = document.createElement('canvas').getContext('2d');
+            probe.font = '24px ' + MINIMAP_FONT_FAMILY;
+            const baseCharW = probe.measureText('MMMMMMMMMM').width / 10 || 14.4;
+            const targetCharW = MINIMAP_CHAR_W * ss;
+            const fontSize = 24 * (targetCharW / baseCharW);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.imageSmoothingEnabled = true;
+            if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+            const off = document.createElement('canvas');
+            const offW = Math.max(1, Math.round(cssWidth * ss));
+            const offH = Math.ceil((MINIMAP_BAND + 8) * ss);
+            off.width = offW; off.height = offH;
+            const octx = off.getContext('2d');
+            const punct = palette[''];
+            const tileBottom = tileTop + tileH;
+            let i = 0;
+            while (i < rows.length && rows[i].top + rows[i].height < tileTop) i++;
+            while (i < rows.length) {
+                if (rows[i].top >= tileBottom) break;
+                const bandTop = Math.floor(rows[i].top / MINIMAP_BAND) * MINIMAP_BAND;
+                octx.clearRect(0, 0, offW, offH);
+                octx.font = fontSize + 'px ' + MINIMAP_FONT_FAMILY;
+                octx.textBaseline = 'alphabetic';
+                let lastCol = null, lastAl = -1;
+                for (; i < rows.length && rows[i].top < bandTop + MINIMAP_BAND; i++) {
+                    const row = rows[i];
+                    const y = (row.top - bandTop) * ss;
+                    const rowH = Math.max(1, row.height * ss);
+                    const baseline = y + rowH * 0.66;
+                    let x = Math.max(0, row.left / realCharW) * targetCharW;
+                    for (const t of row.tokens) {
+                        if (x >= offW) break;
+                        if (MINIMAP_HAS_NON_WS.test(t.text)) {
+                            const col = (t.cls && palette[t.cls]) || punct, al = t.cls ? 0.95 : 0.8;
+                            if (col !== lastCol) { octx.fillStyle = col; lastCol = col; }
+                            if (al !== lastAl) { octx.globalAlpha = al; lastAl = al; }
+                            octx.fillText(t.text, x, baseline);
                         }
+                        x += t.text.length * targetCharW;
                     }
-                    x += tokenW;
                 }
-            });
-            ctx.globalAlpha = 1;
+                octx.globalAlpha = 1;
+                ctx.drawImage(off, 0, 0, offW, offH, 0, Math.round((bandTop - tileTop) * s), Math.round(cssWidth * s), Math.round((MINIMAP_BAND + 8) * s));
+            }
         }
 
         const minimapResizeObservers = {};
@@ -2609,9 +2688,12 @@
             const mm = document.getElementById('minimap-' + item.id);
             if (!mm || minimapResizeObservers[item.id]) return;
             let pending = null;
+            // The observer's immediate first callback would just redo the render applyMinimapForEntry already did.
+            let skipNext = true;
             const ro = new ResizeObserver(() => {
+                if (skipNext) { skipNext = false; return; }
                 if (pending) return;
-                pending = requestAnimationFrame(() => { pending = null; if (item.minimap) renderMinimap(item); });
+                pending = requestAnimationFrame(() => { pending = null; renderMinimapIfStale(item); });
             });
             ro.observe(mm);
             minimapResizeObservers[item.id] = ro;
@@ -2619,11 +2701,14 @@
 
         function renderMinimap(item) {
             const mm = document.getElementById('minimap-' + item.id);
-            const blurCanvas = document.getElementById('minimap-canvas-blur-' + item.id);
-            const sharpCanvas = document.getElementById('minimap-canvas-sharp-' + item.id);
+            const canvas = document.getElementById('minimap-canvas-' + item.id);
             const contentEl = document.getElementById('content-' + item.id);
-            if (!mm || !blurCanvas || !sharpCanvas || !contentEl || !mm.classList.contains('mm-visible')) return;
+            if (!mm || !canvas || !contentEl || !mm.classList.contains('mm-visible')) return;
+            // Not focused = minimap is display:none; nothing to draw (and measuring a big tree is costly).
+            if (!mm.closest('.entry.focused-entry')) return;
             const rootNode = contentEl.firstElementChild;
+            const cvBig = contentEl.classList.contains('cv-big');
+            if (cvBig) contentEl.classList.add('cv-off'); // measure every row for real
             const cssWidth = MINIMAP_WIDTH;
             const dpr = window.devicePixelRatio || 1;
             const scrollHeight = contentEl.scrollHeight || 1;
@@ -2631,44 +2716,93 @@
             item._minimapContentHeight = mapHeight;
 
             let rows = [];
+            let palette = null, realCharW = 1;
+            try {
             if (rootNode) {
                 // getBoundingClientRect-relative math (rather than offsetTop) because every
-                // .json-node is itself position:relative (for its own stacking purposes), which
-                // would make offsetTop resolve against the nearest ANCESTOR node instead of
-                // .content — this instead measures directly against .content's own box, correct
-                // regardless of how deeply nested a row is.
+                // .json-node is itself position:relative, which would make offsetTop resolve
+                // against the nearest ancestor node instead of .content.
                 const contentRect = contentEl.getBoundingClientRect();
                 const scrollTop = contentEl.scrollTop;
+                const cs = getComputedStyle(contentEl);
+                const originLeft = contentRect.left + (parseFloat(cs.paddingLeft) || 0) - contentEl.scrollLeft;
+                // Real width of one character in the tree, to convert indentation px into columns.
+                const mctx = document.createElement('canvas').getContext('2d');
+                mctx.font = cs.fontSize + ' ' + cs.fontFamily;
+                realCharW = mctx.measureText('MMMMMMMMMM').width / 10 || (parseFloat(cs.fontSize) || 11) * 0.6;
                 const rowEls = collectMinimapRows(rootNode);
+                // Where text starts inside a row's box is the same for every row of a kind (toggle
+                // width / footer padding), so measure it once per kind instead of a Range per row.
+                const textInset = {};
                 rows = rowEls.map(el => {
                     const r = el.getBoundingClientRect();
+                    const kind = el.classList.contains('footer') ? 'f' : 'h';
+                    if (textInset[kind] === undefined) textInset[kind] = rowTextLeft(el, r.left);
                     return {
                         top: (r.top - contentRect.top + scrollTop) * MINIMAP_SCALE,
                         height: Math.max(1, r.height) * MINIMAP_SCALE,
+                        left: r.left + textInset[kind] - originLeft,
                         tokens: tokensFromRowElement(el)
                     };
                 });
+                palette = getMinimapPalette(contentEl);
             }
 
-            [blurCanvas, sharpCanvas].forEach(canvas => {
-                canvas.width = Math.max(1, Math.round(cssWidth * dpr));
-                canvas.height = Math.max(1, Math.round(mapHeight * dpr));
-                canvas.style.width = cssWidth + 'px';
-                canvas.style.height = mapHeight + 'px';
-                const ctx = canvas.getContext('2d');
-                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-                drawMinimapContent(ctx, rows, cssWidth, mapHeight);
-            });
+            } finally { if (cvBig) contentEl.classList.remove('cv-off'); }
+            // The map is painted as a stack of tall-but-bounded canvas tiles at full device resolution
+            // (a single canvas would have to be downscaled once a long document exceeds browser limits).
+            const sc = dpr;
+            const tileCss = Math.max(64, Math.floor(MINIMAP_MAX_CANVAS_PX / sc));
+            const nTiles = Math.max(1, Math.ceil(mapHeight / tileCss));
+            item._mmTileCss = tileCss;
+            item._mmTiles = [];
+            mm.querySelectorAll('.minimap-canvas.mm-extra').forEach(c => c.remove());
+            for (let k = 0; k < nTiles; k++) {
+                let cv = canvas;
+                if (k > 0) { cv = document.createElement('canvas'); cv.className = 'minimap-canvas mm-extra'; mm.insertBefore(cv, canvas.nextSibling); }
+                const th = Math.min(tileCss, mapHeight - k * tileCss);
+                cv.width = 1; cv.height = 1; // no backing store until the tile scrolls into view (see ensureMinimapTiles)
+                cv.style.width = cssWidth + 'px';
+                cv.style.height = th + 'px';
+                cv.style.top = (k * tileCss) + 'px';
+                item._mmTiles.push({ cv, top: k * tileCss, th, painted: false });
+            }
+            item._mmPaint = palette ? { rows, palette, realCharW, sc, cssWidth } : null;
 
+            item._mmSig = minimapSig(item);
             updateMinimapViewport(item);
+        }
+
+        // Cheap fingerprint of everything that changes the minimap's geometry; lets the focus /
+        // ResizeObserver paths skip a redundant full re-measure right after a render.
+        function minimapSig(item) {
+            const c = document.getElementById('content-' + item.id), mm = document.getElementById('minimap-' + item.id);
+            return c && mm ? [c.scrollHeight, c.clientHeight, c.clientWidth, mm.clientHeight, mm.clientWidth].join('|') : '';
+        }
+        function renderMinimapIfStale(item) {
+            if (item && item.minimap && item._mmSig !== minimapSig(item)) renderMinimap(item);
+        }
+
+        // Paints only the tiles that are (nearly) inside the minimap's visible window; the rest wait
+        // until the user scrolls/pans there, so a huge document costs one or two tiles up front.
+        function ensureMinimapTiles(item, panOffset, mmHeight) {
+            const P = item._mmPaint, tiles = item._mmTiles;
+            if (!P || !tiles) return;
+            const lo = panOffset - mmHeight * 0.5, hi = panOffset + mmHeight * 1.5;
+            for (const t of tiles) {
+                if (t.painted || t.top + t.th < lo || t.top > hi) continue;
+                t.painted = true;
+                t.cv.width = Math.max(1, Math.round(P.cssWidth * P.sc));
+                t.cv.height = Math.max(1, Math.round(t.th * P.sc));
+                paintMinimapBlocks(t.cv.getContext('2d'), P.rows, P.cssWidth, t.top, t.th + 4, P.palette, P.realCharW, P.sc);
+            }
         }
 
         function updateMinimapViewport(item) {
             const contentEl = document.getElementById('content-' + item.id);
             const viewportEl = document.getElementById('minimap-viewport-' + item.id);
             const mm = document.getElementById('minimap-' + item.id);
-            const blurCanvas = document.getElementById('minimap-canvas-blur-' + item.id);
-            const sharpCanvas = document.getElementById('minimap-canvas-sharp-' + item.id);
+            const canvas = document.getElementById('minimap-canvas-' + item.id);
             if (!contentEl || !viewportEl || !mm || !mm.classList.contains('mm-visible')) return;
             const scrollHeight = contentEl.scrollHeight || 1;
             const clientHeight = contentEl.clientHeight || 0;
@@ -2686,13 +2820,10 @@
 
             viewportEl.style.top = boxTop + 'px';
             viewportEl.style.height = boxHeight + 'px';
-            if (blurCanvas) blurCanvas.style.top = (-panOffset) + 'px';
-            if (sharpCanvas) {
-                sharpCanvas.style.top = (-panOffset) + 'px';
-                const boxTopFullMap = panOffset + boxTop;
-                const bottomInset = Math.max(0, mapHeight - boxTopFullMap - boxHeight);
-                sharpCanvas.style.clipPath = 'inset(' + boxTopFullMap + 'px 0 ' + bottomInset + 'px 0)';
+            if (canvas) {
+                (item._mmTiles || [{ cv: canvas, top: 0 }]).forEach(t => { t.cv.style.top = (t.top - panOffset) + 'px'; });
             }
+            ensureMinimapTiles(item, panOffset, mmHeight);
         }
 
         function minimapPointerDown(e, entryId) {
@@ -3072,6 +3203,40 @@
     var initial = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
     updateToggleIcon(initial);
 })();
+</script>
+<script>
+(function () {
+    // The minimap bakes token colors into canvases, so theme / color-palette changes and window
+    // resizes need an explicit repaint (same hooks the code viewer uses).
+    function repaintMinimaps() {
+        try { postedEntries.forEach(function (item) { if (item.minimap) renderMinimap(item); }); } catch (e) {}
+    }
+    try {
+        new MutationObserver(function () { requestAnimationFrame(repaintMinimaps); })
+            .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-hc', 'style', 'class'] });
+    } catch (e) {}
+    if (window.DT && DT.onChange) {
+        var palSig = '';
+        DT.onChange(function () {
+            var sig = DT.palette ? DT.palette.id + DT.palette.kind : '';
+            if (sig !== palSig) { palSig = sig; }
+            requestAnimationFrame(repaintMinimaps);
+        });
+    }
+    var t = null;
+    window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(repaintMinimaps, 200); });
+})();
+
+function toggleFoldBtn(btn, collapseFn, expandFn, arg) {
+    const collapsed = btn.classList.toggle('is-collapsed');
+    btn.title = collapsed ? (btn.dataset.te || 'Expand all') : (btn.dataset.tc || 'Collapse all');
+    try { (window[collapsed ? collapseFn : expandFn])(arg); } catch (e) { console.error(e); }
+}
+function entryFoldToggle(btn) {
+    const collapsed = btn.classList.toggle('is-collapsed');
+    btn.title = collapsed ? btn.dataset.te : btn.dataset.tc;
+    setEntryTreeCollapse(btn, collapsed);
+}
 </script>
 </body>
 </html>

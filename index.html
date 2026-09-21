@@ -234,8 +234,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
 
   /* ---------- Panes ---------- */
   #panes { position: relative; flex: 1 1 auto; min-height: 0; background: var(--bg); overflow: hidden; }
-  .pane { position: absolute; inset: 0; display: none; overflow: hidden; }
-  .pane.active { display: block; }
+  /* Inactive panes stay laid out (just not painted or clickable), so switching back doesn't re-layout a big table or tree. */
+  .pane { position: absolute; inset: 0; visibility: hidden; pointer-events: none; overflow: hidden; }
+  .pane.active { visibility: visible; pointer-events: auto; }
   /* "Interface size" scales each tool like browser zoom: the frame is laid out at 1/scale and scaled back up. */
   .pane iframe {
     width: calc(100% / var(--ui-scale)); height: calc(100% / var(--ui-scale));
@@ -315,6 +316,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
     padding: 0.4375rem 0.625rem; border-radius: 4px; cursor: pointer; font-size: 0.8125rem;
   }
   .pal-item[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); }
+  .pal-via { margin-left: auto; font-size: 0.6875rem; color: var(--text-dim); white-space: nowrap; }
+  .pal-item[aria-selected="true"] .pal-via { color: rgba(255,255,255,0.8); }
   .pal-item kbd, .kbd {
     font-family: var(--font-mono); font-size: 0.6875rem; padding: 0.0625rem 0.375rem;
     border: 1px solid var(--bar-border); border-radius: 3px; background: var(--bg); color: var(--text-dim);
@@ -334,6 +337,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .pick-slot { font: inherit; font-family: var(--font-mono); font-size: 0.6875rem; min-width: 1.5rem; padding: 0.0625rem 0.375rem; border-radius: 3px; cursor: pointer; border: 1px solid var(--bar-border); background: var(--bg); color: var(--text-dim); }
   .pick-slot:hover { border-color: var(--focus); color: var(--text-bright); }
   .pick-slot.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .pal-pick-head .pick-len { margin-left: 0.25rem; font-family: inherit; }
   .pal-item[aria-selected="true"] .pick-slot { border-color: rgba(255,255,255,0.5); color: #fff; background: rgba(255,255,255,0.12); }
   .pal-item[aria-selected="true"] .pick-slot.on { background: #fff; color: var(--accent); border-color: #fff; }
   .pal-empty { padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8125rem; }
@@ -370,7 +374,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .set-main.no-preview .set-preview-col { display: none; }
   .key-list { list-style: none; margin: 0; padding: 0; }
   .key-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.4375rem 0; border-bottom: 1px solid var(--bar-border); font-size: 0.8125rem; }
-  .key-ctl { display: flex; align-items: center; gap: 0.375rem; flex: 0 0 auto; }
+  .key-label { flex: 1 1 auto; min-width: 0; }
+  .key-alias-none { visibility: hidden; }
+  .key-alias { flex: 0 0 9.5rem; width: 9.5rem; padding: 0.1875rem 0.4375rem; font-size: 0.75rem; }
+  .key-cols { display: flex; align-items: center; gap: 1rem; padding: 0.25rem 0; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
+  .key-cols span:first-child { flex: 1 1 auto; } .key-alias-h { flex: 0 0 9.5rem; } .key-ctl-h { flex: 0 0 7.75rem; text-align: right; }
+  .key-ctl { min-width: 7.75rem; justify-content: flex-end; display: flex; align-items: center; gap: 0.375rem; flex: 0 0 auto; }
   .key-btn { cursor: pointer; min-width: 4.5rem; text-align: center; font: inherit; font-family: var(--font-mono); font-size: 0.6875rem; }
   .key-btn:hover { border-color: var(--focus); color: var(--text-bright); }
   .key-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -670,6 +679,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   </div>
 </div>
 
+<script src="samples.js" defer></script>
 <script>
 (function () {
   'use strict';
@@ -746,6 +756,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     { id: 'toggleWrap', group: G_CODE, label: 'Toggle line wrap on all snippets', tools: ['code'], pane: 'viewer', kw: 'wrap long lines', call: ['toggleWrap', []], say: 'Line wrap toggled' },
     { id: 'toggleMinimap', group: G_VIEW, label: 'Toggle the minimap on all entries', tools: ['code', 'json'], pane: 'viewer', generic: true, kw: 'map overview', call: ['toggleMinimap', []], say: 'Minimap toggled' },
     { id: 'toggleHeader', group: G_XLSX, label: 'Toggle “first row is a header” on all files', tools: ['xlsx'], pane: 'viewer', kw: 'header row columns', call: ['toggleHeader', []], say: 'Header row toggled' },
+    { id: 'addSampleLang', group: G_CODE, label: 'Add a sample by language…', tools: ['code'], pane: 'viewer', kw: 'example demo test dummy programming language python java go rust short long', pick: { mode: 'lang', verb: 'Sample by language' } },
     { id: 'copyRaw', group: G_CODE, label: 'Copy a snippet as raw text', tools: ['code'], pane: 'viewer', kw: 'clipboard plain', pick: { mode: 'copy', api: 'copy', arg: 'raw', verb: 'Copy', done: 'Copied' } },
     { id: 'copyFence', group: G_CODE, label: 'Copy a snippet as a Markdown code block', tools: ['code'], pane: 'viewer', kw: 'clipboard markdown fence', pick: { mode: 'copy', api: 'copy', arg: 'fence', verb: 'Copy', done: 'Copied' } },
     { id: 'saveFile', group: G_CODE, label: 'Download a snippet / JSON entry as a file', tools: ['code', 'json'], pane: 'viewer', kw: 'save export file', pick: { mode: 'copy', api: 'save', arg: 'file', verb: 'Download', done: 'Downloading' } },
@@ -832,6 +843,21 @@ window.addEventListener('beforeinstallprompt', function (e) {
     ['Settings pages', ['settingsCode', 'settingsJson', 'settingsXlsx']],
     ['App', ['install', 'github']]
   ];
+  // Short codes typed in the palette. Editable in Settings → Keyboard shortcuts (up to 3 per command).
+  var DEFAULT_ALIASES = {
+    compareLoad: ['cmp'], compareRun: ['run'], compareSwap: ['swap'], compareNext: ['nd'], comparePrev: ['pd'], compareFormat: ['fmt'], compareMinify: ['min'],
+    copyRaw: ['cp'], copyFence: ['cpmd'], copyFormatted: ['cpf'], copyMinified: ['cpm'], copyXml: ['cpx'], copyAsJson: ['cpj'], copyCsv: ['cpc'], copyTableJson: ['cpj'], copyMarkdown: ['cpmd'],
+    saveFile: ['dl'], saveCsv: ['dlc'], saveXlsx: ['dlx'],
+    exportAll: ['exp'], importAll: ['imp'], exportSettings: ['exps'], importSettings: ['imps'],
+    upload: ['up'], settings: ['set'], shortcuts: ['keys'], palPicker: ['pal'], palNext: ['pn'], themeToggle: ['th'],
+    expandAll: ['ea'], collapseAll: ['ca'], focusSearch: ['find'], toggleWrap: ['wrap'], clearAll: ['clr'], ocr: ['ocr']
+  };
+  function aliasesOf(id) { if (NO_ALIAS.indexOf(id) >= 0) return []; var o = settings.aliases || {}; return Object.prototype.hasOwnProperty.call(o, id) ? o[id] : (DEFAULT_ALIASES[id] || []); }
+  var NO_ALIAS = ['palette', 'paletteEditor'];   // opening the palette itself can't have a code typed inside it
+  function cleanAliases(v) {   // text or array → at most one short code (letters, digits, - and _)
+    var first = Array.isArray(v) ? v[0] : String(v || '').split(',')[0], a = String(first || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 12);
+    return a ? [a] : [];
+  }
   var MIN_PAL_ORDER = ['shortcuts', 'tab1', 'tab2', 'tab3'];   // what a new or empty custom palette shows
   var DEFAULT_PAL_ORDER = [];   // every command that can appear in the palette, by type
   PAL_TYPE.forEach(function (g) { g[1].forEach(function (id) { DEFAULT_PAL_ORDER.push(id); }); });
@@ -881,7 +907,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
         palette: pick(g.palette, PALETTE_IDS, 'stock'),
         splash: g.splash !== false
       },
-      keys: {},
+      keys: {}, aliases: {},
       palette: { sort: pick((raw.palette || {}).sort, ['none', 'type', 'alpha', 'custom'], 'none'), order: null },
       code: {
         font: pick(c.font, FONT_IDS, 'default'), customFont: cleanFontText(c.customFont),
@@ -901,6 +927,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
     TOOLS.forEach(function (t) { out[t].fontStack = stackFor(out[t]); });   // tools read the resolved stack directly
     var po = (raw.palette || {}).order;
     if (Array.isArray(po)) out.palette.order = po.filter(function (id, i) { return DEFAULT_PAL_ORDER.indexOf(id) >= 0 && po.indexOf(id) === i; });
+    var ra = raw.aliases && typeof raw.aliases === 'object' ? raw.aliases : {};
+    KEY_DEFS.forEach(function (d) {
+      if (NO_ALIAS.indexOf(d.id) >= 0 || !Object.prototype.hasOwnProperty.call(ra, d.id)) return;
+      var cl = cleanAliases(ra[d.id]), df = DEFAULT_ALIASES[d.id] || [];
+      if (cl.join() !== df.join()) out.aliases[d.id] = cl;   // only differences from the built-in ones are stored
+    });
     var used = {};
     KEY_DEFS.forEach(function (d) {   // an invalid, reserved or duplicate binding falls back to the default
       var v = kraw[d.id];
@@ -1261,7 +1293,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
      Sample data for the palette's "Add sample" commands.
      Generated from fixed seeds, so every run produces exactly the same text.
      ========================================================================= */
-  var SAMPLE_INFO = { code: ['15 lines', '400+ lines'], json: ['1 object', '400 records'], xlsx: ['10 rows', '1,000 rows'] };
+  var SAMPLE_INFO = { code: ['15 lines', '400+ lines'], json: ['random, small', 'random, 400 records'], xlsx: ['random, 10 rows', 'random, 1,000 rows'] };
 
   function sampleRng(seed) {
     var x = seed >>> 0;
@@ -1425,82 +1457,160 @@ window.addEventListener('beforeinstallprompt', function (e) {
     return out.join('\n');
   }
 
+  // ---- Random samples: each call picks a template at random and fills it with random values (works offline: Math.random). ----
+  function newRand() { return sampleRng((Math.random() * 4294967296) >>> 0); }
+  function rnd(rand, lo, hi) { return lo + Math.floor(rand() * (hi - lo + 1)); }
+  function money(rand, lo, hi) { return Math.round((lo + rand() * (hi - lo)) * 100) / 100; }
+  function isoTime(rand) { return sampleIsoDate(1700 + rnd(rand, 0, 100)) + 'T' + ('0' + rnd(rand, 0, 23)).slice(-2) + ':' + ('0' + rnd(rand, 0, 59)).slice(-2) + ':' + ('0' + rnd(rand, 0, 59)).slice(-2) + 'Z'; }
+  function repeat(n, fn) { var o = []; for (var i = 0; i < n; i++) o.push(fn(i)); return o; }
+  var S_PRODUCTS = ['Notebook', 'Desk lamp', 'USB hub', 'Monitor arm', 'Keyboard', 'Webcam', 'Headset', 'Mouse pad', 'Cable tidy', 'Footrest', 'Backpack', 'Water bottle', 'Charger', 'Speaker'];
+  var S_CATS = ['Office', 'Audio', 'Accessories', 'Furniture', 'Travel', 'Home'];
+  var S_SERVICES = ['auth', 'billing', 'search', 'gateway', 'mailer', 'reports'];
+  var S_MSGS = ['Request completed', 'Cache miss', 'Retrying upstream call', 'Token refreshed', 'Slow query detected', 'Connection reset', 'Job queued', 'Payment authorised'];
+  var JSON_TEMPLATES = {
+    users: function (rand, n) {
+      var tags = ['admin', 'beta', 'staff', 'trial', 'vip', 'newsletter'], skus = ['A-100', 'B-220', 'C-315', 'D-408', 'E-512'];
+      return { generatedAt: isoTime(rand), users: repeat(n, function (i) {
+        var first = samplePick(rand, S_FIRST), last = samplePick(rand, S_LAST);
+        return { id: 1000 + i, name: first + ' ' + last, email: (first + '.' + last).toLowerCase() + i + '@example.com', active: rand() < 0.8, score: Math.round(rand() * 1000) / 10,
+          address: { city: samplePick(rand, S_CITIES), street: rnd(rand, 1, 199) + ' ' + samplePick(rand, ['Oak', 'Maple', 'Cedar', 'Elm', 'Birch']) + ' St', geo: { lat: Math.round((rand() * 140 - 70) * 1000) / 1000, lng: Math.round((rand() * 340 - 170) * 1000) / 1000 } },
+          tags: tags.filter(function () { return rand() < 0.3; }),
+          orders: repeat(rnd(rand, 0, 3), function (o) { return { id: 'ORD-' + (1000 + i) + '-' + (o + 1), placed: sampleIsoDate(rnd(rand, 0, 1800)), items: repeat(rnd(rand, 1, 3), function () { return { sku: samplePick(rand, skus), qty: rnd(rand, 1, 4), price: money(rand, 5, 100) }; }) }; }),
+          lastLogin: isoTime(rand), notes: rand() < 0.15 ? 'Prefers e-mail, not phone' : null };
+      }) };
+    },
+    products: function (rand, n) {
+      return { currency: samplePick(rand, ['USD', 'EUR', 'ILS', 'GBP']), products: repeat(n, function (i) {
+        return { id: 'P-' + (2000 + i), name: samplePick(rand, S_PRODUCTS) + ' ' + samplePick(rand, ['Mini', 'Pro', 'Max', 'Lite', 'Plus']), category: samplePick(rand, S_CATS), price: money(rand, 4, 400),
+          stock: rnd(rand, 0, 300), rating: Math.round((2 + rand() * 3) * 10) / 10, inStock: rand() < 0.85, dimensions: { w: rnd(rand, 5, 80), h: rnd(rand, 2, 60), d: rnd(rand, 1, 40), unit: 'cm' },
+          tags: ['new', 'sale', 'eco', 'popular'].filter(function () { return rand() < 0.35; }), supplier: rand() < 0.2 ? null : { name: samplePick(rand, S_LAST) + ' Supply', leadDays: rnd(rand, 2, 30) } };
+      }) };
+    },
+    orders: function (rand, n) {
+      return { shop: 'demo-store', orders: repeat(n, function (i) {
+        var items = repeat(rnd(rand, 1, 4), function () { return { product: samplePick(rand, S_PRODUCTS), qty: rnd(rand, 1, 5), unitPrice: money(rand, 3, 120) }; });
+        var total = items.reduce(function (a, it) { return a + it.qty * it.unitPrice; }, 0);
+        return { id: 'ORD-' + (5000 + i), status: samplePick(rand, ['paid', 'shipped', 'delivered', 'refunded', 'pending']), placed: isoTime(rand),
+          customer: { name: samplePick(rand, S_FIRST) + ' ' + samplePick(rand, S_LAST), city: samplePick(rand, S_CITIES) }, items: items, total: Math.round(total * 100) / 100, gift: rand() < 0.1, coupon: rand() < 0.2 ? 'SAVE' + rnd(rand, 5, 30) : null };
+      }) };
+    },
+    events: function (rand, n) {
+      return { source: 'app-logs', events: repeat(n, function (i) {
+        var level = samplePick(rand, ['info', 'info', 'info', 'warn', 'error', 'debug']);
+        return { ts: isoTime(rand), level: level, service: samplePick(rand, S_SERVICES), message: samplePick(rand, S_MSGS), latencyMs: rnd(rand, 3, 1800), requestId: 'req-' + Math.floor(rand() * 1e9).toString(36),
+          meta: { host: 'node-' + rnd(rand, 1, 12), retry: rnd(rand, 0, 3), user: rand() < 0.3 ? null : rnd(rand, 1000, 1400) }, error: level === 'error' ? { code: samplePick(rand, ['E_TIMEOUT', 'E_DB', 'E_AUTH']), retryable: rand() < 0.5 } : undefined };
+      }) };
+    },
+    books: function (rand, n) {
+      var T1 = ['The Quiet', 'Paper', 'Northern', 'Last', 'Broken', 'Hidden', 'Glass', 'Silver'], T2 = ['Garden', 'Harbor', 'Signal', 'Orchard', 'Machine', 'River', 'Letters', 'Atlas'];
+      return { library: 'City Library', books: repeat(n, function (i) {
+        return { isbn: '978-' + rnd(rand, 100000000, 999999999), title: samplePick(rand, T1) + ' ' + samplePick(rand, T2), author: { first: samplePick(rand, S_FIRST), last: samplePick(rand, S_LAST) }, year: rnd(rand, 1950, 2025),
+          pages: rnd(rand, 90, 900), genres: ['fiction', 'history', 'science', 'poetry', 'crime'].filter(function () { return rand() < 0.3; }), available: rand() < 0.7, copies: rnd(rand, 1, 6), rating: Math.round((2 + rand() * 3) * 10) / 10 };
+      }) };
+    },
+    weather: function (rand, n) {
+      return { units: 'metric', forecast: repeat(n, function (i) {
+        var lo = rnd(rand, -5, 22);
+        return { date: sampleIsoDate(1800 + i), city: samplePick(rand, S_CITIES), tempC: { min: lo, max: lo + rnd(rand, 3, 12) }, humidity: rnd(rand, 20, 95), windKph: rnd(rand, 0, 60), condition: samplePick(rand, ['sunny', 'cloudy', 'rain', 'fog', 'storm', 'snow']), precipitation: rand() < 0.4 ? { mm: money(rand, 0.1, 30), chance: rnd(rand, 20, 100) } : null };
+      }) };
+    },
+    tasks: function (rand, n) {
+      return { project: samplePick(rand, ['Apollo', 'Nimbus', 'Orion', 'Pilot']), tasks: repeat(n, function (i) {
+        return { id: 'T-' + (100 + i), title: samplePick(rand, ['Fix login bug', 'Write docs', 'Design review', 'Upgrade deps', 'Add tests', 'Refactor API', 'Ship v2']), status: samplePick(rand, ['todo', 'doing', 'review', 'done']), priority: rnd(rand, 1, 4),
+          assignee: rand() < 0.15 ? null : samplePick(rand, S_FIRST), due: sampleIsoDate(rnd(rand, 1800, 1900)), estimateH: rnd(rand, 1, 40), labels: ['bug', 'feature', 'infra', 'docs'].filter(function () { return rand() < 0.3; }), subtasks: repeat(rnd(rand, 0, 3), function (k) { return { id: 'T-' + (100 + i) + '.' + (k + 1), done: rand() < 0.5 }; }) };
+      }) };
+    },
+    config: function (rand) {
+      return { name: 'service-' + samplePick(rand, S_SERVICES), version: rnd(rand, 1, 4) + '.' + rnd(rand, 0, 9) + '.' + rnd(rand, 0, 20), private: true, author: { name: samplePick(rand, S_FIRST) + ' ' + samplePick(rand, S_LAST), email: 'dev@example.com' },
+        scripts: { build: 'vite build', test: 'vitest run', lint: 'eslint .' }, dependencies: { react: '^18.3.0', zod: '^3.23.8', express: '^4.19.2' },
+        settings: { theme: samplePick(rand, ['dark', 'light']), autosave: rand() < 0.5, retries: rnd(rand, 1, 5), ratio: Math.round(rand() * 100) / 100, proxy: null },
+        releases: repeat(rnd(rand, 2, 3), function (i) { return { version: '1.' + i + '.0', date: sampleIsoDate(1500 + i * 60 + rnd(rand, 0, 20)), notes: [samplePick(rand, ['Search', 'Dark mode', 'Export', 'Faster startup', 'Bug fixes'])] }; }) };
+    }
+  };
+  var JSON_SHORT = ['config', 'users', 'products', 'orders', 'events', 'books', 'weather', 'tasks'], JSON_LONG = ['users', 'products', 'orders', 'events'];
   function sampleJson(long) {
-    if (!long) {
-      return JSON.stringify({
-        name: 'dev-toolkit-sample',
-        version: '1.0.0',
-        private: true,
-        author: { name: 'Ada Lovelace', email: 'ada@example.com' },
-        tags: ['json', 'viewer', 'sample'],
-        scripts: { build: 'vite build', test: 'vitest run', lint: 'eslint .' },
-        dependencies: { react: '^18.3.0', zod: '^3.23.8' },
-        settings: { theme: 'dark', autosave: true, retries: 3, ratio: 0.75, proxy: null },
-        releases: [
-          { version: '1.0.0', date: '2026-01-15', notes: ['First release'] },
-          { version: '1.1.0', date: '2026-03-02', notes: ['Search', 'Dark mode'] }
-        ]
-      }, null, 2);
-    }
-    var rand = sampleRng(20260101), tags = ['admin', 'beta', 'staff', 'trial', 'vip', 'newsletter'], skus = ['A-100', 'B-220', 'C-315', 'D-408', 'E-512'];
-    var users = [];
-    for (var i = 0; i < 400; i++) {
-      var first = samplePick(rand, S_FIRST), last = samplePick(rand, S_LAST), city = samplePick(rand, S_CITIES);
-      var orders = [], orderCount = Math.floor(rand() * 4);
-      for (var o = 0; o < orderCount; o++) {
-        var items = [], itemCount = 1 + Math.floor(rand() * 3);
-        for (var k = 0; k < itemCount; k++) items.push({ sku: samplePick(rand, skus), qty: 1 + Math.floor(rand() * 4), price: Math.round((5 + rand() * 95) * 100) / 100 });
-        orders.push({ id: 'ORD-' + (1000 + i) + '-' + (o + 1), placed: sampleIsoDate(Math.floor(rand() * 1800)), items: items });
-      }
-      var userTags = tags.filter(function () { return rand() < 0.3; });
-      users.push({
-        id: 1000 + i,
-        name: first + ' ' + last,
-        email: (first + '.' + last).toLowerCase() + i + '@example.com',
-        active: rand() < 0.8,
-        score: Math.round(rand() * 1000) / 10,
-        address: { city: city, street: Math.floor(1 + rand() * 199) + ' ' + samplePick(rand, ['Oak', 'Maple', 'Cedar', 'Elm', 'Birch']) + ' St', geo: { lat: Math.round((rand() * 140 - 70) * 1000) / 1000, lng: Math.round((rand() * 340 - 170) * 1000) / 1000 } },
-        tags: userTags,
-        orders: orders,
-        lastLogin: sampleIsoDate(1700 + Math.floor(rand() * 100)) + 'T' + ('0' + Math.floor(rand() * 24)).slice(-2) + ':' + ('0' + Math.floor(rand() * 60)).slice(-2) + ':00Z',
-        notes: rand() < 0.15 ? 'Prefers e-mail, not phone' : null
-      });
-    }
-    return JSON.stringify({ generatedAt: '2026-04-01T00:00:00Z', count: users.length, users: users }, null, 2);
+    var rand = newRand(), t = samplePick(rand, long ? JSON_LONG : JSON_SHORT);
+    var n = long ? 400 : rnd(rand, 3, 5);
+    return { text: JSON.stringify(JSON_TEMPLATES[t](rand, n), null, 2), name: 'Sample ' + t + (long ? ' (long)' : '') };
   }
 
+  var CSV_TEMPLATES = {
+    employees: function (rand, i, long) {
+      var first = samplePick(rand, S_FIRST), last = samplePick(rand, S_LAST), salary = 42000 + rnd(rand, 0, 89) * 1000;
+      return long ? [1001 + i, first + ' ' + last, (first + '.' + last).toLowerCase() + i + '@example.com', samplePick(rand, S_DEPTS), samplePick(rand, S_CITIES), salary, sampleIsoDate(rnd(rand, 0, 1900)), rand() < 0.85 ? 'true' : 'false',
+        rand() < 0.12 ? 'Prefers remote, part-time' : (rand() < 0.05 ? 'Nickname "' + first[0] + last[0] + '"' : '')]
+        : [1 + i, first + ' ' + last, samplePick(rand, S_DEPTS), samplePick(rand, S_CITIES), salary, sampleIsoDate(rnd(rand, 0, 1900))];
+    },
+    sales: function (rand, i) {
+      var qty = rnd(rand, 1, 20), price = money(rand, 3, 250), disc = samplePick(rand, [0, 0, 0, 5, 10, 15]);
+      return ['INV-' + (7000 + i), sampleIsoDate(rnd(rand, 1500, 1900)), samplePick(rand, S_CITIES), samplePick(rand, S_PRODUCTS), qty, price, disc, Math.round(qty * price * (100 - disc)) / 100, samplePick(rand, S_FIRST) + ' ' + samplePick(rand, S_LAST)];
+    },
+    inventory: function (rand, i) {
+      var stock = rnd(rand, 0, 500), min = rnd(rand, 5, 60);
+      return ['SKU-' + (100 + i), samplePick(rand, S_PRODUCTS) + ' ' + samplePick(rand, ['Mini', 'Pro', 'Max', 'Lite']), samplePick(rand, S_CATS), stock, min, money(rand, 2, 300), stock < min ? 'reorder' : 'ok', sampleIsoDate(rnd(rand, 1700, 1900))];
+    },
+    tasks: function (rand, i) {
+      return ['T-' + (100 + i), samplePick(rand, ['Fix login bug', 'Write docs', 'Design review', 'Upgrade deps', 'Add tests', 'Refactor API', 'Ship v2']), samplePick(rand, ['todo', 'doing', 'review', 'done']), rnd(rand, 1, 4), samplePick(rand, S_FIRST), sampleIsoDate(rnd(rand, 1800, 1900)), rnd(rand, 1, 40)];
+    },
+    students: function (rand, i) {
+      var g = function () { return rnd(rand, 45, 100); }, a = g(), b = g(), c = g();
+      return [3000 + i, samplePick(rand, S_FIRST) + ' ' + samplePick(rand, S_LAST), samplePick(rand, ['Math', 'Physics', 'History', 'Biology', 'Art']), a, b, c, Math.round((a + b + c) / 3 * 10) / 10, rnd(rand, 0, 12)];
+    },
+    flights: function (rand, i) {
+      var from = samplePick(rand, S_CITIES), to = samplePick(rand, S_CITIES);
+      return [samplePick(rand, ['LY', 'BA', 'LH', 'AF', 'TP']) + rnd(rand, 100, 999), from, to, sampleIsoDate(rnd(rand, 1800, 1900)), ('0' + rnd(rand, 0, 23)).slice(-2) + ':' + samplePick(rand, ['00', '15', '30', '45']), rnd(rand, 60, 780), money(rand, 60, 900), samplePick(rand, ['on time', 'on time', 'delayed', 'cancelled'])];
+    },
+    weather: function (rand, i) {
+      var lo = rnd(rand, -5, 22);
+      return [sampleIsoDate(1800 + i), samplePick(rand, S_CITIES), lo, lo + rnd(rand, 3, 12), rnd(rand, 20, 95), rnd(rand, 0, 60), samplePick(rand, ['sunny', 'cloudy', 'rain', 'fog', 'storm', 'snow']), money(rand, 0, 25)];
+    },
+    transactions: function (rand, i) {
+      var amt = money(rand, -900, 2500);
+      return ['TX-' + (90000 + i), sampleIsoDate(rnd(rand, 1600, 1900)), samplePick(rand, ['Groceries', 'Rent', 'Salary', 'Transport', 'Dining', 'Utilities', 'Refund', 'Software']), amt, amt < 0 ? 'debit' : 'credit', samplePick(rand, ['Visa', 'Amex', 'Bank transfer', 'Cash']), rand() < 0.9 ? 'cleared' : 'pending'];
+    }
+  };
+  var CSV_HEADERS = {
+    employees: [['id', 'name', 'department', 'city', 'salary', 'start_date'], ['id', 'name', 'email', 'department', 'city', 'salary', 'start_date', 'active', 'notes']],
+    sales: [['invoice', 'date', 'city', 'product', 'qty', 'unit_price', 'discount_pct', 'total', 'rep']],
+    inventory: [['sku', 'name', 'category', 'stock', 'min_stock', 'unit_cost', 'status', 'last_counted']],
+    transactions: [['id', 'date', 'category', 'amount', 'type', 'method', 'status']],
+    tasks: [['id', 'title', 'status', 'priority', 'assignee', 'due', 'estimate_h']],
+    students: [['id', 'name', 'course', 'exam1', 'exam2', 'exam3', 'average', 'absences']],
+    flights: [['flight', 'from', 'to', 'date', 'departs', 'minutes', 'price', 'status']],
+    weather: [['date', 'city', 'min_c', 'max_c', 'humidity', 'wind_kph', 'condition', 'rain_mm']]
+  };
   function sampleCsv(long) {
     function cell(v) { v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
-    var rand = sampleRng(long ? 7071 : 42), rows = [];
-    var n = long ? 1000 : 10;
-    rows.push((long ? ['id', 'name', 'email', 'department', 'city', 'salary', 'start_date', 'active', 'notes'] : ['id', 'name', 'department', 'city', 'salary', 'start_date']).join(','));
-    for (var i = 0; i < n; i++) {
-      var first = samplePick(rand, S_FIRST), last = samplePick(rand, S_LAST);
-      var salary = 42000 + Math.floor(rand() * 90) * 1000;
-      var row = long
-        ? [1001 + i, first + ' ' + last, (first + '.' + last).toLowerCase() + i + '@example.com', samplePick(rand, S_DEPTS), samplePick(rand, S_CITIES), salary, sampleIsoDate(Math.floor(rand() * 1900)), rand() < 0.85 ? 'true' : 'false',
-           rand() < 0.12 ? 'Prefers remote, part-time' : (rand() < 0.05 ? 'Nickname "' + first[0] + last[0] + '"' : '')]
-        : [1 + i, first + ' ' + last, samplePick(rand, S_DEPTS), samplePick(rand, S_CITIES), salary, sampleIsoDate(Math.floor(rand() * 1900))];
-      rows.push(row.map(cell).join(','));
-    }
-    return rows.join('\n');
+    var rand = newRand(), t = samplePick(rand, long ? ['employees', 'sales', 'inventory', 'transactions'] : ['employees', 'sales', 'inventory', 'transactions', 'tasks', 'students', 'flights', 'weather']), hd = CSV_HEADERS[t];
+    var rows = [(hd.length > 1 && long ? hd[1] : hd[0]).join(',')];
+    for (var i = 0; i < (long ? 1000 : 10); i++) rows.push(CSV_TEMPLATES[t](rand, i, long).map(cell).join(','));
+    return { text: rows.join('\n'), name: 'Sample ' + t + (long ? ' (long)' : '') };
+  }
+
+  // Code samples by language (data lives in samples.js): short = one of 4 variants, long = one of 2 generators.
+  var SAMPLE_LANGS = ['typescript', 'javascript', 'java', 'csharp', 'python', 'objectscript', 'cpp', 'c', 'go', 'rust', 'php', 'ruby', 'kotlin', 'swift', 'sql', 'shell', 'json', 'xml', 'html', 'css', 'yaml'];
+  var SAMPLE_LANG_NAMES = { typescript: 'TypeScript', javascript: 'JavaScript', java: 'Java', csharp: 'C#', python: 'Python', objectscript: 'ObjectScript', cpp: 'C++', c: 'C', go: 'Go', rust: 'Rust', php: 'PHP', ruby: 'Ruby', kotlin: 'Kotlin', swift: 'Swift', sql: 'SQL', shell: 'Shell', json: 'JSON', xml: 'XML', html: 'HTML', css: 'CSS', yaml: 'YAML' };
+  function sampleLang(lang, long) {
+    var d = window.DT_LANG_SAMPLES && window.DT_LANG_SAMPLES[lang];
+    if (!d) return null;
+    var text = long ? d.long[Math.floor(Math.random() * d.long.length)]() : d.short[Math.floor(Math.random() * d.short.length)];
+    return { text: text, name: SAMPLE_LANG_NAMES[lang] + ' sample' + (long ? ' (long)' : ''), lang: lang };
   }
 
   function buildSample(tool, long) {
     if (tool === 'code') return { text: sampleCode(long), name: long ? 'Sample (long)' : 'Sample' };
-    if (tool === 'json') return { text: sampleJson(long), name: long ? 'Sample (long)' : 'Sample' };
-    return { text: sampleCsv(long), name: long ? 'Sample (long)' : 'Sample' };
+    return tool === 'json' ? sampleJson(long) : sampleCsv(long);
   }
   // Adds the sample as a new entry in the tool's Viewer (directly when same-origin, otherwise by message).
-  function addSample(tool, long) {
+  function addSample(tool, long, ready) {
     var f = toolFrame(tool);
     if (!f || !frameLoaded[tool]) return;
-    var s = buildSample(tool, long);
+    var s = ready || buildSample(tool, long);
     try {
       var w = f.contentWindow;
-      if (w.DT && typeof w.DT.addSample === 'function') { w.DT.addSample(s.text, s.name); return; }
+      if (w.DT && typeof w.DT.addSample === 'function') { w.DT.addSample(s.text, s.name, s.lang); return; }
     } catch (err) { /* cross-origin: use the message below */ }
-    postTo(f, { __devToolkitCmd: 'addSample', text: s.text, name: s.name });
+    postTo(f, { __devToolkitCmd: 'addSample', text: s.text, name: s.name, lang: s.lang });
   }
 
   var staleShown = false;
@@ -1583,8 +1693,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
     });
     var ct = active || 'code', cm = META[ct], pane = getInnerTab(ct), csz = settings[ct].size, dsz = DEFAULTS[ct].size;
     function fmtSize(n) { return (Math.round(n * 10) / 10) + 'px'; }
-    list.push({ id: 'switchInner', title: pane === 'viewer' ? 'Show the Compare tab (' + cm.short + ')' : 'Show the Viewer tab (' + cm.short + ')', kw: 'compare viewer tab diff switch inner',
-      run: function () { var to = pane === 'viewer' ? 'compare' : 'viewer'; setInnerTab(ct, to); if (to === 'viewer') focusToolInput(ct); } });
     var tdoc = toolDoc(ct);   // (only readable when the tool is same-origin; then the hint shows the current view)
     if (pane === 'viewer') {
       var cont = tdoc && tdoc.getElementById('container'), isGrid = cont ? cont.classList.contains('grid-view') : null;
@@ -1635,7 +1743,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     [['exportAll', 'Export everything (settings and data)…'], ['importAll', 'Import everything from a file…'], ['exportSettings', 'Export my settings and shortcuts'], ['importSettings', 'Import settings and shortcuts…'],
      ['exportCode', 'Export all Code snippets'], ['importCode', 'Import Code snippets…'], ['exportJson', 'Export all JSON / XML entries'], ['importJson', 'Import JSON / XML entries…'],
      ['exportXlsx', 'Export all CSV / XLSX files'], ['importXlsx', 'Import CSV / XLSX files…']].forEach(function (x) {
-      list.push({ id: x[0], title: x[1], kw: 'backup restore save load file download upload move transfer', run: function () { CMD[x[0]](); } });
+      list.push({ id: x[0], title: x[1], kw: 'backup restore move transfer', run: function () { CMD[x[0]](); } });
     });
     list.push({ id: 'settings', title: 'Open settings', kw: 'preferences options', run: function () { openSettings('general'); } });
     list.push({ id: 'settingsCode', title: 'Settings: Code Viewer (font, size, tabs, wrap)', kw: 'code font size line height tab wrap', run: function () { openSettings('code'); } });
@@ -1684,19 +1792,50 @@ window.addEventListener('beforeinstallprompt', function (e) {
     return out;
   }
 
+  /* How the palette search ranks (best first): 0 an alias you typed exactly, 1 an alias that starts with it, 2 the title has every word
+     starting a word, 3 the title contains every word, 4 words found in the title or at the start of a hidden keyword (shown as "matched: …").
+     Inside a tier: earlier match, then commands you use more, then the normal order. */
+  var USAGE_KEY = 'dev_toolkit_usage_v1', usage = {};
+  try { usage = JSON.parse(localStorage.getItem(USAGE_KEY) || '{}') || {}; } catch (e) { usage = {}; }
+  function noteUsage(id) {
+    if (!id) return;
+    var u = usage[id] || { n: 0, t: 0 }; u.n++; u.t = Date.now(); usage[id] = u;
+    try { localStorage.setItem(USAGE_KEY, JSON.stringify(usage)); } catch (e) {}
+  }
+  function usageScore(id) { var u = usage[id]; if (!u) return 0; var days = (Date.now() - u.t) / 864e5; return u.n * (days < 7 ? 2 : 1); }
   function filterCommands(q) {
     var all = arrangePalette(commandList());
     q = q.trim().toLowerCase();
     if (!q) return all;
-    var toks = q.split(/\s+/);
-    var scored = [];
+    var toks = q.split(/\s+/), scored = [];
     all.forEach(function (c, idx) {
-      var hay = (c.title + ' ' + (c.kw || '')).toLowerCase(), score = 0, ok = true;
-      toks.forEach(function (t) { var p = hay.indexOf(t); if (p < 0) ok = false; else score += p; });
-      if (ok) scored.push({ c: c, score: score, idx: idx });
+      var title = c.title.toLowerCase(), kws = (c.kw || '').toLowerCase().split(/\s+/).filter(Boolean), tier = 9, pos = 0;
+      c.via = ''; c.aliasHit = '';
+      if (toks.length === 1) {
+        aliasesOf(c.id).forEach(function (a) {
+          if (a === q && tier > 0) { tier = 0; c.aliasHit = a; }
+          else if (a.indexOf(q) === 0 && tier > 1) { tier = 1; c.aliasHit = a; }
+        });
+      }
+      if (tier > 1) {
+        var inTitle = toks.every(function (t) { return title.indexOf(t) >= 0; });
+        if (inTitle) {
+          tier = toks.every(function (t) { return new RegExp('(^|[^a-z0-9])' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(title); }) ? 2 : 3;
+          toks.forEach(function (t) { pos += title.indexOf(t); });
+        } else {
+          var via = '', ok = toks.every(function (t) {
+            if (title.indexOf(t) >= 0) { pos += title.indexOf(t); return true; }
+            var k = kws.filter(function (w) { return w.indexOf(t) === 0; })[0];
+            if (k) { if (!via) via = k; pos += 50; return true; }
+            return false;
+          });
+          if (ok) { tier = 4; c.via = via; }
+        }
+      }
+      if (tier < 9) scored.push({ c: c, tier: tier, pos: pos, use: usageScore(c.id), idx: idx });
     });
-    scored.sort(function (a, b) { return a.score - b.score || a.idx - b.idx; });
-    return scored.map(function (s) { return s.c; });
+    scored.sort(function (a, b) { return a.tier - b.tier || a.pos - b.pos || b.use - a.use || a.idx - b.idx; });
+    return scored.map(function (x) { return x.c; });
   }
 
   function renderPalette() {
@@ -1714,7 +1853,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     palItems.forEach(function (c, i) {
       if (showGroups && c.group !== lastGroup) { lastGroup = c.group; list.appendChild(h('li', { class: 'pal-group', role: 'presentation', text: c.group })); }
       var li = h('li', { class: 'pal-item', role: 'option', id: 'pal-' + i, 'aria-selected': i === palSel ? 'true' : 'false' }, [
-        h('span', { text: c.title }), c.hint ? h('kbd', { text: c.hint }) : null
+        h('span', { text: c.title }), c.aliasHit ? h('span', { class: 'pal-via', text: 'alias ' + c.aliasHit }) : c.via ? h('span', { class: 'pal-via', text: 'matched “' + c.via + '”' }) : null, c.hint ? h('kbd', { text: c.hint }) : null
       ]);
       li.addEventListener('mousemove', function () { if (palSel !== i) { palSel = i; markPalSel(); } });
       li.addEventListener('click', function () { runPalette(i); });
@@ -1749,15 +1888,16 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function runPalette(i) {
     var c = palItems[i];
     if (pk) { pickEnter(false, i); return; }
-    if (c && c.pick) { startPick(c.pick); return; }   // asks which entries; keeps the palette open
+    if (c && c.pick) { noteUsage(c.id); startPick(c.pick); return; }   // asks which entries; keeps the palette open
     closePalette();
-    if (c) setTimeout(function () { c.run(); }, 0);
+    if (c) { noteUsage(c.id); setTimeout(function () { c.run(); }, 0); }
   }
   $('palInput').addEventListener('input', function () { palSel = 0; renderPalette(); });
   $('palInput').addEventListener('keydown', function (e) {
     if (pk) {
       if (e.key === 'Escape') { e.preventDefault(); closePick(); return; }
       if (e.key === 'Enter') { e.preventDefault(); pickEnter(e.shiftKey, palSel); return; }
+      if (e.key === 'Tab' && pk.tc.pick.mode === 'lang') { e.preventDefault(); setLangLong(!pk.long); return; }
       if (e.altKey && (e.key === '1' || e.key === '2') && pk.tc.pick.mode === 'compare') { e.preventDefault(); var pr = palItems[palSel]; if (pr) pickAssign(pr.id, e.key === '1' ? 'A' : 'B'); return; }
     }
     if (e.key === 'ArrowDown') { e.preventDefault(); if (palItems.length) { palSel = (palSel + 1) % palItems.length; markPalSel(); previewPal(); } }
@@ -2008,7 +2148,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
         : settings.palette.sort === 'alpha' ? 'All commands, A to Z.' : 'Your own palette: pick the commands you want from the full list and drag them into the order you like. A new one starts with just the essentials.' })
     ]));
     box.appendChild(h('div', { class: 'key-head' }, [
-      h('p', { class: 'help', style: 'margin:0.5rem 0', text: 'Every command has a slot here. Click a shortcut (or double-click its row), then press the new combination: it needs ' + MOD + ' plus a key. Esc cancels, Backspace removes it, ↺ restores the original.' }),
+      h('p', { class: 'help', style: 'margin:0.5rem 0', text: 'Every command has a slot here. An alias is a short code you can type in the palette (for example cmp for Compare); each command can have one. Click a shortcut (or double-click its row), then press the new combination: it needs ' + MOD + ' plus a key. Esc cancels, Backspace removes it, ↺ restores the original.' }),
       filter,
       h('p', { class: 'help key-msg', id: 'keyMsg', role: 'status', 'aria-live': 'polite' })
     ]));
@@ -2016,6 +2156,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     KEY_DEFS.forEach(function (d) { if (groups.indexOf(d.group) < 0) groups.push(d.group); });
     groups.forEach(function (g) {
       var list = h('ul', { class: 'key-list', 'aria-label': g });
+      if (g === groups[0]) list.appendChild(h('li', { class: 'key-cols', 'aria-hidden': 'true' }, [h('span', { text: 'Command' }), h('span', { class: 'key-alias-h', text: 'Alias' }), h('span', { class: 'key-ctl-h', text: 'Shortcut' })]));
       KEY_DEFS.filter(function (d) { return d.group === g; }).forEach(function (d) {
         var cur = settings.keys[d.id], txt = cur ? comboLabel(cur) : 'Not set';
         var btn = h('button', { type: 'button', class: 'kbd key-btn' + (cur ? '' : ' unset'), 'data-fk': focusKey('keys', d.id), text: txt,
@@ -2023,7 +2164,19 @@ window.addEventListener('beforeinstallprompt', function (e) {
         btn.addEventListener('click', function () { startRecording(d.id, btn); });
         var reset = cur === d.def ? null : h('button', { type: 'button', class: 'key-reset', text: '↺', title: 'Reset to ' + (d.def ? comboLabel(d.def) : 'no shortcut'),
           'aria-label': 'Reset “' + d.label + '” to ' + (d.def ? comboLabel(d.def) : 'no shortcut'), onclick: function () { trySetKey(d.id, d.def); } });
-        var li = h('li', { class: 'key-row', 'data-text': (g + ' ' + d.label + ' ' + txt).toLowerCase() }, [h('span', { text: d.label }), h('span', { class: 'key-ctl' }, [reset, btn])]);
+        var al = aliasesOf(d.id), noAl = NO_ALIAS.indexOf(d.id) >= 0;
+        var aliasIn = noAl ? h('span', { class: 'key-alias key-alias-none', 'aria-hidden': 'true' }) : h('input', { class: 'field key-alias', type: 'text', value: al.join(''), placeholder: 'none', maxlength: '12', autocomplete: 'off', spellcheck: 'false',
+          'aria-label': 'Alias for “' + d.label + '” (one short code typed in the palette)', 'data-fk': focusKey('aliases', d.id) });
+        if (!noAl) (function (id, inp) {
+          function save() {
+            var cl = cleanAliases(inp.value);
+            settings.aliases = settings.aliases || {}; settings.aliases[id] = cl; settings = sanitize(settings); saveSettings(); broadcast();
+            inp.value = aliasesOf(id).join('');
+          }
+          inp.addEventListener('change', save);
+          inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } e.stopPropagation(); });
+        })(d.id, aliasIn);
+        var li = h('li', { class: 'key-row', 'data-text': (g + ' ' + d.label + ' ' + txt + ' ' + al.join(' ')).toLowerCase() }, [h('span', { class: 'key-label', text: d.label }), aliasIn, h('span', { class: 'key-ctl' }, [reset, btn])]);
         li.addEventListener('dblclick', function () { startRecording(d.id, btn); });
         list.appendChild(li);
       });
@@ -2291,7 +2444,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   $('resetSection').addEventListener('click', function () {
     if (!confirm('Reset the “' + SECTIONS.filter(function (s) { return s[0] === section; })[0][1] + '” settings to their defaults?')) return;
     settings[section] = JSON.parse(JSON.stringify(DEFAULTS[section]));
-    if (section === 'keys') settings.palette = JSON.parse(JSON.stringify(DEFAULTS.palette));   // the palette order lives on the same page
+    if (section === 'keys') { settings.palette = JSON.parse(JSON.stringify(DEFAULTS.palette)); settings.aliases = {}; }   // the palette order lives on the same page
     settings = sanitize(settings); commit();
   });
   $('resetAll').addEventListener('click', function () {
@@ -2630,6 +2783,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
 
   /* ---------- Picking entries inside the palette (copy / download / compare) ---------- */
+  var langLong = false;   // remembers Short / Long in the sample-by-language picker
   var pk = null;   // { tc, ct, entries, checked, A, B }
   function resetPick() {
     if (pk && pk.tc.pick.mode === 'palette' && !pk.done && pk.orig) {   // closed without choosing: undo the live preview
@@ -2644,6 +2798,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     var k = function (t) { return '<span class="kbd">' + t + '</span>'; };
     $('palFoot').innerHTML = mode === 'copy' ? '<span>' + k('↑') + ' ' + k('↓') + ' to move</span><span>' + k('Enter') + ' run</span><span>' + k('Shift+Enter') + ' tick</span><span>' + k('Esc') + ' back</span>'
       : mode === 'compare' ? '<span>' + k('↑') + ' ' + k('↓') + ' to move</span><span>' + k('Enter') + ' next slot</span><span>' + k('Alt+1') + ' / ' + k('Alt+2') + ' A / B</span><span>' + k('Shift+Enter') + ' open Compare</span><span>' + k('Esc') + ' back</span>'
+      : mode === 'lang' ? '<span>' + k('↑') + ' ' + k('↓') + ' to move</span><span>' + k('Tab') + ' short / long</span><span>' + k('Enter') + ' add</span><span>' + k('Shift+Enter') + ' add, keep open</span><span>' + k('Esc') + ' back</span>'
       : mode === 'palette' ? '<span>' + k('↑') + ' ' + k('↓') + ' to move</span><span>' + k('Enter') + ' keep it</span><span>' + k('Esc') + ' cancel</span>'
       : '<span>' + k('↑') + ' ' + k('↓') + ' to move</span><span>' + k('Enter') + ' to run</span><span>' + k('Esc') + ' to close</span>';
   }
@@ -2674,6 +2829,13 @@ window.addEventListener('beforeinstallprompt', function (e) {
       palSel = Math.max(0, pk.entries.map(function (e) { return !!e.cur; }).indexOf(true)); $('palPickHead').hidden = false; setPalFoot('palette'); renderPalette(); $('palInput').focus();
       return;
     }
+    if (p.mode === 'lang') {
+      if (!paletteOpen) openPalette();
+      pk = { tc: tc, ct: ct, entries: SAMPLE_LANGS.map(function (id) { return { id: id, name: SAMPLE_LANG_NAMES[id], info: '' }; }), checked: {}, A: null, B: null, long: langLong };
+      $('palInput').value = ''; $('palInput').placeholder = 'Filter languages…';
+      palSel = 0; $('palPickHead').hidden = false; setPalFoot('lang'); renderPalette(); $('palInput').focus();
+      return;
+    }
     apiCall(ct, 'list', []).then(function (list) {
       list = Array.isArray(list) ? list : [];
       if (!list.length) { closePalette(); announce('Nothing in ' + META[ct].short + ' yet: add something to the Viewer first'); return; }
@@ -2697,6 +2859,15 @@ window.addEventListener('beforeinstallprompt', function (e) {
     palItems = rows;
     palSel = Math.min(palSel, Math.max(0, rows.length - 1));
     var nChecked = Object.keys(pk.checked).length;
+    if (mode === 'lang') {
+      var hd = $('palPickHead'); hd.innerHTML = '';
+      hd.appendChild(h('b', { text: 'Sample by language' })); hd.appendChild(document.createTextNode(' — pick a language, then Enter. Length: '));
+      [['Short', false, '4 variants, picked at random'], ['Long', true, '2 variants, 150+ lines']].forEach(function (o) {
+        hd.appendChild(h('button', { type: 'button', class: 'pick-slot pick-len' + (pk.long === o[1] ? ' on' : ''), tabindex: '-1', title: o[2], text: (pk.long === o[1] ? '✓ ' : '') + o[0],
+          onclick: function () { setLangLong(o[1]); $('palInput').focus(); } }));
+      });
+      hd.appendChild(document.createTextNode(' (Tab switches)'));
+    } else
     $('palPickHead').innerHTML = mode === 'palette' ? '<b>Color palette</b> — moving through the list previews each one; Enter keeps it, Esc cancels.' : mode === 'compare'
       ? '<b>Load into Compare</b> — set entries as A and B. A: <b></b> · B: <b></b>'
       : '<b>' + esc(pk.tc.pick.verb) + '</b> — choose one or more' + (nChecked ? ' (' + nChecked + ' ticked)' : '');
@@ -2707,13 +2878,13 @@ window.addEventListener('beforeinstallprompt', function (e) {
       var kids = [];
       if (mode === 'copy') {
         var on = r.id === '*' ? nChecked === pk.entries.length : !!pk.checked[r.id];
-        kids.push(h('span', { class: 'pk-check', 'aria-hidden': 'true', 'data-tick': '1', text: on ? '☑' : '☐' }));
+        kids.push(h('span', { class: 'pick-check', 'aria-hidden': 'true', 'data-tick': '1', text: on ? '☑' : '☐' }));
       }
-      kids.push(h('span', { class: 'pk-name', text: r.name, title: r.name }));
-      if (r.info) kids.push(h('span', { class: 'pk-info', text: r.info }));
+      kids.push(h('span', { class: 'pick-name', text: r.name, title: r.name }));
+      if (r.info) kids.push(h('span', { class: 'pick-info', text: r.info }));
       if (mode === 'compare') {
-        kids.push(h('span', { class: 'pk-slots' }, ['A', 'B'].map(function (sl) {
-          return h('button', { type: 'button', class: 'pk-slot' + (pk[sl] === r.id ? ' on' : ''), tabindex: '-1', text: sl, title: 'Use as ' + sl, 'aria-label': 'Use ' + r.name + ' as ' + sl,
+        kids.push(h('span', { class: 'pick-slots' }, ['A', 'B'].map(function (sl) {
+          return h('button', { type: 'button', class: 'pick-slot' + (pk[sl] === r.id ? ' on' : ''), tabindex: '-1', text: sl, title: 'Use as ' + sl, 'aria-label': 'Use ' + r.name + ' as ' + sl,
             onclick: function (ev) { ev.stopPropagation(); pickAssign(r.id, sl); } });
         })));
       }
@@ -2726,6 +2897,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
       list.appendChild(li);
     });
     $('palInput').setAttribute('aria-activedescendant', 'pal-' + palSel);
+  }
+  function setLangLong(v) { langLong = pk.long = !!v; renderPick(); }
+  function addLangSample(r) {
+    var smp = sampleLang(r.id, pk.long);
+    if (!smp) { announce('Samples are still loading, try again'); return false; }
+    addSample('code', false, smp); announce('Added a ' + (pk.long ? 'long ' : '') + SAMPLE_LANG_NAMES[r.id] + ' sample'); return true;
   }
   function pickToggle(id) {
     if (id === '*') { var all = Object.keys(pk.checked).length === pk.entries.length; pk.checked = {}; if (!all) pk.entries.forEach(function (e) { pk.checked[e.id] = 1; }); }
@@ -2749,6 +2926,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
       closePalette();
       if (id === 'system') { selectSystem(); announce('Following the system theme'); }
       else { selectPalette(parts[0], parts[1]); announce(id === 'stock:dark' || id === 'stock:light' ? 'Stock, ' + parts[1] : 'Color palette: ' + paletteById(parts[0]).name); }
+      return;
+    }
+    if (mode === 'lang') {
+      if (!r) return;
+      if (shift) { addLangSample(r); return; }
+      var okL = addLangSample(r); if (okL) closePalette();
       return;
     }
     if (mode === 'compare') {
