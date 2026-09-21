@@ -123,6 +123,7 @@ Open it, press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type `add sample`, and press Enter 
 - **Per-tool settings** with a live preview: font, font size, line spacing, tab width, wrap, tree depth, row density and more.
 - Four included programmer fonts (no download needed, and nothing is fetched until you pick one).
 - **Your work is saved automatically** in your browser, with one-click backup and restore.
+- **Undo for deletes.** Removing an entry with its red × (or Clear all) shows “deleted · Undo” for 10 seconds; an entry comes back in the same place.
 - **Installable** as a desktop app from Chrome or Edge.
 - The top bar and dialogs adapt to narrow screens.
 
@@ -154,6 +155,10 @@ Open it, press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type `add sample`, and press Enter 
   <tr>
     <td width="50%"><b>Reading code from a screenshot (OCR)</b><br><img src="docs/ocr.png" alt="The OCR dialog with a screenshot on the left and the recognized code on the right"></td>
     <td width="50%"><b>Light theme</b><br><img src="docs/json-viewer-light.png" alt="JSON viewer in the light theme"></td>
+  </tr>
+  <tr>
+    <td width="50%"><b>Export all: choose what goes in the file</b><br><img src="docs/export-all.png" alt="The Export all dialog with checkboxes for settings, shortcuts and each tool"></td>
+    <td width="50%"><b>Importing into a tool: Cancel, Replace or Add</b><br><img src="docs/import-tab.png" alt="The import dialog for Code snippets with Cancel, Replace and Add buttons"></td>
   </tr>
 </table>
 
@@ -197,7 +202,7 @@ Type to filter, use the arrow keys to move, and press Enter to run. The list cha
 - Theme: follow system / dark / light / toggle, **Color palette picker…** (System on top, then each palette; moving through the list previews each one live, Enter keeps it, Esc cancels), **Next color palette**, **Color palette: stock**
 - Accessibility: high contrast, reduce animations
 - Interface size: larger / smaller / reset
-- Back up my data (export), and **Export / Import** for everything, settings only, or one tool
+- Back up my data (export the current tool), **Export all / Import all** (settings, shortcuts and data), **Export / Import shortcuts**, and export / import for one tool
 - Show keyboard shortcuts
 - Install Dev Toolkit as an app (Chrome and Edge, when the browser offers it)
 - Star Dev Toolkit on GitHub
@@ -213,7 +218,7 @@ Type to filter, use the arrow keys to move, and press Enter to run. The list cha
   On the Code Viewer, **Add sample** picks a random language every time (short or long as the command says). JSON and CSV/XLSX samples are **random each time** (no internet needed): one of 8 short templates (config, users, products, orders, log events, books, weather, tasks) or 4 long ones (users, products, orders, events) for JSON, and 8 short tables (employees, sales, inventory, transactions, tasks, students, flights, weather) or 4 long ones for XLSX, filled with random values.
 - **Compare button: pick two entries on / off** (alias `pick`): does the same as clicking the Compare button in the Viewer toolbar, so you can then click two entries with the mouse. Run it again to cancel. With fewer than two entries it tells you Compare needs two.
 - **Add a sample by language…** (Code Viewer): pick a language from the list, choose **Short** or **Long** (Tab switches), press Enter. Short picks one of 4 hand-written snippets at random; long picks one of 2 generated files (150+ lines) that come out different every time. Shift+Enter adds and keeps the list open. The language is set on the entry. The sample text lives in `samples.js`, so upload it together with the other files.
-- **Clear all** (asks for confirmation first)
+- **Clear all** (also the trash button in the toolbar): removes every entry **and resets the Compare tab** (both panels and the results), then shows “N entries deleted · **Undo**” for 10 seconds. Undo brings the entries back and the Compare tab as it was. It does not ask for confirmation first.
 
 **On a Compare tab**
 
@@ -238,7 +243,7 @@ Open them with the gear icon, <kbd>Ctrl</kbd>+<kbd>,</kbd>, or the palette. Chan
 
 | Section | Options |
 |---|---|
-| **General** | A **System** button (on by default: stock colors, light or dark as your device says; it turns off when you pick a palette), **color palette** (Stock, Monokai, Solarized, Dracula, Nord, GitHub; click again for stock; a dark-only or light-only palette switches to that mode), export / import everything, interface size (90-150%), contrast, animations, welcome screen on/off (you can also switch it off right on the welcome screen with **Don’t show this page again**), install as an app, storage meter and "protect my data" |
+| **General** | A **System** button (on by default: stock colors, light or dark as your device says; it turns off when you pick a palette), **color palette** (Stock, Monokai, Solarized, Dracula, Nord, GitHub; click again for stock; a dark-only or light-only palette switches to that mode), **Export all / Import all** (see [backups](#your-data-privacy-storage-and-backups)), interface size (90-150%), contrast, animations, welcome screen on/off (you can also switch it off right on the welcome screen with **Don’t show this page again**), install as an app, storage meter and "protect my data" |
 | **Keyboard shortcuts** | Rebind or remove any shortcut and assign one to any palette command (per shortcut or all at once) |
 | **Code Viewer** | Export / import your snippets, font, font size, line spacing, tab width, wrap long lines by default |
 | **JSON / XML** | Export / import your entries, font, font size, how many tree levels open by default |
@@ -294,7 +299,11 @@ Two libraries are loaded from public CDNs when the page opens, so those two host
 
 **Saved automatically.** Snippets, JSON entries and tables you add are stored in your browser's **IndexedDB** (database `dev_toolkit_v1`), one record per item, so saving is fast and large files are fine. Settings and a few small preferences are in `localStorage` (`dev_toolkit_settings_v1`, `dev_toolkit_last_tab_v1`, and layout choices).
 
-**Backups, export and import.** Everything lives in **Settings**, so nothing clutters the main window. **General** exports or imports everything (settings plus the data of all three tools) in one file; when you import it, you choose whether to include the settings. Each of the Code, JSON / XML and CSV / XLSX settings pages has its own export and import for just that tool. Data imports offer **Add** (the default: keeps what you have and skips items that are already there) or **Replace** (swaps what you have; a backup file is downloaded first). The same actions are in the command palette. Older backup files from earlier versions still import.
+**Backups, export and import.** Everything lives in **Settings**, so nothing clutters the main window. **General → Export all** opens a list of checkboxes: *Settings*, *Shortcuts, aliases and palette order*, and the data of each tool (Code, JSON / XML, CSV / XLSX); tick what you want in the file. **Import all** shows what the chosen file contains, with the same checkboxes (items the file doesn’t have are greyed out). **Keyboard shortcuts** has its own **Export shortcuts / Import shortcuts** buttons, and each tool’s settings page has an export / import for just that tool. The small export / import icons on the Viewer / Compare tab bar of every tool export and import that tool’s entries. Every export uses the same file format, so any file can be opened with **Import all**: for example, a file exported from the JSON tab shows only *JSON / XML entries* as available. When you import into a single tool (its tab, or its settings page) you get **Cancel**, **Replace** (swaps what you have; Undo is available for 10 seconds) or **Add** (keeps what you have and skips items that are already there). In **Import all**, choose Add or Replace with the radio buttons. The same actions are in the command palette. Older backup files from earlier versions still import.
+
+**Undo after an import.** Every import shows “Imported … · **Undo**” for 10 seconds. Undo puts back exactly what you had before (your entries in the tools that were imported, and your settings and shortcuts if they were included). Nothing is downloaded; if you want a copy of your data anyway, use **Export all** first.
+
+**Danger zone.** At the bottom of **Settings → General**, two red buttons: **Clear all data** deletes every snippet, JSON / XML entry and CSV / XLSX file (settings are kept), and **Reset app** does that and also restores all settings, shortcuts, aliases and the palette order to the defaults. Both ask for confirmation and cannot be undone, so use **Export all** first if you want a copy.
 
 **Good to know**
 

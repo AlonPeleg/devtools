@@ -426,7 +426,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .pal-mode button:hover { background: var(--hover); color: var(--text-bright); }
   .pal-mode button.on { background: var(--accent); color: var(--accent-fg); }
   .pal-mode button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-  .io-btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .io-btns { display: flex; gap: 0.5rem; flex-wrap: nowrap; margin-top: 0.5rem; }
+  .io-btns .btn { white-space: nowrap; }
+  .io-btns.io-top { margin: 0 0 0.75rem; }
+  .io-hint { color: var(--text-dim); font-size: 0.75rem; }
+  .io-choice > div { padding: 0.375rem 0; }
+  .io-choice > div > small { display: block; color: var(--text-dim); font-size: 0.75rem; font-weight: 400; }
   #palEdit .dialog { width: 52rem; height: min(38rem, calc(100vh - 2rem)); }
   .pe-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; padding: 0.75rem; }
   .pe-col { min-height: 0; overflow-y: auto; border: 1px solid var(--bar-border); border-radius: 6px; background: var(--bg); padding: 0 0.375rem 0.5rem; }
@@ -487,6 +492,14 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .btn:hover { background: var(--hover); }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
   .btn.primary:hover { filter: brightness(1.1); }
+  .btn.danger { background: #2d333b; border-color: #444c56; color: #ff6a63; font-weight: 600; }
+  .btn.danger:hover { background: #b62324; border-color: #b62324; color: #fff; }
+  .btn.danger:active { background: #8e1519; border-color: #8e1519; color: #fff; }
+  .btn.danger:focus-visible { outline: 2px solid #ff8a7a; outline-offset: 2px; }
+  html[data-theme="light"] .btn.danger { background: #f6f8fa; border-color: #d0d7de; color: #cf222e; }
+  html[data-theme="light"] .btn.danger:hover { background: #a40e26; border-color: #a40e26; color: #fff; }
+  html[data-theme="light"] .btn.danger:active { background: #82061e; border-color: #82061e; color: #fff; }
+  #dangerBox { margin-top: 1rem; }
 
   .meter { height: 0.5rem; border-radius: 999px; background: var(--input); overflow: hidden; border: 1px solid var(--bar-border); }
   .meter > span { display: block; height: 100%; background: var(--accent-strong); min-width: 2px; }
@@ -674,6 +687,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       <span id="ioNote"></span>
       <span class="spacer"></span>
       <button id="ioCancel" class="btn" type="button">Cancel</button>
+      <button id="ioAlt" class="btn" type="button" hidden>Replace</button>
       <button id="ioGo" class="btn primary" type="button">Export</button>
     </div>
   </div>
@@ -801,7 +815,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     { id: 'addSample', group: G_CUR, label: 'Add a sample (Viewer)', def: '', run: 'addSample', close: true },
     { id: 'addSampleLong', group: G_CUR, label: 'Add a long sample (Viewer)', def: '', run: 'addSampleLong', close: true },
     { id: 'ocr', group: G_CUR, label: 'Add code from a screenshot (OCR, Code Viewer)', def: '', run: 'ocr', close: true },
-    { id: 'clearAll', group: G_CUR, label: 'Clear everything (Viewer: all entries; Compare: both panels and results)', def: '', run: 'clearAll', close: true },
+    { id: 'clearAll', group: G_CUR, label: 'Clear everything (Viewer: all entries and the Compare tab, with Undo; Compare: both panels and results)', def: '', run: 'clearAll', close: true },
     { id: 'clearResults', group: G_CUR, label: 'Clear the compare results only', def: '', run: 'clearResults', close: true },
     { id: 'themeToggle', group: G_LOOK, label: 'Toggle light / dark theme', def: '', run: 'themeToggle' },
     { id: 'themeSystem', group: G_LOOK, label: 'Theme: follow system', def: '', run: 'themeSystem' },
@@ -820,10 +834,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
     { id: 'settingsJson', group: G_SET, label: 'Settings: JSON / XML Viewer', def: '', run: 'settingsJson' },
     { id: 'settingsXlsx', group: G_SET, label: 'Settings: CSV / XLSX Viewer', def: '', run: 'settingsXlsx' },
     { id: 'shortcuts', group: G_SET, label: 'Open these keyboard shortcuts', def: '', run: 'shortcuts' },
-    { id: 'exportAll', group: G_IO, label: 'Export everything (settings and data)…', def: '', run: 'exportAll' },
-    { id: 'importAll', group: G_IO, label: 'Import everything from a file…', def: '', run: 'importAll' },
-    { id: 'exportSettings', group: G_IO, label: 'Export my settings and shortcuts', def: '', run: 'exportSettings' },
-    { id: 'importSettings', group: G_IO, label: 'Import settings and shortcuts…', def: '', run: 'importSettings' },
+    { id: 'exportAll', group: G_IO, label: 'Export all (settings, shortcuts and data)…', def: '', run: 'exportAll' },
+    { id: 'importAll', group: G_IO, label: 'Import all from a file…', def: '', run: 'importAll' },
+    { id: 'exportShortcuts', group: G_IO, label: 'Export my shortcuts, aliases and palette order', def: '', run: 'exportShortcuts' },
+    { id: 'importShortcuts', group: G_IO, label: 'Import shortcuts, aliases and palette order…', def: '', run: 'importShortcuts' },
     { id: 'exportCode', group: G_IO, label: 'Export all Code snippets', def: '', run: 'exportCode' },
     { id: 'importCode', group: G_IO, label: 'Import Code snippets…', def: '', run: 'importCode' },
     { id: 'exportJson', group: G_IO, label: 'Export all JSON / XML entries', def: '', run: 'exportJson' },
@@ -840,7 +854,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       'saveFile', 'saveCsv', 'saveXlsx', 'toggleWrap', 'toggleMinimap', 'toggleHeader', 'fontUp', 'fontDown', 'fontReset', 'addSample', 'addSampleLong', 'ocr', 'clearAll', 'clearResults']],
     ['Compare', ['compareLoad', 'compareRun', 'compareSwap', 'compareNext', 'comparePrev', 'compareFormat', 'compareMinify', 'cmpWhitespace', 'cmpCase', 'cmpBlank', 'cmpHeader']],
     ['Appearance', ['themeToggle', 'themeSystem', 'themeDark', 'themeLight', 'palPicker', 'palNext', 'palStock', 'contrast', 'motion', 'scaleUp', 'scaleDown', 'scaleReset']],
-    ['Import & export', ['exportAll', 'importAll', 'exportSettings', 'importSettings', 'exportCode', 'importCode', 'exportJson', 'importJson', 'exportXlsx', 'importXlsx', 'backup']],
+    ['Import & export', ['exportAll', 'importAll', 'exportShortcuts', 'importShortcuts', 'exportCode', 'importCode', 'exportJson', 'importJson', 'exportXlsx', 'importXlsx', 'backup']],
     ['Settings pages', ['settingsCode', 'settingsJson', 'settingsXlsx']],
     ['App', ['install', 'github']]
   ];
@@ -849,7 +863,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     compareLoad: ['cmp'], comparePick: ['pick'], compareRun: ['run'], compareSwap: ['swap'], compareNext: ['nd'], comparePrev: ['pd'], compareFormat: ['fmt'], compareMinify: ['min'],
     copyRaw: ['cp'], copyFence: ['cpmd'], copyFormatted: ['cpf'], copyMinified: ['cpm'], copyXml: ['cpx'], copyAsJson: ['cpj'], copyCsv: ['cpc'], copyTableJson: ['cpj'], copyMarkdown: ['cpmd'],
     saveFile: ['dl'], saveCsv: ['dlc'], saveXlsx: ['dlx'],
-    exportAll: ['exp'], importAll: ['imp'], exportSettings: ['exps'], importSettings: ['imps'],
+    exportAll: ['exp'], importAll: ['imp'], exportShortcuts: ['exps'], importShortcuts: ['imps'],
     upload: ['up'], settings: ['set'], shortcuts: ['keys'], palPicker: ['pal'], palNext: ['pn'], themeToggle: ['th'],
     expandAll: ['ea'], collapseAll: ['ca'], focusSearch: ['find'], toggleWrap: ['wrap'], clearAll: ['clr'], ocr: ['ocr']
   };
@@ -1112,7 +1126,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     if (settingsOpen) { if (!(opts && opts.keepControls)) renderControls(); renderPreview(); }
   }
   // A short message at the bottom of the window, with an optional action (e.g. Undo).
-  function toast(message, actionLabel, onAction) {
+  function toast(message, actionLabel, onAction, ms) {
     var t = document.createElement('div');
     t.className = 'toast'; t.setAttribute('role', 'status');
     t.appendChild(document.createTextNode(message));
@@ -1124,7 +1138,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       t.appendChild(b);
     }
     document.body.appendChild(t);
-    timer = setTimeout(gone, 8000);
+    timer = setTimeout(gone, ms || 8000);
   }
   function setVal(section, key, value, opts) {
     settings[section][key] = value;
@@ -1726,8 +1740,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
         run: function () { addSample(ct, true); announce('Added a long sample to ' + cm.short); } });
     }
     if (pane === 'viewer') {
-      list.push({ id: 'clearAll', title: 'Clear all ' + NOUN[ct] + ' (' + cm.short + ')', kw: 'delete remove empty wipe reset list',
-        run: function () { if (confirm('Clear all ' + NOUN[ct] + ' in ' + cm.short + '?\n\nThey are removed from this browser and can’t be undone.')) { callTool(ct, 'clearAllEntries'); announce('Cleared all ' + NOUN[ct]); } } });
+      list.push({ id: 'clearAll', title: 'Clear all ' + NOUN[ct] + ' and reset Compare (' + cm.short + ')', kw: 'delete remove empty wipe reset list undo',
+        run: function () { callTool(ct, 'clearAllEntries'); } });
     } else {
       list.push({ id: 'clearAll', title: 'Clear all — both compare panels and the results (' + cm.short + ')', kw: 'delete remove empty wipe reset panels',
         run: function () { callTool(ct, CLEAR_PANELS[ct]); announce('Compare panels and results cleared'); } });
@@ -1744,7 +1758,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       if (tc.pick) it.pick = tc; else it.run = function () { runToolCmd(tc.id); };
       list.push(it);
     });
-    [['exportAll', 'Export everything (settings and data)…'], ['importAll', 'Import everything from a file…'], ['exportSettings', 'Export my settings and shortcuts'], ['importSettings', 'Import settings and shortcuts…'],
+    [['exportAll', 'Export all (settings, shortcuts and data)…'], ['importAll', 'Import all from a file…'], ['exportShortcuts', 'Export my shortcuts, aliases and palette order'], ['importShortcuts', 'Import shortcuts, aliases and palette order…'],
      ['exportCode', 'Export all Code snippets'], ['importCode', 'Import Code snippets…'], ['exportJson', 'Export all JSON / XML entries'], ['importJson', 'Import JSON / XML entries…'],
      ['exportXlsx', 'Export all CSV / XLSX files'], ['importXlsx', 'Import CSV / XLSX files…']].forEach(function (x) {
       list.push({ id: x[0], title: x[1], kw: 'backup restore move transfer', run: function () { CMD[x[0]](); } });
@@ -1765,10 +1779,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     list.push({ id: 'scaleUp', title: 'Interface size: larger', kw: 'zoom text bigger scale', run: function () { stepScale(1); } });
     list.push({ id: 'scaleDown', title: 'Interface size: smaller', kw: 'zoom text smaller scale', run: function () { stepScale(-1); } });
     list.push({ id: 'scaleReset', title: 'Interface size: reset to 100%', kw: 'zoom text scale default', run: function () { stepScale(0); } });
-    list.push({ id: 'backup', title: 'Back up my data (export from ' + META[active || 'code'].short + ')', kw: 'export download save backup', run: function () {
-      var f = document.querySelector('#pane-' + active + ' iframe');
-      if (f) postTo(f, { __devToolkitCmd: 'export' });
-    } });
+    list.push({ id: 'backup', title: 'Back up my data (export from ' + META[active || 'code'].short + ')', kw: 'export download save backup', run: function () { var ct = active || 'code'; ioExport({ tools: [ct], name: ct }); } });
     list.push({ id: 'shortcuts', title: 'Show keyboard shortcuts', kw: 'keys help hotkeys keybindings rebind customize shortcuts', run: function () { openSettings('keys'); } });
     if (canInstall()) list.push({ id: 'install', title: 'Install Dev Toolkit as an app', kw: 'pwa desktop app window download', run: runInstall });
     list.push({ id: 'github', title: 'Star Dev Toolkit on GitHub', kw: 'github repo support', run: function () { window.open(REPO_URL, '_blank', 'noopener'); } });
@@ -1945,7 +1956,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { key: 'splash', type: 'switch', label: 'Show the welcome screen when Dev Toolkit opens', help: 'Click anywhere (or press a key) to dismiss it. Takes effect the next time you open the page.' },
       { custom: 'install' },
       { custom: 'storage' },
-      { custom: 'io' }
+      { custom: 'io' },
+      { custom: 'danger' }
     ],
     keys: [
       { custom: 'keys' }
@@ -2137,6 +2149,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   function buildKeys() {
     var box = h('div', { id: 'keysBox' });
+    box.appendChild(h('div', { class: 'io-btns io-top' }, [
+      h('button', { type: 'button', class: 'btn', text: 'Export shortcuts…', title: 'Save your shortcuts, aliases and palette order to a file', onclick: function () { ioExport({ shortcuts: true, tools: [], name: 'shortcuts' }); } }),
+      h('button', { type: 'button', class: 'btn', text: 'Import shortcuts…', title: 'Load shortcuts, aliases and palette order from a file', onclick: function () { pickImportFile('shortcuts'); } })]));
     var filter = h('input', { class: 'field key-filter', type: 'search', placeholder: 'Filter shortcuts…', 'aria-label': 'Filter shortcuts', value: keyFilter, autocomplete: 'off', spellcheck: 'false' });
     filter.addEventListener('input', function () { keyFilter = filter.value; applyKeyFilter(); });
     var sortSel = h('select', { class: 'field', id: 'palSortSel', 'aria-label': 'Command palette order', 'data-fk': focusKey('palette', 'sort') },
@@ -2305,6 +2320,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       else if (spec.custom === 'storage') box.appendChild(buildStorage());
       else if (spec.custom === 'keys') box.appendChild(buildKeys());
       else if (spec.custom === 'io') box.appendChild(buildIo(section));
+      else if (spec.custom === 'danger') box.appendChild(buildDanger());
       else if (spec.custom === 'themes') box.appendChild(buildThemes());
       else box.appendChild(buildControl(spec, section));
     });
@@ -2523,17 +2539,26 @@ window.addEventListener('beforeinstallprompt', function (e) {
     setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1500);
   }
   function plural(n, word) { return n + ' ' + (n === 1 ? word : word === 'entry' ? 'entries' : word + 's'); }
-  // opts: { settings: bool, tools: [...], name: 'file name part' }
+  function splitSettings(s) {   // settings = appearance and tool options; shortcuts = keys, aliases and the palette order
+    var st = {}, sc = {};
+    Object.keys(s || {}).forEach(function (k) { if (k === 'keys' || k === 'aliases' || k === 'palette') sc[k] = s[k]; else st[k] = s[k]; });
+    var hasSt = ['general', 'code', 'json', 'xlsx'].some(function (k) { return st[k] && typeof st[k] === 'object'; });
+    return { settings: hasSt ? st : null, shortcuts: Object.keys(sc).length ? sc : null };
+  }
+  // opts: { settings: bool, shortcuts: bool, tools: [...], name: 'file name part' }
   function ioExport(opts) {
     return flushFrames().then(function () { return idbOpen(); }).then(function (db) {
       return Promise.all((opts.tools || []).map(function (t) { return idbReadTool(db, t); }));
     }).then(function (lists) {
-      var bundle = { __format: IO_FORMAT, version: 1, app: 'Dev Toolkit', exportedAt: new Date().toISOString(), contains: [] };
-      if (opts.settings) { bundle.settings = JSON.parse(JSON.stringify(settings)); bundle.contains.push('settings'); }
+      var bundle = { __format: IO_FORMAT, version: 2, app: 'Dev Toolkit', exportedAt: new Date().toISOString(), contains: [] };
+      var sp = splitSettings(JSON.parse(JSON.stringify(settings)));
+      if (opts.settings) { bundle.settings = sp.settings; bundle.contains.push('settings'); }
+      if (opts.shortcuts) { bundle.shortcuts = sp.shortcuts; bundle.contains.push('shortcuts'); }
       if ((opts.tools || []).length) { bundle.data = {}; opts.tools.forEach(function (t, i) { bundle.data[t] = lists[i]; bundle.contains.push(t); }); }
       ioDownload('dev-toolkit-' + (opts.name || 'export') + '-' + ioDate() + '.json', bundle);
       var bits = [];
       if (opts.settings) bits.push('settings');
+      if (opts.shortcuts) bits.push('shortcuts');
       (opts.tools || []).forEach(function (t, i) { bits.push(plural(lists[i].length, IO_ONE[t])); });
       toast('Exported ' + bits.join(', ') + '.');
       return bundle;
@@ -2543,17 +2568,19 @@ window.addEventListener('beforeinstallprompt', function (e) {
     var obj;
     try { obj = JSON.parse(text); } catch (e) { return { error: 'That file isn’t valid JSON.' }; }
     if (!obj || typeof obj !== 'object') return { error: 'That file doesn’t look like a Dev Toolkit export.' };
-    var out = { settings: null, data: {}, at: obj.exportedAt || obj.__exportedAt || null };
-    var src = null;
-    if (obj.__format === IO_FORMAT) { src = obj.data; if (obj.settings && typeof obj.settings === 'object') out.settings = obj.settings; }
+    var out = { settings: null, shortcuts: null, data: {}, at: obj.exportedAt || obj.__exportedAt || null };
+    var src = null, rawSet = null, rawSc = null;
+    if (obj.__format === IO_FORMAT) { src = obj.data; if (obj.settings && typeof obj.settings === 'object') rawSet = obj.settings; if (obj.shortcuts && typeof obj.shortcuts === 'object') rawSc = obj.shortcuts; }
     else if (obj.indexedDB || obj.localStorage) {   // legacy backup written by the tools' own export button
       src = obj.indexedDB;
-      try { var raw = obj.localStorage && obj.localStorage[SETTINGS_KEY]; if (raw) out.settings = JSON.parse(raw); } catch (e) {}
+      try { var raw = obj.localStorage && obj.localStorage[SETTINGS_KEY]; if (raw) rawSet = JSON.parse(raw); } catch (e) {}
     } else return { error: 'That file doesn’t look like a Dev Toolkit export.' };
+    if (rawSet) { var sp = splitSettings(rawSet); out.settings = sp.settings; out.shortcuts = sp.shortcuts; }   // older files keep both in one block
+    if (rawSc) out.shortcuts = rawSc;
     IO_TOOLS.forEach(function (t) {
       if (src && Array.isArray(src[t])) out.data[t] = src[t].filter(function (r) { return r && typeof r === 'object' && r.id != null; });
     });
-    if (!out.settings && !Object.keys(out.data).length) return { error: 'There is nothing to import in that file.' };
+    if (!out.settings && !out.shortcuts && !Object.keys(out.data).length) return { error: 'There is nothing to import in that file.' };
     return out;
   }
   function ioSig(rec) { var c = {}; Object.keys(rec).forEach(function (k) { if (k !== 'id' && k !== 'timeStr') c[k] = rec[k]; }); return JSON.stringify(c); }
@@ -2583,30 +2610,52 @@ window.addEventListener('beforeinstallprompt', function (e) {
       return txP(tx).then(function () { return { added: out.length, skipped: skipped }; });
     });
   }
-  // sel: { settings: bool, tools: [..], mode: 'add' | 'replace' }
+  // sel: { settings: bool, shortcuts: bool, tools: [..], mode: 'add' | 'replace' }
   function ioApply(parsed, sel) {
-    var tools = sel.tools.filter(function (t) { return parsed.data[t]; }), pre = Promise.resolve();
-    if (sel.mode === 'replace' && tools.length) pre = ioExport({ settings: false, tools: tools, name: 'backup-before-import' });   // safety copy of what is about to be replaced
-    return pre.then(function () { return flushFrames(); }).then(function () { return tools.length ? idbOpen() : null; }).then(function (db) {
+    var tools = sel.tools.filter(function (t) { return parsed.data[t]; });
+    var doSet = !!(sel.settings && parsed.settings), doSc = !!(sel.shortcuts && parsed.shortcuts), snap = { tools: tools, lists: [], settings: JSON.parse(JSON.stringify(settings)) };
+    return flushFrames().then(function () { return tools.length ? idbOpen() : null; }).then(function (db) {
+      if (!db) return null;
+      return Promise.all(tools.map(function (t) { return idbReadTool(db, t); })).then(function (lists) { snap.lists = lists; return db; });   // what you have now, kept in memory so Undo can put it back
+    }).then(function (db) {
       var chain = Promise.resolve(), res = {};
       tools.forEach(function (t) { chain = chain.then(function () { return ioWriteTool(db, t, parsed.data[t], sel.mode); }).then(function (r) { res[t] = r; }); });
       return chain.then(function () { return res; });
     }).then(function (res) {
-      if (sel.settings && parsed.settings) { settings = sanitize(parsed.settings); commit(); }
+      if (doSet || doSc) {
+        var m = JSON.parse(JSON.stringify(settings));
+        if (doSet) ['general', 'code', 'json', 'xlsx'].forEach(function (k) { if (parsed.settings[k]) m[k] = parsed.settings[k]; });
+        if (doSc) ['keys', 'aliases', 'palette'].forEach(function (k) { if (parsed.shortcuts[k]) m[k] = parsed.shortcuts[k]; });
+        settings = sanitize(m); commit();
+      }
       if (tools.length) resetPanes();   // every tool re-reads its data
       var bits = [];
-      if (sel.settings && parsed.settings) bits.push('settings');
+      if (doSet) bits.push('settings');
+      if (doSc) bits.push('shortcuts');
       tools.forEach(function (t) {
         var r = res[t]; bits.push(sel.mode === 'replace' ? plural(r.added, IO_ONE[t]) + ' (replaced)' : plural(r.added, IO_ONE[t]) + (r.skipped ? ' (' + r.skipped + ' already here, skipped)' : ''));
       });
-      toast('Imported ' + (bits.join(', ') || 'nothing') + '.');
+      toast('Imported ' + (bits.join(', ') || 'nothing') + '.', (doSet || doSc || tools.length) ? 'Undo' : null, function () { ioUndo(snap); }, 10000);
     }).catch(function (err) { toast('Couldn’t import: ' + ((err && err.message) || 'unknown error')); });
+  }
+  function ioUndo(snap) {   // puts back exactly what was there before the import
+    return flushFrames().then(function () { return snap.tools.length ? idbOpen() : null; }).then(function (db) {
+      var chain = Promise.resolve();
+      snap.tools.forEach(function (t, i) { chain = chain.then(function () { return ioWriteTool(db, t, snap.lists[i], 'replace'); }); });
+      return chain;
+    }).then(function () {
+      settings = sanitize(snap.settings); commit();
+      if (snap.tools.length) resetPanes();
+      toast('Import undone.');
+    }).catch(function (err) { toast('Couldn’t undo: ' + ((err && err.message) || 'unknown error')); });
   }
 
   /* ----- the export / import dialog ----- */
   var ioOpen = false, ioGoFn = null, ioBackTo = null;
-  function ioShow(title, goLabel, goFn) {
+  function ioShow(title, goLabel, goFn, alt) {   // alt: { label, fn } adds a second action (Replace) beside the main one
     $('ioTitle').textContent = title; $('ioGo').textContent = goLabel; ioGoFn = goFn;
+    $('ioGo').hidden = false; $('ioGo').disabled = false;
+    $('ioAlt').hidden = !alt; if (alt) $('ioAlt').textContent = alt.label; ioAltFn = alt ? alt.fn : null;
     if (!ioOpen) {
       ioOpen = true; ioBackTo = document.activeElement;
       if (paletteOpen) closePalette(true);
@@ -2614,9 +2663,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
       if (settingsOpen) { var st = $('settings'); if ('inert' in st) st.inert = true; st.setAttribute('aria-hidden', 'true'); } else lockBackground(true);
     }
   }
+  var ioAltFn = null;
   function ioHide() {
     if (!ioOpen) return;
-    ioOpen = false; ioGoFn = null;
+    ioOpen = false; ioGoFn = null; ioAltFn = null;
     $('ioDlg').hidden = true;
     if (settingsOpen) { var st = $('settings'); if ('inert' in st) st.inert = false; st.setAttribute('aria-hidden', 'false'); }
     else restoreFocus();
@@ -2627,23 +2677,25 @@ window.addEventListener('beforeinstallprompt', function (e) {
     var row = h('label', { class: 'io-row' + (disabled ? ' off' : '') }, [cb, h('span', { text: label }), h('span', { class: 'io-count', text: countText || '' })]);
     return { row: row, cb: cb, count: row.querySelector('.io-count') };
   }
-  function openIoExport() {   // "Export everything": choose what goes in the file
+  var IO_SET_LABEL = 'Settings (appearance, colors, editor options)', IO_SC_LABEL = 'Shortcuts, aliases and palette order';
+  function openIoExport() {   // "Export all": choose what goes in the file
     var body = $('ioBody'); body.innerHTML = '';
     body.appendChild(h('p', {}, [h('b', { text: 'Choose what to export. ' }), 'The file is saved to your device; nothing is uploaded anywhere.']));
-    var rows = { settings: ioRow('Settings, shortcuts and palette order', true, false, '') };
-    body.appendChild(rows.settings.row);
+    var rows = { settings: ioRow(IO_SET_LABEL, true, false, ''), shortcuts: ioRow(IO_SC_LABEL, true, false, '') };
+    body.appendChild(rows.settings.row); body.appendChild(rows.shortcuts.row);
     IO_TOOLS.forEach(function (t) { rows[t] = ioRow(IO_NAMES[t], true, false, '…'); body.appendChild(rows[t].row); });
     ioCounts().then(function (c) { IO_TOOLS.forEach(function (t) { if (c[t] != null) rows[t].count.textContent = c[t]; }); });
     $('ioNote').textContent = '';
-    ioShow('Export everything', 'Export', function () {
-      var tools = IO_TOOLS.filter(function (t) { return rows[t].cb.checked; }), withSettings = rows.settings.cb.checked;
-      if (!tools.length && !withSettings) { $('ioNote').textContent = 'Tick at least one item.'; return; }
+    ioShow('Export all', 'Export', function () {
+      var tools = IO_TOOLS.filter(function (t) { return rows[t].cb.checked; }), withSet = rows.settings.cb.checked, withSc = rows.shortcuts.cb.checked;
+      if (!tools.length && !withSet && !withSc) { $('ioNote').textContent = 'Tick at least one item.'; return; }
       ioHide();
-      ioExport({ settings: withSettings, tools: tools, name: tools.length === IO_TOOLS.length && withSettings ? 'all' : (tools.length ? tools.join('-') : 'settings') });
+      var parts = (withSet ? ['settings'] : []).concat(withSc ? ['shortcuts'] : [], tools);
+      ioExport({ settings: withSet, shortcuts: withSc, tools: tools, name: withSet && withSc && tools.length === IO_TOOLS.length ? 'all' : parts.join('-') });
     });
     $('ioGo').focus();
   }
-  function pickImportFile(scope) {   // scope: 'all' | 'settings' | 'code' | 'json' | 'xlsx'
+  function pickImportFile(scope) {   // scope: 'all' | 'shortcuts' | 'code' | 'json' | 'xlsx'
     var inp = document.createElement('input');
     inp.type = 'file'; inp.accept = '.json,application/json';
     inp.addEventListener('change', function () {
@@ -2661,42 +2713,73 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   function openIoImport(parsed, scope, fname) {
     var body = $('ioBody'); body.innerHTML = '';
-    var wantSettings = scope === 'all' || scope === 'settings', wantTools = scope === 'all' ? IO_TOOLS : (IO_TOOLS.indexOf(scope) >= 0 ? [scope] : []);
     var when = parsed.at ? ' (exported ' + new Date(parsed.at).toLocaleString() + ')' : '';
+    if (IO_TOOLS.indexOf(scope) >= 0) return openIoImportTool(parsed, scope, fname, when);
+    var wantSet = scope === 'all', wantSc = scope === 'all' || scope === 'shortcuts', wantTools = scope === 'all' ? IO_TOOLS : [];
     body.appendChild(h('p', {}, [h('b', { text: fname }), when + '. Choose what to import.']));
     var rows = {}, any = false;
-    if (wantSettings) {
-      rows.settings = ioRow('Settings, shortcuts and palette order', !!parsed.settings, !parsed.settings, parsed.settings ? 'replaces yours' : 'not in this file');
+    if (wantSet) {
+      rows.settings = ioRow(IO_SET_LABEL, !!parsed.settings, !parsed.settings, parsed.settings ? 'replaces yours' : 'not in this file');
       body.appendChild(rows.settings.row); if (parsed.settings) any = true;
+    }
+    if (wantSc) {
+      rows.shortcuts = ioRow(IO_SC_LABEL, !!parsed.shortcuts, !parsed.shortcuts, parsed.shortcuts ? 'replaces yours' : 'not in this file');
+      body.appendChild(rows.shortcuts.row); if (parsed.shortcuts) any = true;
     }
     wantTools.forEach(function (t) {
       var n = parsed.data[t] ? parsed.data[t].length : 0;
       rows[t] = ioRow(IO_NAMES[t], n > 0, n === 0, n ? String(n) : 'not in this file');
       body.appendChild(rows[t].row); if (n) any = true;
     });
-    var modeBox = null;
+    var rep = null;
     if (wantTools.some(function (t) { return parsed.data[t] && parsed.data[t].length; })) {
-      modeBox = h('div', { class: 'io-mode', role: 'radiogroup', 'aria-label': 'How to import the data' });
-      var add = h('input', { type: 'radio', name: 'iomode', value: 'add' }), rep = h('input', { type: 'radio', name: 'iomode', value: 'replace' });
+      var modeBox = h('div', { class: 'io-mode', role: 'radiogroup', 'aria-label': 'How to import the data' });
+      var add = h('input', { type: 'radio', name: 'iomode', value: 'add' }); rep = h('input', { type: 'radio', name: 'iomode', value: 'replace' });
       add.checked = true;
       modeBox.appendChild(h('label', {}, [add, h('span', {}, ['Add to what I have', h('small', { text: 'Keeps your current items. Anything already here is skipped, so nothing is duplicated.' })])]));
-      modeBox.appendChild(h('label', {}, [rep, h('span', {}, ['Replace what I have', h('small', { text: 'Swaps your current items for the ones in the file. A backup of what you have now is downloaded first.' })])]));
+      modeBox.appendChild(h('label', {}, [rep, h('span', {}, ['Replace what I have', h('small', { text: 'Swaps your current items for the ones in the file. You can Undo for 10 seconds.' })])]));
       body.appendChild(modeBox);
     }
-    if (!any) body.appendChild(h('p', { text: scope === 'all' ? 'There is nothing to import in that file.' : 'That file has nothing of this kind.' }));
+    if (!any) body.appendChild(h('p', { text: scope === 'all' ? 'There is nothing to import in that file.' : 'That file has no shortcuts in it.' }));
     $('ioNote').textContent = '';
-    ioShow(scope === 'settings' ? 'Import settings' : scope === 'all' ? 'Import everything' : 'Import ' + IO_NAMES[scope], 'Import', function () {
-      var sel = { settings: !!(rows.settings && rows.settings.cb.checked && parsed.settings), tools: wantTools.filter(function (t) { return rows[t] && rows[t].cb.checked; }), mode: rep && rep.checked ? 'replace' : 'add' };
-      if (!sel.settings && !sel.tools.length) { $('ioNote').textContent = 'Tick at least one item.'; return; }
+    ioShow(scope === 'shortcuts' ? 'Import shortcuts' : 'Import all', 'Import', function () {
+      var sel = { settings: !!(rows.settings && rows.settings.cb.checked && parsed.settings), shortcuts: !!(rows.shortcuts && rows.shortcuts.cb.checked && parsed.shortcuts),
+        tools: wantTools.filter(function (t) { return rows[t] && rows[t].cb.checked; }), mode: rep && rep.checked ? 'replace' : 'add' };
+      if (!sel.settings && !sel.shortcuts && !sel.tools.length) { $('ioNote').textContent = 'Tick at least one item.'; return; }
       ioHide();
       ioApply(parsed, sel);
     });
     $('ioGo').disabled = !any;
     if (any) $('ioGo').focus(); else $('ioCancel').focus();
   }
+  function openIoImportTool(parsed, t, fname, when) {   // import into one tool: Cancel, Replace or Add
+    var body = $('ioBody'), n = parsed.data[t] ? parsed.data[t].length : 0;
+    body.appendChild(h('p', {}, [h('b', { text: fname }), when + '.']));
+    var others = [];
+    if (parsed.settings) others.push('settings');
+    if (parsed.shortcuts) others.push('shortcuts');
+    IO_TOOLS.forEach(function (o) { if (o !== t && parsed.data[o] && parsed.data[o].length) others.push(IO_NAMES[o]); });
+    if (!n) {
+      body.appendChild(h('p', { text: 'That file has no ' + IO_NAMES[t].toLowerCase() + ' in it.' }));
+      if (others.length) body.appendChild(h('p', { class: 'io-hint', text: 'Use Settings → General → Import all for the rest of the file.' }));
+      $('ioNote').textContent = '';
+      ioShow('Import ' + IO_NAMES[t], 'Add', function () {});
+      $('ioGo').hidden = true; $('ioCancel').focus();
+      return;
+    }
+    var mode = h('div', { class: 'io-mode io-choice' });
+    mode.appendChild(h('div', {}, [h('b', { text: 'Add' }), h('small', { text: 'Keeps yours and adds the ones from the file. Anything already here is skipped.' })]));
+    mode.appendChild(h('div', {}, [h('b', { text: 'Replace' }), h('small', { text: 'Swaps yours for the ones in the file. You can Undo for 10 seconds.' })]));
+    body.appendChild(mode);
+    $('ioNote').textContent = '';
+    function go(m) { return function () { ioHide(); ioApply(parsed, { settings: false, shortcuts: false, tools: [t], mode: m }); }; }
+    ioShow('Import ' + IO_NAMES[t], 'Add', go('add'), { label: 'Replace', fn: go('replace') });
+    $('ioGo').focus();
+  }
   $('ioClose').addEventListener('click', ioHide);
   $('ioCancel').addEventListener('click', ioHide);
   $('ioGo').addEventListener('click', function () { if (ioGoFn) ioGoFn(); });
+  $('ioAlt').addEventListener('click', function () { if (ioAltFn) ioAltFn(); });
   $('ioDlg').addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); ioHide(); } else trapTab(e, $('ioDlg')); });
   $('ioDlg').addEventListener('mousedown', function (e) { if (e.target === $('ioDlg')) ioHide(); });
 
@@ -2733,21 +2816,53 @@ window.addEventListener('beforeinstallprompt', function (e) {
     box.appendChild(h('p', { class: 'help', text: 'Recolors the interface, the code editor and the JSON / table views. Click a palette again to go back to stock. A palette with only a dark or only a light version switches to that mode; if you switch back, that mode uses the stock colors.' }));
     return box;
   }
+  /* ----- Clear all data / Reset app (Settings → General, bottom) ----- */
+  function wipeAllData() {   // empties Code, JSON / XML and CSV / XLSX for good
+    return flushFrames().then(function () { return idbOpen(); }).then(function (db) {
+      var names = IO_TOOLS.map(function (t) { return 'entries_' + t; }).concat('meta');
+      var tx = db.transaction(names, 'readwrite');
+      IO_TOOLS.forEach(function (t) { tx.objectStore('entries_' + t).clear(); tx.objectStore('meta').put({ key: 'order:' + t, ids: [] }); });
+      return txP(tx);
+    });
+  }
+  function clearAllData() {
+    if (!confirm('Delete ALL your snippets, JSON / XML entries and CSV / XLSX files?\n\nSettings and shortcuts are kept. This can’t be undone (Export all first if you want a copy).')) return;
+    wipeAllData().then(function () { resetPanes(); toast('All data cleared.'); })
+      .catch(function (err) { toast('Couldn’t clear the data: ' + ((err && err.message) || 'unknown error')); });
+  }
+  function resetApp() {
+    if (!confirm('Reset the whole app?\n\nThis deletes ALL your data (snippets, JSON / XML entries, CSV / XLSX files) and puts every setting, shortcut, alias and the palette order back to the defaults. This can’t be undone (Export all first if you want a copy).')) return;
+    wipeAllData().then(function () {
+      [LEGACY_THEME_KEY, LAST_TAB_KEY, USAGE_KEY, 'code_viewer_layout_mode', 'json_viewer_layout_mode', 'sheet_viewer_layout_mode', 'code_viewer_theme_v1', 'json_viewer_theme_v1', 'sheet_viewer_theme_v1'].forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+      usage = {};
+      settings = sanitize(JSON.parse(JSON.stringify(DEFAULTS))); commit();
+      resetPanes(); toast('The app was reset.');
+    }).catch(function (err) { toast('Couldn’t reset the app: ' + ((err && err.message) || 'unknown error')); });
+  }
+  function buildDanger() {
+    var box = h('div', { id: 'dangerBox' }, [h('div', { class: 'grp', text: 'Danger zone' })]);
+    var body = h('div', { class: 'ctl' }), btns = h('div', { class: 'io-btns' });
+    body.appendChild(h('p', { class: 'help', style: 'margin-top:0', text: 'Clear all data deletes every snippet, JSON / XML entry and CSV / XLSX file. Reset app does that and also puts all settings, shortcuts and the palette order back to the defaults. Neither can be undone: use Export all first if you want a copy.' }));
+    btns.appendChild(h('button', { type: 'button', class: 'btn danger', text: 'Clear all data', onclick: clearAllData }));
+    btns.appendChild(h('button', { type: 'button', class: 'btn danger', text: 'Reset app', onclick: resetApp }));
+    body.appendChild(btns); box.appendChild(body);
+    return box;
+  }
+
+  var IO_SHORT = { code: 'Code', json: 'JSON / XML', xlsx: 'CSV / XLSX' };
   function buildIo(sec) {   // Export / import buttons at the bottom of a settings page
     var box = h('div', { id: 'ioBox' }, [h('div', { class: 'grp', text: sec === 'general' ? 'Export & import' : 'Your data' })]);
     var body = h('div', { class: 'ctl' }), btns = h('div', { class: 'io-btns' });
     if (sec === 'general') {
-      body.appendChild(h('p', { class: 'help', style: 'margin-top:0', text: 'Move everything to another browser or computer, or keep a copy. One file can hold your settings and the data of all three tools.' }));
-      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Export everything…', onclick: openIoExport }));
-      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Import everything…', onclick: function () { pickImportFile('all'); } }));
-      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Export settings only', onclick: function () { ioExport({ settings: true, tools: [], name: 'settings' }); } }));
-      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Import settings only…', onclick: function () { pickImportFile('settings'); } }));
+      body.appendChild(h('p', { class: 'help', style: 'margin-top:0', text: 'Move everything to another browser or computer, or keep a copy. You choose what goes in the file: settings, shortcuts, and the data of each tool. Any export from this app (also from a single tool or from Shortcuts) can be imported here.' }));
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Export all…', onclick: openIoExport }));
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Import all…', onclick: function () { pickImportFile('all'); } }));
       body.appendChild(btns);
     } else {
       var status = h('p', { class: 'help', style: 'margin-top:0', text: 'Your ' + IO_NAMES[sec].toLowerCase() + ' are saved in this browser.' });
       body.appendChild(status);
-      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Export ' + IO_NAMES[sec] + '…', onclick: function () { ioExport({ settings: false, tools: [sec], name: sec }); } }));
-      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Import ' + IO_NAMES[sec] + '…', onclick: function () { pickImportFile(sec); } }));
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Export ' + IO_SHORT[sec] + '…', onclick: function () { ioExport({ settings: false, tools: [sec], name: sec }); } }));
+      btns.appendChild(h('button', { type: 'button', class: 'btn', text: 'Import ' + IO_SHORT[sec] + '…', onclick: function () { pickImportFile(sec); } }));
       body.appendChild(btns);
       ioCounts().then(function (c) { if (c[sec] != null) status.textContent = plural(c[sec], IO_ONE[sec]) + ' saved in this browser. Importing can add to them or replace them.'; });
     }
@@ -2973,7 +3088,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     settingsCode: function () { openSettings('code'); },
     settingsJson: function () { openSettings('json'); },
     settingsXlsx: function () { openSettings('xlsx'); },
-    backup: function () { var f = document.querySelector('#pane-' + (active || 'code') + ' iframe'); if (f) postTo(f, { __devToolkitCmd: 'export' }); },
+    backup: function () { var ct = active || 'code'; ioExport({ tools: [ct], name: ct }); },
     install: function () { if (canInstall()) runInstall(); else announce('Dev Toolkit is already installed, or this browser can’t install it'); },
     github: function () { window.open(REPO_URL, '_blank', 'noopener'); },
     switchInner: function () {
@@ -2996,7 +3111,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     clearAll: function () {
       var ct = active || 'code'; if (!frameLoaded[ct]) return;
       if (getInnerTab(ct) === 'viewer') {
-        if (confirm('Clear all ' + NOUN[ct] + ' in ' + META[ct].short + '?\n\nThey are removed from this browser and can’t be undone.')) { callTool(ct, 'clearAllEntries'); announce('Cleared all ' + NOUN[ct]); }
+        callTool(ct, 'clearAllEntries');   // the tool shows the “deleted · Undo” message
       } else { callTool(ct, CLEAR_PANELS[ct]); announce('Compare panels and results cleared'); }
     },
     clearResults: function () { var ct = active || 'code'; if (frameLoaded[ct] && getInnerTab(ct) === 'compare') { callTool(ct, CLEAR_RESULTS[ct]); announce('Compare results cleared'); } else announce('Open the Compare tab to clear its results'); },
@@ -3016,8 +3131,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
   CMD.palPicker = function () { startPick(PAL_PICK_TC); };
   CMD.exportAll = function () { openIoExport(); };
   CMD.importAll = function () { pickImportFile('all'); };
-  CMD.exportSettings = function () { ioExport({ settings: true, tools: [], name: 'settings' }); };
-  CMD.importSettings = function () { pickImportFile('settings'); };
+  CMD.exportShortcuts = function () { ioExport({ shortcuts: true, tools: [], name: 'shortcuts' }); };
+  CMD.importShortcuts = function () { pickImportFile('shortcuts'); };
   IO_TOOLS.forEach(function (t) {
     var T = t.charAt(0).toUpperCase() + t.slice(1);
     CMD['export' + T] = function () { ioExport({ settings: false, tools: [t], name: t }); };
@@ -3087,6 +3202,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       if (s) runShortcut(s);
     } else if (d.__devToolkit === 'themeToggle') toggleTheme();
     else if (d.__devToolkit === 'reloadAll') resetPanes();
+    else if (d.__devToolkit === 'undoToast' && TOOLS.indexOf(d.tool) >= 0) toast(String(d.message || 'Deleted'), 'Undo', function () { callTool(d.tool, d.method === 'undoRemoveEntry' ? 'undoRemoveEntry' : 'undoClearAll'); }, 10000);
+    else if (d.__devToolkit === 'io' && IO_TOOLS.indexOf(d.tool) >= 0) { if (d.action === 'export') ioExport({ tools: [d.tool], name: d.tool }); else if (d.action === 'import') pickImportFile(d.tool); }
     else if (d.__devToolkit === 'reply') { var apiCb = apiPending[d.id]; if (apiCb) { delete apiPending[d.id]; apiCb(d.ok ? d.result : undefined); } }
   });
 

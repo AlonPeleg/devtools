@@ -240,7 +240,7 @@
         }
         function flush() { clearTimeout(timer); timer = null; return ready ? run() : Promise.resolve(); }
 
-        var api = { name: name, load: load, save: save, flush: flush };
+        var api = { name: name, load: load, save: save, flush: flush, records: function () { return cfg.getEntries().map(cfg.toRecord); }, recordOf: function (e) { return cfg.toRecord(e); } };
         trackers.push(api);
         return api;
     }
@@ -317,6 +317,19 @@
         return !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
     };
     DT.post = function (msg) { if (!embedded) return; try { window.parent.postMessage(msg, TARGET); } catch (e) {} };
+    // "N entries deleted · Undo": shown by the shell (10 s); standalone pages show a small one of their own.
+    DT.undoToast = function (message, onUndo, method) {
+        if (embedded) { DT.post({ __devToolkit: 'undoToast', tool: TOOL, message: message, method: method || 'undoClearAll' }); return; }
+        var t = document.createElement('div');
+        t.setAttribute('role', 'status');
+        t.style.cssText = 'position:fixed;left:50%;bottom:1.25rem;transform:translateX(-50%);z-index:99999;background:#252526;color:#fff;border:1px solid #3c3c3c;border-radius:6px;padding:0.5rem 0.875rem;font:13px system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.4)';
+        t.appendChild(document.createTextNode(message + ' '));
+        var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Undo';
+        b.style.cssText = 'font:inherit;font-weight:600;color:#4fc1ff;background:none;border:0;cursor:pointer;margin-left:0.5rem';
+        var done = function () { if (t.parentNode) t.parentNode.removeChild(t); };
+        b.addEventListener('click', function () { done(); onUndo(); });
+        t.appendChild(b); document.body.appendChild(t); setTimeout(done, 10000);
+    };
     DT.onChange = function (fn) { DT._l.push(fn); };
     // Color palette chosen in Settings (CSS variables prepared by the shell, plus token colors for Monaco).
     var palNames = [];
@@ -395,7 +408,7 @@
             var link = document.querySelector('.tab-link[onclick*="' + want + '"]');
             if (link) link.click();
         }
-        else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults',
+        else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'undoClearAll', 'undoRemoveEntry', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults',
              'toggleLayout', 'toggleViewerLayout', 'toggleCompareDiffMode', 'toggleEditorDiffMode'].indexOf(d.fn) >= 0 && typeof window[d.fn] === 'function') {
             window[d.fn]();
         }
@@ -1065,10 +1078,10 @@
         <div class="tab-link active" data-tab="viewer-pane" onclick="switchTab('viewer-pane', this)">Viewer</div>
         <div class="tab-link" data-tab="compare-pane" onclick="switchTab('compare-pane', this)">Compare</div>
         <div class="storage-io-bar">
-            <button class="btn-global-icon" id="storageExportBtn" title="Export local storage to a file" onclick="exportLocalStorageBackup()">
+            <button class="btn-global-icon" id="storageExportBtn" title="Export this tab’s entries to a file" onclick="exportLocalStorageBackup()">
                 <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M6.5 2.5h-3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/><path d="M6 8h7.5M11 5.5L13.5 8 11 10.5"/></svg>
             </button>
-            <button class="btn-global-icon" id="storageImportBtn" title="Import local storage from a file" onclick="document.getElementById('storageImportInput').click()">                
+            <button class="btn-global-icon" id="storageImportBtn" title="Import entries into this tab from a file" onclick="storageImportClick()">                
                 <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M9.5 2.5h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3"/><path d="M2.5 8H10M7.5 5.5L10 8l-2.5 2.5"/></svg>
             </button>
             <input type="file" id="storageImportInput" accept=".json,application/json" style="display:none" onchange="importLocalStorageBackup(this)">
@@ -1236,7 +1249,12 @@ function flashStorageIoButton(btnId) {
     setTimeout(() => { btn.innerHTML = original; }, 900);
 }
 
+function storageImportClick() {
+    if (window.DT && DT.embedded) DT.post({ __devToolkit: 'io', tool: DT.tool, action: 'import' });   // the shell shows Cancel / Replace / Add
+    else document.getElementById('storageImportInput').click();
+}
 function exportLocalStorageBackup() {
+    if (window.DT && DT.embedded) { DT.post({ __devToolkit: 'io', tool: DT.tool, action: 'export' }); return; }   // the shell writes the file in the shared format
     const data = {};
     try {
         for (let i = 0; i < localStorage.length; i++) {
@@ -3248,10 +3266,16 @@ function toggleEntryCollapse(el) {
         refreshEntryChromeAfterResize(entry.dataset.entryId);
     }
 }
+const removedStack = [];
 function removeEntry(el) {
     const entry = el.closest('.entry');
     const id = entry.dataset.entryId;
     const item = findEntry(id);
+    if (item) {
+        const rec = dtStore.recordOf(item);
+        removedStack.push({ rec, index: postedEntries.indexOf(item) });
+        DT.undoToast((rec.name ? '“' + (rec.name.length > 28 ? rec.name.slice(0, 27) + '…' : rec.name) + '” deleted' : 'Entry deleted'), undoRemoveEntry, 'undoRemoveEntry');
+    }
     if (item) disposeEntryEditor(item);
     postedEntries = postedEntries.filter(e => e.id !== id);
     entry.remove();
@@ -3261,12 +3285,54 @@ function removeEntry(el) {
     saveEntriesToStorage();
     renderCompareChips();
 }
+function undoRemoveEntry() {
+    const s = removedStack.pop(); if (!s) return;
+    const it = s.rec;
+    const item = addEntryAndRender(it.rawCode, { name: it.name, id: findEntry(it.id) ? undefined : it.id, timeStr: it.timeStr, override: it.override, noPersist: true });
+    if (!item) return;
+    const idx = Math.min(s.index, postedEntries.length - 1);
+    postedEntries.splice(postedEntries.indexOf(item), 1);
+    postedEntries.splice(idx, 0, item);   // back where it was (the list shows the newest first)
+    const next = postedEntries[idx + 1];
+    const card = document.querySelector('#container .entry[data-entry-id="' + item.id + '"]');
+    const ref = next && document.querySelector('#container .entry[data-entry-id="' + next.id + '"]');
+    if (card && ref) ref.after(card);
+    saveEntriesToStorage();
+    renderCompareChips();
+}
+let lastClear = null;
 function clearAllEntries() {
+    const n = postedEntries.length;
+    const snap = { records: dtStore.records(), compare: snapshotCompare() };
+    cmpPickCancel();
     postedEntries.forEach(disposeEntryEditor);
     postedEntries = [];
     document.getElementById('container').innerHTML = '<div class="empty-state">No snippets yet — paste or upload some code above.</div>';
     saveEntriesToStorage();
+    resetCompareSection();   // clearing the list also resets the Compare tab
     renderCompareChips();
+    if (n) { lastClear = snap; DT.undoToast(n === 1 ? '1 entry deleted' : n + ' entries deleted', undoClearAll); }
+}
+function undoClearAll() {
+    const s = lastClear; if (!s) return; lastClear = null;
+    s.records.forEach(it => addEntryAndRender(it.rawCode, { name: it.name, id: findEntry(it.id) ? undefined : it.id, timeStr: it.timeStr, override: it.override, noPersist: true }));
+    saveEntriesToStorage();
+    restoreCompare(s.compare);
+}
+function snapshotCompare() {
+    const res = document.getElementById('compareResults'), panels = {};
+    ['compareLeft', 'compareRight'].forEach(id => { panels[id] = { code: getPanelCode(id), name: document.getElementById(id + 'Name').value, state: comparePanels[id] }; });
+    return { panels, shown: !!res && !/^Load code into each panel/.test(res.textContent.trim()) };
+}
+function restoreCompare(s) {
+    Object.keys(s.panels).forEach(id => {
+        const p = s.panels[id];
+        setPanelCode(id, p.code);
+        document.getElementById(id + 'Name').value = p.name;
+        comparePanels[id] = p.state;
+        refreshCompareBadge(id);
+    });
+    if (s.shown) runCompare();
 }
 function updateEntryName(input) {
     const entry = input.closest('.entry');

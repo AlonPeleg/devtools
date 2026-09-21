@@ -240,7 +240,7 @@
         }
         function flush() { clearTimeout(timer); timer = null; return ready ? run() : Promise.resolve(); }
 
-        var api = { name: name, load: load, save: save, flush: flush };
+        var api = { name: name, load: load, save: save, flush: flush, records: function () { return cfg.getEntries().map(cfg.toRecord); }, recordOf: function (e) { return cfg.toRecord(e); } };
         trackers.push(api);
         return api;
     }
@@ -317,6 +317,19 @@
         return !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
     };
     DT.post = function (msg) { if (!embedded) return; try { window.parent.postMessage(msg, TARGET); } catch (e) {} };
+    // "N entries deleted · Undo": shown by the shell (10 s); standalone pages show a small one of their own.
+    DT.undoToast = function (message, onUndo, method) {
+        if (embedded) { DT.post({ __devToolkit: 'undoToast', tool: TOOL, message: message, method: method || 'undoClearAll' }); return; }
+        var t = document.createElement('div');
+        t.setAttribute('role', 'status');
+        t.style.cssText = 'position:fixed;left:50%;bottom:1.25rem;transform:translateX(-50%);z-index:99999;background:#252526;color:#fff;border:1px solid #3c3c3c;border-radius:6px;padding:0.5rem 0.875rem;font:13px system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.4)';
+        t.appendChild(document.createTextNode(message + ' '));
+        var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Undo';
+        b.style.cssText = 'font:inherit;font-weight:600;color:#4fc1ff;background:none;border:0;cursor:pointer;margin-left:0.5rem';
+        var done = function () { if (t.parentNode) t.parentNode.removeChild(t); };
+        b.addEventListener('click', function () { done(); onUndo(); });
+        t.appendChild(b); document.body.appendChild(t); setTimeout(done, 10000);
+    };
     DT.onChange = function (fn) { DT._l.push(fn); };
     // Color palette chosen in Settings (CSS variables prepared by the shell, plus token colors for Monaco).
     var palNames = [];
@@ -384,7 +397,7 @@
             var link = document.querySelector('.tab-link[onclick*="' + want + '"]');
             if (link) link.click();
         }
-        else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults',
+        else if (d.__devToolkitCmd === 'call' && ['clearAllEntries', 'undoClearAll', 'undoRemoveEntry', 'resetCompareSection', 'clearEditorCompareAll', 'clearCompareResults', 'clearEditorCompareResults',
              'toggleLayout', 'toggleViewerLayout', 'toggleCompareDiffMode', 'toggleEditorDiffMode'].indexOf(d.fn) >= 0 && typeof window[d.fn] === 'function') {
             window[d.fn]();
         }
@@ -790,10 +803,10 @@
     .btn { display: inline-flex; align-items: center; gap: 6px; }
     svg.ic { width: 14px; height: 14px; flex-shrink: 0; display: block; }
     .btn-iconbtn { padding: 4px 7px; justify-content: center; }
-    .btn-compare-pick { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: 12px; }
+    .btn-compare-pick { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; font-size: 11px; font-weight: 600; border-radius: 4px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     .btn-compare-pick .ic { width: 14px; height: 14px; }
     .btn-compare-pick[aria-pressed="true"] { background: var(--vscode-button-background); color: var(--vscode-button-foreground); outline: 1px solid var(--vscode-focusBorder); }
-    .btn-compare-pick:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-compare-pick:disabled { opacity: .4; cursor: not-allowed; }
     .compare-pick-hint { font-size: 12px; color: var(--vscode-focusBorder); margin: 4px 0; }
     #container.compare-pick-mode .entry { cursor: pointer; }
     #container.compare-pick-mode .entry:hover { outline: 1px solid var(--vscode-focusBorder); }
@@ -814,10 +827,10 @@
         <div class="tab-link active" onclick="switchTab('viewer-pane', this)">Viewer</div>
         <div class="tab-link" onclick="switchTab('editor-pane', this)">Edit &amp; Compare</div>
         <div class="storage-io-bar">
-            <button class="btn-global-icon" id="storageExportBtn" title="Export local storage to a file" onclick="exportLocalStorageBackup()">
+            <button class="btn-global-icon" id="storageExportBtn" title="Export this tab’s entries to a file" onclick="exportLocalStorageBackup()">
                 <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M6.5 2.5h-3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/><path d="M6 8h7.5M11 5.5L13.5 8 11 10.5"/></svg>
             </button>
-            <button class="btn-global-icon" id="storageImportBtn" title="Import local storage from a file" onclick="document.getElementById('storageImportInput').click()">                
+            <button class="btn-global-icon" id="storageImportBtn" title="Import entries into this tab from a file" onclick="storageImportClick()">                
                 <svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M9.5 2.5h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3"/><path d="M2.5 8H10M7.5 5.5L10 8l-2.5 2.5"/></svg>
             </button>
             <input type="file" id="storageImportInput" accept=".json,application/json" style="display:none" onchange="importLocalStorageBackup(this)">
@@ -980,7 +993,12 @@
             setTimeout(() => { btn.innerHTML = original; }, 900);
         }
 
-        function exportLocalStorageBackup() {
+        function storageImportClick() {
+    if (window.DT && DT.embedded) DT.post({ __devToolkit: 'io', tool: DT.tool, action: 'import' });   // the shell shows Cancel / Replace / Add
+    else document.getElementById('storageImportInput').click();
+}
+function exportLocalStorageBackup() {
+    if (window.DT && DT.embedded) { DT.post({ __devToolkit: 'io', tool: DT.tool, action: 'export' }); return; }   // the shell writes the file in the shared format
     const data = {};
     try {
         for (let i = 0; i < localStorage.length; i++) {
@@ -1238,11 +1256,36 @@
             }).catch(err => { console.error("Failed to load entries:", err); });
         }
 
+        let lastClear = null;
         function clearAllEntries() {
+            const n = postedEntries.length;
+            const snap = { records: dtStore.records(), compare: snapshotCompare() };
+            if (typeof setComparePick === 'function') setComparePick(false);
             document.getElementById('container').innerHTML = '';
             postedEntries = [];
             saveEntriesToStorage();
+            clearEditorCompareAll();   // clearing the list also resets the Compare tab
             renderEditorChips();
+            if (n) { lastClear = snap; DT.undoToast(n === 1 ? '1 entry deleted' : n + ' entries deleted', undoClearAll); }
+        }
+        function undoClearAll() {
+            const s = lastClear; if (!s) return; lastClear = null;
+            s.records.forEach(item => processInput(item.rawString, item.name, item.timeStr, postedEntries.some(e => e.id === item.id) ? null : item.id, false));
+            saveEntriesToStorage();
+            restoreCompare(s.compare);
+        }
+        function snapshotCompare() {
+            const res = document.getElementById('editorCompareResults'), panels = {};
+            ['editorLeft', 'editorRight'].forEach(id => { const nm = document.getElementById(id + 'Name'); panels[id] = { text: document.getElementById(id).value, name: nm ? nm.value : '' }; });
+            return { panels, shown: !!res && res.children.length > 0 && !/^Click "Compare"/.test(res.textContent.trim()) };
+        }
+        function restoreCompare(s) {
+            Object.keys(s.panels).forEach(id => {
+                const ta = document.getElementById(id), nm = document.getElementById(id + 'Name');
+                ta.value = s.panels[id].text; if (nm) nm.value = s.panels[id].name;
+                ta.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            if (s.shown) runEditorCompare();
         }
 
         function setAllCollapse(collapsed) {
@@ -1275,15 +1318,35 @@
             }
         }
 
+        const removedStack = [];
         function removeEntry(el) {
             const entry = el.closest('.entry');
+            const item = postedEntries.find(e => e.id === entry.dataset.entryId);
+            if (item) {
+                const rec = dtStore.recordOf(item);
+                removedStack.push({ rec, index: postedEntries.indexOf(item) });
+                DT.undoToast((rec.name ? '“' + (rec.name.length > 28 ? rec.name.slice(0, 27) + '…' : rec.name) + '” deleted' : 'Entry deleted'), undoRemoveEntry, 'undoRemoveEntry');
+            }
             postedEntries = postedEntries.filter(e => e.id !== entry.dataset.entryId);
             entry.remove();
             saveEntriesToStorage();
             renderEditorChips();
         }
-
-        let focusedEntryPlaceholder = null;
+        function undoRemoveEntry() {
+            const s = removedStack.pop(); if (!s) return;
+            const it = s.rec, before = postedEntries.length;
+            processInput(it.rawString, it.name, it.timeStr, postedEntries.some(e => e.id === it.id) ? null : it.id, false);
+            if (postedEntries.length === before) return;
+            const item = postedEntries[postedEntries.length - 1];
+            const idx = Math.min(s.index, postedEntries.length - 1);
+            postedEntries.pop(); postedEntries.splice(idx, 0, item);   // back where it was (the list shows the newest first)
+            const next = postedEntries[idx + 1];
+            const card = document.querySelector('#container .entry[data-entry-id="' + item.id + '"]');
+            const ref = next && document.querySelector('#container .entry[data-entry-id="' + next.id + '"]');
+            if (card && ref) ref.after(card);
+            saveEntriesToStorage();
+            renderEditorChips();
+        }
 
         function focusEntry(btn) {
             const entry = btn.closest('.entry');
