@@ -2503,7 +2503,7 @@
                     return did;
                 }),
 
-                compareStart: guard(function () { toggleComparePick(); return true; }),
+                compareStart: guard(function () { var was = comparePickMode; toggleComparePick(); return was ? 'off' : (comparePickMode ? 'on' : 'few'); }),
 
                 toggleLayout: guard(function () { toggleViewerLayout(); return true; })
             };

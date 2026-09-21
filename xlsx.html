@@ -3624,7 +3624,7 @@
                 }, false);
             },
             toggleLayout() { return safe(() => { toggleLayout(); return true; }, false); },
-            compareStart() { return safe(() => { toggleComparePick(); return true; }, true); }
+            compareStart() { return safe(() => { const was = cmpPicking; toggleComparePick(); return was ? 'off' : (cmpPicking ? 'on' : 'few'); }, true); }
         };
     })();
 

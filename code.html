@@ -5446,7 +5446,7 @@ init();
             loadEntryIntoPanel(String(id), panel);
             return true;
         }, false),
-        compareStart: safe(function () { cmpPickToggle(); return true; }, false),
+        compareStart: safe(function () { var was = cmpPickOn, r = cmpPickToggle(); return was ? 'off' : (r ? 'on' : 'few'); }, false),
         compareSwap: safe(function () { swapComparePanels(); return true; }, false),
         compareReset: safe(function () { resetCompareSection(); return true; }, false),
         compareClearResults: safe(function () { clearCompareResults(); return true; }, false),

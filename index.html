@@ -757,6 +757,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     { id: 'toggleMinimap', group: G_VIEW, label: 'Toggle the minimap on all entries', tools: ['code', 'json'], pane: 'viewer', generic: true, kw: 'map overview', call: ['toggleMinimap', []], say: 'Minimap toggled' },
     { id: 'toggleHeader', group: G_XLSX, label: 'Toggle “first row is a header” on all files', tools: ['xlsx'], pane: 'viewer', kw: 'header row columns', call: ['toggleHeader', []], say: 'Header row toggled' },
     { id: 'addSampleLang', group: G_CODE, label: 'Add a sample by language…', tools: ['code'], pane: 'viewer', kw: 'example demo test dummy programming language python java go rust short long', pick: { mode: 'lang', verb: 'Sample by language' } },
+    { id: 'comparePick', group: G_VIEW, label: 'Compare button: pick two entries on / off', tools: ALL_T, pane: 'viewer', generic: true, kw: 'compare pick select choose diff two entries button toggle', call: ['compareStart'], cmp: true },
     { id: 'copyRaw', group: G_CODE, label: 'Copy a snippet as raw text', tools: ['code'], pane: 'viewer', kw: 'clipboard plain', pick: { mode: 'copy', api: 'copy', arg: 'raw', verb: 'Copy', done: 'Copied' } },
     { id: 'copyFence', group: G_CODE, label: 'Copy a snippet as a Markdown code block', tools: ['code'], pane: 'viewer', kw: 'clipboard markdown fence', pick: { mode: 'copy', api: 'copy', arg: 'fence', verb: 'Copy', done: 'Copied' } },
     { id: 'saveFile', group: G_CODE, label: 'Download a snippet / JSON entry as a file', tools: ['code', 'json'], pane: 'viewer', kw: 'save export file', pick: { mode: 'copy', api: 'save', arg: 'file', verb: 'Download', done: 'Downloading' } },
@@ -845,7 +846,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   ];
   // Short codes typed in the palette. Editable in Settings → Keyboard shortcuts (up to 3 per command).
   var DEFAULT_ALIASES = {
-    compareLoad: ['cmp'], compareRun: ['run'], compareSwap: ['swap'], compareNext: ['nd'], comparePrev: ['pd'], compareFormat: ['fmt'], compareMinify: ['min'],
+    compareLoad: ['cmp'], comparePick: ['pick'], compareRun: ['run'], compareSwap: ['swap'], compareNext: ['nd'], comparePrev: ['pd'], compareFormat: ['fmt'], compareMinify: ['min'],
     copyRaw: ['cp'], copyFence: ['cpmd'], copyFormatted: ['cpf'], copyMinified: ['cpm'], copyXml: ['cpx'], copyAsJson: ['cpj'], copyCsv: ['cpc'], copyTableJson: ['cpj'], copyMarkdown: ['cpmd'],
     saveFile: ['dl'], saveCsv: ['dlc'], saveXlsx: ['dlx'],
     exportAll: ['exp'], importAll: ['imp'], exportSettings: ['exps'], importSettings: ['imps'],
@@ -1293,7 +1294,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
      Sample data for the palette's "Add sample" commands.
      Generated from fixed seeds, so every run produces exactly the same text.
      ========================================================================= */
-  var SAMPLE_INFO = { code: ['15 lines', '400+ lines'], json: ['random, small', 'random, 400 records'], xlsx: ['random, 10 rows', 'random, 1,000 rows'] };
+  var SAMPLE_INFO = { code: ['random language, short', 'random language, 150+ lines'], json: ['random, small', 'random, 400 records'], xlsx: ['random, 10 rows', 'random, 1,000 rows'] };
 
   function sampleRng(seed) {
     var x = seed >>> 0;
@@ -1598,7 +1599,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
 
   function buildSample(tool, long) {
-    if (tool === 'code') return { text: sampleCode(long), name: long ? 'Sample (long)' : 'Sample' };
+    if (tool === 'code') {   // a random language each time (falls back to the built-in JavaScript sample if samples.js didn't load)
+      var rl = sampleLang(SAMPLE_LANGS[Math.floor(Math.random() * SAMPLE_LANGS.length)], long);
+      return rl || { text: sampleCode(long), name: long ? 'Sample (long)' : 'Sample' };
+    }
     return tool === 'json' ? sampleJson(long) : sampleCsv(long);
   }
   // Adds the sample as a new entry in the tool's Viewer (directly when same-origin, otherwise by message).
@@ -2777,6 +2781,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     if (tc.pane === 'compare' && pane !== 'compare') { announce('Open the Compare tab of ' + META[ct].short + ' first'); return; }
     if (tc.pick) { startPick(tc); return; }
     apiCall(ct, tc.call[0], tc.call.slice(1)).then(function (res) {
+      if (tc.cmp) { announce(res === 'on' ? 'Compare: click the first entry, then the second' : res === 'off' ? 'Compare selection cancelled' : res === 'few' ? 'Compare needs at least two entries in ' + META[ct].short : 'Nothing to do here'); if (res === 'few') toast('Compare needs at least two entries. Add another one first.'); return; }
       if (res === undefined || res === false || res === null) announce('Nothing to do here');
       else announce(typeof res === 'string' ? res : (tc.say || 'Done'));
     });
