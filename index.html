@@ -81,15 +81,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
 </script>
 
 <style>
-  /* Included fonts (SIL Open Font License, see fonts/). A face is only downloaded if it is actually used. */
-  @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: local("JetBrains Mono"), local("JetBrainsMono-Regular"), url("fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-  @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: local("JetBrains Mono Bold"), local("JetBrainsMono-Bold"), url("fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-  @font-face { font-family: "Fira Code"; font-style: normal; font-weight: 400; font-display: swap; src: local("Fira Code"), local("FiraCode-Regular"), url("fonts/fira-code-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-  @font-face { font-family: "Fira Code"; font-style: normal; font-weight: 700; font-display: swap; src: local("Fira Code Bold"), local("FiraCode-Bold"), url("fonts/fira-code-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-  @font-face { font-family: "Source Code Pro"; font-style: normal; font-weight: 400; font-display: swap; src: local("Source Code Pro"), local("SourceCodePro-Regular"), url("fonts/source-code-pro-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-  @font-face { font-family: "Source Code Pro"; font-style: normal; font-weight: 700; font-display: swap; src: local("Source Code Pro Bold"), local("SourceCodePro-Bold"), url("fonts/source-code-pro-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-  @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: local("IBM Plex Mono"), local("IBMPlexMono"), url("fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-  @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 700; font-display: swap; src: local("IBM Plex Mono Bold"), local("IBMPlexMono-Bold"), url("fonts/ibm-plex-mono-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 
   :root {
     --bg: #1e1e1e;
@@ -720,38 +711,18 @@ window.addEventListener('beforeinstallprompt', function (e) {
   var TARGET = IS_FILE ? '*' : SELF_ORIGIN;
   var BUILD = '2026-09-20.1';   // appended to the tool URLs so a cached older copy is never used with this page
 
-  // 'bundled' fonts ship with Dev Toolkit (fonts/ folder) and work everywhere; 'local' fonts are proprietary or
-  // platform fonts, so they are only offered when they are actually installed on this device.
-  var FONTS = [
-    ['default', 'Default'],
-    ['system', 'System monospace'],
-    ['jetbrains', 'JetBrains Mono', 'JetBrains Mono', 'bundled'],
-    ['fira', 'Fira Code', 'Fira Code', 'bundled'],
-    ['source', 'Source Code Pro', 'Source Code Pro', 'bundled'],
-    ['plex', 'IBM Plex Mono', 'IBM Plex Mono', 'bundled'],
-    ['cascadia', 'Cascadia Code', 'Cascadia Code', 'local'],
-    ['consolas', 'Consolas', 'Consolas', 'local'],
-    ['menlo', 'Menlo', 'Menlo', 'local'],
-    ['sfmono', 'SF Mono', 'SF Mono', 'local'],
-    ['custom', 'Custom…']
-  ];
-  var FONT_IDS = FONTS.map(function (f) { return f[0]; });
+  // Font choice: the tool's own default, or the device's monospace font.
+  var FONTS = [['default', 'Default'], ['system', 'System monospace']];
+  var FONT_IDS = FONTS.map(function (f) { return f[0]; });   // anything else in an old settings file falls back to Default
 
   function pick(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt; }
   function num(v, min, max, dflt) { v = Number(v); return isFinite(v) ? Math.min(max, Math.max(min, v)) : dflt; }
-  function cleanFontText(v) { return String(v == null ? '' : v).replace(/[^\p{L}\p{N} ,._-]/gu, '').slice(0, 80); }
-  function isBundled(id) { for (var i = 0; i < FONTS.length; i++) if (FONTS[i][0] === id) return FONTS[i][3] === 'bundled'; return false; }
-  function familyOf(id) { for (var i = 0; i < FONTS.length; i++) if (FONTS[i][0] === id) return FONTS[i][2] || null; return null; }
 
   // '' means "keep the tool's own default font".
   function stackFor(sec) {
     if (sec.font === 'default') return '';
     if (sec.font === 'system') return 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
-    var names = [];
-    if (sec.font === 'custom') names = cleanFontText(sec.customFont).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-    else { var f = familyOf(sec.font); if (f) names = [f]; }
-    if (!names.length) return '';
-    return names.map(function (n) { return '"' + n + '"'; }).join(', ') + ', ' + DEFAULT_STACK;
+    return '';
   }
 
   // Rebindable shortcuts. A binding is 'Mod[+Shift][+Alt]+<KeyboardEvent.code>'; Mod is Ctrl (⌘ on a Mac).
@@ -904,9 +875,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
     general: { theme: 'system', uiScale: 100, motion: 'system', contrast: 'normal', splash: true },
     keys: DEFAULT_KEYS,
     palette: { sort: 'none', order: null },   // order: null = not customised yet
-    code: { font: 'default', customFont: '', size: 12, lineHeight: 1.5, tabSize: 4, wrap: false },
-    json: { font: 'default', customFont: '', size: 11, expand: 'all' },
-    xlsx: { font: 'default', customFont: '', size: 11.5, density: 'normal', header: true }
+    code: { font: 'default', size: 12, lineHeight: 1.5, tabSize: 4, wrap: false },
+    json: { font: 'default', size: 11, expand: 'all' },
+    xlsx: { font: 'default', size: 11.5, density: 'normal', header: true }
   };
 
   function sanitize(raw) {
@@ -925,16 +896,16 @@ window.addEventListener('beforeinstallprompt', function (e) {
       keys: {}, aliases: {},
       palette: { sort: pick((raw.palette || {}).sort, ['none', 'type', 'alpha', 'custom'], 'none'), order: null },
       code: {
-        font: pick(c.font, FONT_IDS, 'default'), customFont: cleanFontText(c.customFont),
+        font: pick(c.font, FONT_IDS, 'default'),
         size: num(c.size, 9, 24, 12), lineHeight: pick(Number(c.lineHeight), [1.3, 1.5, 1.7], 1.5),
         tabSize: pick(Number(c.tabSize), [2, 4, 8], 4), wrap: !!c.wrap
       },
       json: {
-        font: pick(j.font, FONT_IDS, 'default'), customFont: cleanFontText(j.customFont),
+        font: pick(j.font, FONT_IDS, 'default'),
         size: num(j.size, 9, 24, 11), expand: pick(String(j.expand), ['all', '1', '2', '3'], 'all')
       },
       xlsx: {
-        font: pick(x.font, FONT_IDS, 'default'), customFont: cleanFontText(x.customFont),
+        font: pick(x.font, FONT_IDS, 'default'),
         size: num(x.size, 9, 24, 11.5), density: pick(x.density, ['compact', 'normal', 'relaxed'], 'normal'),
         header: x.header !== false
       }
@@ -1929,21 +1900,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
   var SECTIONS = [['general', 'General'], ['keys', 'Keyboard shortcuts'], ['code', 'Code Viewer'], ['json', 'JSON / XML'], ['xlsx', 'CSV / XLSX']];
   var section = 'general';
   var pendingScroll = null;
-  var fontCache = {};
-
-  function fontInstalled(name) {
-    if (name in fontCache) return fontCache[name];
-    var ok = false;
-    try {
-      var ctx = document.createElement('canvas').getContext('2d'), sample = 'mmmmmmmmmmlli1WWWW@#%0O';
-      ok = ['monospace', 'serif', 'sans-serif'].some(function (b) {
-        ctx.font = '72px ' + b; var w0 = ctx.measureText(sample).width;
-        ctx.font = '72px "' + name + '", ' + b; return ctx.measureText(sample).width !== w0;
-      });
-    } catch (e) {}
-    return (fontCache[name] = ok);
-  }
-
   var SCHEMA = {
     general: [
       { group: 'Appearance' },
@@ -2019,28 +1975,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
       cb.checked = !!cur;
       cb.addEventListener('change', function () { setVal(sec, spec.key, cb.checked, { keepControls: true }); });
       wrap.appendChild(h('label', { class: 'switch', for: lid, style: 'margin-bottom:0' }, [cb, h('span', { class: 'track' }), h('span', { text: spec.label })]));
-    } else if (spec.type === 'font') {
-      wrap.appendChild(h('label', { for: lid, text: spec.label }));
-      var sel = h('select', { class: 'field', id: lid, 'data-fk': focusKey(sec, spec.key) });
-      var gBuilt = h('optgroup', { label: 'Included with Dev Toolkit' }), gLocal = h('optgroup', { label: 'Installed on this device' });
-      FONTS.forEach(function (f) {
-        var o = h('option', { value: f[0], text: f[1] });
-        if (cur === f[0]) o.selected = true;
-        if (f[3] === 'bundled') gBuilt.appendChild(o);
-        else if (f[3] === 'local') { if (cur === f[0] || fontInstalled(f[2])) gLocal.appendChild(o); }
-        else sel.appendChild(o);
-      });
-      var custom = sel.querySelector('option[value="custom"]');
-      sel.insertBefore(gBuilt, custom);
-      if (gLocal.children.length) sel.insertBefore(gLocal, custom);
-      sel.addEventListener('change', function () { setVal(sec, 'font', sel.value); });
-      wrap.appendChild(sel);
-      if (settings[sec].font === 'custom') {
-        var ci = h('input', { class: 'field', type: 'text', style: 'margin-top:0.5rem', placeholder: 'e.g. Iosevka, Hack', 'aria-label': 'Custom font names', value: settings[sec].customFont, 'data-fk': focusKey(sec, 'customFont') });
-        ci.addEventListener('input', function () { setVal(sec, 'customFont', ci.value, { keepControls: true }); });
-        wrap.appendChild(ci);
-      }
-      wrap.appendChild(h('p', { class: 'help', text: 'Included fonts work on any device. Other fonts are listed only if they’re installed here; with Custom, any installed font name works.' }));
+    } else if (spec.type === 'font') {   // stored as 'default' or 'system'; shown as one switch
+      var fcb = h('input', { type: 'checkbox', role: 'switch', id: lid, 'data-fk': focusKey(sec, spec.key) });
+      fcb.checked = cur === 'system';
+      fcb.addEventListener('change', function () { setVal(sec, 'font', fcb.checked ? 'system' : 'default', { keepControls: true }); });
+      wrap.appendChild(h('label', { class: 'switch', for: lid, style: 'margin-bottom:0' }, [fcb, h('span', { class: 'track' }), h('span', { text: 'Use my system’s monospace font' })]));
+      wrap.appendChild(h('p', { class: 'help', text: 'Off: the font Dev Toolkit ships with. On: your device’s own code font (for example SF Mono on a Mac, Consolas on Windows).' }));
       return wrap;
     }
     if (spec.help) wrap.appendChild(h('p', { class: 'help', text: spec.help }));
@@ -2418,10 +2358,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
       });
       pv.innerHTML = t + '</tbody></table>';
       note.textContent = sec.header ? 'First row is shown as the header.' : 'Columns are lettered; the first row is regular data.';
-    }
-    if (section !== 'general' && sec.font !== 'default' && sec.font !== 'system' && !isBundled(sec.font)) {
-      var fam = sec.font === 'custom' ? cleanFontText(sec.customFont).split(',')[0].trim() : familyOf(sec.font);
-      if (fam && !fontInstalled(fam)) note.textContent += ' “' + fam + '” isn’t installed here, so the default font is shown.';
     }
   }
 

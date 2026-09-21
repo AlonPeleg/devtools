@@ -120,8 +120,7 @@ Open it, press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type `add sample`, and press Enter 
 - **Command palette** for almost everything, with commands that depend on the tool and tab you are in.
 - **Keyboard-first**: switch tools, flip between Viewer and Compare, upload, and open settings without touching the mouse.
 - **Light, dark or system theme**, high-contrast mode, reduced-motion mode, and an interface size from 90% to 150%.
-- **Per-tool settings** with a live preview: font, font size, line spacing, tab width, wrap, tree depth, row density and more.
-- Four included programmer fonts (no download needed, and nothing is fetched until you pick one).
+- **Per-tool settings** with a live preview: font (a switch for your system’s monospace font), font size, line spacing, tab width, wrap, tree depth, row density and more.
 - **Your work is saved automatically** in your browser, with one-click backup and restore.
 - **Undo for deletes.** Removing an entry with its red × (or Clear all) shows “deleted · Undo” for 10 seconds; an entry comes back in the same place.
 - **Installable** as a desktop app from Chrome or Edge.
@@ -249,7 +248,7 @@ Open them with the gear icon, <kbd>Ctrl</kbd>+<kbd>,</kbd>, or the palette. Chan
 | **JSON / XML** | Export / import your entries, font, font size, how many tree levels open by default |
 | **CSV / XLSX** | Export / import your files, font, font size, row density, treat the first row as a header by default |
 
-**Fonts.** JetBrains Mono, Fira Code, Source Code Pro and IBM Plex Mono are included in [`fonts/`](fonts) and work on any device. Cascadia Code, Consolas, Menlo and SF Mono are offered only if they are installed on your machine. With **Custom** you can name any installed font.
+**Fonts.** Each tool has one switch, **Use my system’s monospace font**: off is the tool’s own default font, on is your device’s code font (`ui-monospace`, then SF Mono, Menlo, Consolas, Liberation Mono, and finally the browser’s `monospace`; the first one your device has is used). No font files are shipped, so nothing extra is downloaded.
 
 ---
 
@@ -374,7 +373,6 @@ devtools/
 ├── samples.js              Sample data (code, JSON and table templates) used by the sample commands
 ├── manifest.json           Web app manifest (name, colours, icons) for "Install app"
 ├── sw.js                   Tiny service worker that only enables installing; caches nothing
-├── fonts/                  Included fonts (.woff2) and their licenses
 ├── docs/                   Screenshots used in this README
 ├── favicon.svg / .ico      Browser-tab icon
 ├── apple-touch-icon.png    iPhone / iPad home-screen icon
@@ -482,7 +480,6 @@ Issues and pull requests are welcome, whether it is a bug report, a small fix or
 |---|---|---|
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) 0.45.0 | Code editing (loaded from jsDelivr) | MIT |
 | [SheetJS Community Edition](https://sheetjs.com/) 0.18.5 | Reading Excel files (loaded from cdnjs) | Apache-2.0 |
-| [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), [Fira Code](https://github.com/tonsky/FiraCode), [Source Code Pro](https://github.com/adobe-fonts/source-code-pro), [IBM Plex Mono](https://github.com/IBM/plex) | Included fonts, in [`fonts/`](fonts) | SIL Open Font License 1.1 (see the license files there) |
 | [Tesseract.js](https://github.com/naptha/tesseract.js) 7.0.0, tesseract.js-core and the English language data | Reading text from screenshots (loaded from jsDelivr only when OCR is used) | Apache-2.0 |
 | [Octicons](https://github.com/primer/octicons) | The GitHub mark in the top bar | MIT |
 
