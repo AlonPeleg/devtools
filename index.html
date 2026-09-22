@@ -75,6 +75,7 @@
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
   window.__dtInstall = e;
+  window.__dtInstallPromptSeen = true;   // permanent record that it fired at least once, even after __dtInstall is later consumed/cleared
   window.dispatchEvent(new Event('dt-install-available'));
 });
 </script>
@@ -283,13 +284,17 @@ window.addEventListener('beforeinstallprompt', function (e) {
     background: var(--accent); color: var(--accent-fg);
   }
   .share-card .sc-icon svg { width: 1.0625rem; height: 1.0625rem; }
-  .share-card .sc-body { flex: 1 1 auto; min-width: 0; padding-right: 1.25rem; }
-  .share-card .sc-title { font-size: 0.8125rem; font-weight: 500; color: var(--text-dim); line-height: 1.35; }
+  /* The text block is centered as a unit (each line shrinks to its own width and the group sits
+     centered over the now-centered button row below it), but text stays left-aligned within its
+     own line -- this only shows up if a line is long enough to wrap, which title/meta can. */
+  .share-card .sc-body { flex: 1 1 auto; min-width: 0; padding-right: 1.25rem; display: flex; flex-direction: column; align-items: center; }
+  .share-card .sc-title { width: max-content; max-width: 100%; text-align: left; font-size: 0.8125rem; font-weight: 500; color: var(--text-dim); line-height: 1.35; }
   .share-card .sc-name {
+    width: max-content; max-width: 100%; text-align: left;
     margin-top: 0.25rem; font-size: 0.9375rem; font-weight: 700; color: var(--text-bright); line-height: 1.3;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .share-card .sc-meta { margin-top: 0.1875rem; font-size: 0.75rem; color: var(--text-dim); }
+  .share-card .sc-meta { width: max-content; max-width: 100%; text-align: left; margin-top: 0.1875rem; font-size: 0.75rem; color: var(--text-dim); }
   .share-card .sc-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
   .share-card .sc-actions .btn { flex: 0 0 auto; min-width: 7rem; text-align: center; }
   .share-card .sc-actions .btn.sc-open { display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; }
@@ -3211,19 +3216,39 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function isStandalone() {
     return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
   }
-  // A real "is it installed" signal (Chrome/Edge only, feature-detected via related_applications
-  // in manifest.json) -- more reliable than inferring it from whether the install prompt fired.
-  // null = not yet known (or unsupported browser); true/false once resolved.
+  // "Is it installed" is decided from two Chrome/Edge-only signals, since getInstalledRelatedApps()
+  // alone has proven unreliable in the field (it can resolve an empty list, or resolve late, for an
+  // app that plainly is installed):
+  //  1. getInstalledRelatedApps() (feature-detected via related_applications in manifest.json) --
+  //     authoritative when it says *installed*, but not fully trusted when it says *not installed*.
+  //  2. Whether "beforeinstallprompt" fires. Chrome/Edge only fire this when the app is installable
+  //     and NOT already installed -- so it firing is an authoritative "not installed" signal, and it
+  //     staying silent for a couple of seconds on a browser that supports it at all is itself a good
+  //     sign we're already installed (nothing else would suppress it).
+  // null = not yet known (or an unsupported browser, e.g. Firefox/Safari -- no signal there at all).
   var appInstalled = isStandalone() ? true : null;   // already running standalone proves it on its own
+  var installableBrowser = !!navigator.getInstalledRelatedApps;   // Chrome/Edge/Opera/Samsung Internet family
+  function setAppInstalled(v) {
+    if (appInstalled === v) return;
+    appInstalled = v;
+    refreshInstallUi();
+    refreshShareCardOpenBtn();   // may need to add/remove the "Open in app" button on a card already showing
+  }
   function refreshAppInstalled() {
     if (!navigator.getInstalledRelatedApps) return;
     navigator.getInstalledRelatedApps().then(function (apps) {
-      appInstalled = apps.length > 0;
-      refreshInstallUi();
-      refreshShareCardOpenBtn();   // the promise can resolve after a share card is already showing
+      if (apps.length > 0) setAppInstalled(true);
     }).catch(function () {});
   }
   refreshAppInstalled();
+  if (window.__dtInstallPromptSeen) setAppInstalled(false);   // beforeinstallprompt already fired before this ran
+  else if (installableBrowser) {
+    setTimeout(function () {
+      // Still nothing after a couple of seconds, on a browser that would otherwise offer to
+      // install us: read that silence as "already installed" rather than "never checked".
+      if (!window.__dtInstallPromptSeen && !isStandalone() && appInstalled !== true) setAppInstalled(true);
+    }, 1800);
+  }
   function canInstall() { return !!window.__dtInstall && !isStandalone() && appInstalled !== true; }
   function refreshInstallUi() { if (settingsOpen && section === 'general') renderControls(); }
   function runInstall() {
@@ -3246,8 +3271,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
       ])
     ]);
   }
-  window.addEventListener('dt-install-available', refreshInstallUi);
-  window.addEventListener('appinstalled', function () { window.__dtInstall = null; appInstalled = true; announce('Dev Toolkit was installed as an app'); refreshInstallUi(); });
+  // beforeinstallprompt firing (see the early listener in <head>, which sets both of these even if
+  // it fires before this script runs) is itself the authoritative "not installed" signal above.
+  window.addEventListener('dt-install-available', function () { setAppInstalled(false); refreshInstallUi(); });
+  window.addEventListener('appinstalled', function () { window.__dtInstall = null; setAppInstalled(true); announce('Dev Toolkit was installed as an app'); refreshInstallUi(); });
   // The service worker only exists so the browser offers installing; it caches nothing (see sw.js).
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
