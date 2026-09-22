@@ -1312,9 +1312,19 @@ window.addEventListener('beforeinstallprompt', function (e) {
         if (splashShown()) dismissSplash();
         activate(order[0], { silent: true });   // the tab for the first file becomes the visible one; the rest load quietly behind it
         order.forEach(function (t) { queueLaunchFiles(t, byTool[t]); });
+        // A launch is often followed by closing the window again quickly (e.g. testing "Open with" on
+        // several files in a row); the tool's own save is debounced and only flushed on its OWN pagehide,
+        // which is not guaranteed to finish an async IndexedDB write if the whole window is torn down at
+        // the same time. Flushing here shortly after the file is added — well before a person could react
+        // and close the window — makes the save durable long before that becomes a risk.
+        setTimeout(flushFrames, 900);
       }).catch(function () {});
     });
   }
+  // General safety net: flush any pending tool save as soon as the window is being hidden or closed,
+  // not just when a tool notices its own pagehide (belt-and-braces alongside the launch-time flush above).
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushFrames(); });
+  window.addEventListener('pagehide', function () { flushFrames(); });
 
   /* =========================================================================
      Sample data for the palette's "Add sample" commands.
