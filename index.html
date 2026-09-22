@@ -1148,17 +1148,23 @@ window.addEventListener('beforeinstallprompt', function (e) {
     if (settingsOpen) { if (!(opts && opts.keepControls)) renderControls(); renderPreview(); }
   }
   // A short message at the bottom of the window, with an optional action (e.g. Undo).
+  // actionLabel is normally a single string (the common case, paired with onAction) -- but can
+  // also be an array of { label, onClick } for two or more inline actions in one toast (e.g.
+  // "Open in app" + "Dismiss" on a shared comparison); onAction/ms still work as the 3rd/4th
+  // params either way, since each array entry carries its own onClick. An action with no onClick
+  // just closes the toast, i.e. a plain Dismiss.
   function toast(message, actionLabel, onAction, ms) {
     var t = document.createElement('div');
     t.className = 'toast'; t.setAttribute('role', 'status');
     t.appendChild(document.createTextNode(message));
     var timer;
     function gone() { clearTimeout(timer); t.classList.add('hide'); setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 220); }
-    if (actionLabel) {
-      var b = document.createElement('button'); b.type = 'button'; b.textContent = actionLabel;
-      b.addEventListener('click', function () { gone(); if (onAction) onAction(); });
+    var actions = Array.isArray(actionLabel) ? actionLabel : (actionLabel ? [{ label: actionLabel, onClick: onAction }] : []);
+    actions.forEach(function (a) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = a.label;
+      b.addEventListener('click', function () { gone(); if (a.onClick) a.onClick(); });
       t.appendChild(b);
-    }
+    });
     document.body.appendChild(t);
     timer = setTimeout(gone, ms || 8000);
   }
@@ -3325,6 +3331,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
      lacks CompressionStream). cleanUrl() (below) strips the hash from the address bar either way,
      so this only ever gets one shot at a given link. ---------- */
   var TYPE_NOUN = { code: 'Code snippet', json: 'JSON snippet', xlsx: 'XLSX snippet' };
+  var COMPARE_ARTICLE_NOUN = { code: 'a code comparison', json: 'a JSON comparison', xlsx: 'an XLSX comparison' };
   var SHARE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg>';
   // "External link" glyph (open-in-new-window box + arrow) so "Open in app" reads at a glance as
   // leaving this tab for another window/app, not just another in-page action.
@@ -3529,12 +3536,26 @@ window.addEventListener('beforeinstallprompt', function (e) {
       if (!payload || TOOLS.indexOf(payload.t) < 0) return;
       activate(payload.t, { silent: true });
       if (payload.k === 'c') {
-        // Nothing here is saved to an entry list, so it's safe to just show it -- no confirmation needed.
+        // Nothing here is saved to an entry list, so it's safe to just load it straight into the
+        // panels -- no Add/Dismiss confirmation needed, unlike an entry share below. A center card
+        // (like the entry one) is too heavy for this, though -- there's nothing to decide, the
+        // comparison is already showing right behind it. So this stays a toast, just with an
+        // "Open in app" action added in when that would mean something, so a compare link still
+        // gets the same hand-off chance an entry link does.
         whenToolReady(payload.t, function (f) {
           setInnerTab(payload.t, 'compare');
           postTo(f, { __devToolkitCmd: 'loadSharedCompare', data: { a: payload.a, b: payload.b } });
         });
-        toast('Someone shared a comparison with you — nothing has been saved.', null, null, 8000);
+        var articleNoun = COMPARE_ARTICLE_NOUN[payload.t] || 'a comparison';
+        if (appInstalled === true && !isStandalone()) {
+          var openUrlC = location.origin + location.pathname + hash;
+          toast('Someone shared ' + articleNoun + ' with you.', [
+            { label: 'Open in app', onClick: function () { handleOpenInAppClick(openUrlC); } },
+            { label: 'Dismiss' }
+          ], null, 10000);
+        } else {
+          toast('Someone shared ' + articleNoun + ' with you — nothing has been saved.', null, null, 8000);
+        }
       } else if (payload.k === 'e') {
         var name = (payload.d && payload.d.n) || 'this';
         var noun = TYPE_NOUN[payload.t] || 'Snippet';
