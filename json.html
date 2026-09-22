@@ -163,7 +163,7 @@
             // Saves are held back until every stored entry is back in memory; otherwise a save that runs
             // half-way through loading would look like "the user deleted the rest".
             ready = true;
-            if (pendingBeforeReady) { pendingBeforeReady = false; run(); }   // flush immediately: a save requested before load finished must not wait out a fresh debounce window
+            if (pendingBeforeReady) { pendingBeforeReady = false; schedule(250); }
         }
 
         function migrateLegacy(db) {
@@ -2034,21 +2034,15 @@ function exportLocalStorageBackup() {
 
         function handleJsonFileUpload(fileList) {
             if (!fileList || fileList.length === 0) return;
-            let pending = fileList.length;
-            // Once every file in this batch has settled, flush to IndexedDB immediately instead of
-            // waiting out the normal 250ms debounce -- a page opened via "Open with" can be closed by
-            // the user within that window, and a scheduled-but-not-yet-run save is lost when that happens.
-            const settle = () => { pending--; if (pending <= 0) dtStore.flush(); };
             Array.from(fileList).forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const raw = (e.target.result || '').trim();
-                    if (!raw) { settle(); return; }
+                    if (!raw) return;
                     const name = file.name.replace(/\.[^/.]+$/, '');
                     processInput(raw, name);
-                    settle();
                 };
-                reader.onerror = () => { alert('Failed to read file: ' + file.name); settle(); };
+                reader.onerror = () => alert('Failed to read file: ' + file.name);
                 reader.readAsText(file);
             });
             const fileInput = document.getElementById('jsonFileInput');

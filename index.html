@@ -1150,7 +1150,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
   var hello = {};
   var innerTab = {};   // last Viewer/Compare tab a tool reported ('viewer' | 'compare')
   var frameLoaded = {}, wantInput = {};   // wantInput: put the cursor in the paste box as soon as that tool finishes loading
-  var pendingUploads = {};   // tool -> files waiting for that tool's iframe to finish loading (used by "Open with Dev Toolkit")
   var active = null;
 
   function lastTool() { try { var t = localStorage.getItem(LAST_TAB_KEY); return TOOLS.indexOf(t) >= 0 ? t : null; } catch (e) { return null; } }
@@ -1168,7 +1167,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
       pushStateToFrame(iframe);
       if (active === tool && !overlayOpen() && !splashShown()) { try { iframe.contentWindow.focus(); } catch (e) {} }
       if (wantInput[tool] && active === tool && !overlayOpen()) focusToolInput(tool);
-      if (pendingUploads[tool] && pendingUploads[tool].length) { var pf = pendingUploads[tool]; delete pendingUploads[tool]; sendFiles(tool, pf); }
     });
     pane.innerHTML = '';
     pane.appendChild(iframe);
@@ -1276,55 +1274,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
     } catch (err) { /* cross-origin: send them by message instead (File objects can be posted) */ }
     postTo(f, { __devToolkitCmd: 'uploadFiles', files: files });
   }
-
-  /* ---------- "Open with Dev Toolkit" (installed app only, Chrome/Edge desktop) -----------
-     A file_handlers entry in manifest.json registers this app for the extensions below; launching
-     one from the OS (double-click, right-click → Open with, or drop onto the app/taskbar icon) fires
-     window.launchQueue instead of a normal navigation. Every other browser leaves launchQueue
-     undefined, so this whole block does nothing there. */
-  var LAUNCH_EXT = {
-    json: ['json', 'xml'],
-    xlsx: ['csv', 'tsv', 'xlsx', 'xls']
-    // anything else (or no extension) falls back to the Code tab, same as its own upload picker
-  };
-  function toolForFile(name) {
-    var m = /\.([a-z0-9]+)$/i.exec(name || ''), ext = m ? m[1].toLowerCase() : '';
-    for (var t in LAUNCH_EXT) if (LAUNCH_EXT[t].indexOf(ext) >= 0) return t;
-    return 'code';
-  }
-  function queueLaunchFiles(tool, files) {
-    if (frameLoaded[tool]) { sendFiles(tool, files); return; }
-    pendingUploads[tool] = (pendingUploads[tool] || []).concat(files);
-    loadPane(tool);   // creates the iframe (even for a tool that isn't the visible tab) so it can receive the files once ready
-  }
-  if ('launchQueue' in window) {
-    window.launchQueue.setConsumer(function (params) {
-      var handles = params && params.files;
-      if (!handles || !handles.length) return;
-      Promise.all(handles.map(function (h) { return h.getFile(); })).then(function (files) {
-        if (!files.length) return;
-        var byTool = {}, order = [];
-        files.forEach(function (file) {
-          var t = toolForFile(file.name);
-          if (!byTool[t]) { byTool[t] = []; order.push(t); }
-          byTool[t].push(file);
-        });
-        if (splashShown()) dismissSplash();
-        activate(order[0], { silent: true });   // the tab for the first file becomes the visible one; the rest load quietly behind it
-        order.forEach(function (t) { queueLaunchFiles(t, byTool[t]); });
-        // A launch is often followed by closing the window again quickly (e.g. testing "Open with" on
-        // several files in a row); the tool's own save is debounced and only flushed on its OWN pagehide,
-        // which is not guaranteed to finish an async IndexedDB write if the whole window is torn down at
-        // the same time. Flushing here shortly after the file is added — well before a person could react
-        // and close the window — makes the save durable long before that becomes a risk.
-        setTimeout(flushFrames, 900);
-      }).catch(function () {});
-    });
-  }
-  // General safety net: flush any pending tool save as soon as the window is being hidden or closed,
-  // not just when a tool notices its own pagehide (belt-and-braces alongside the launch-time flush above).
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushFrames(); });
-  window.addEventListener('pagehide', function () { flushFrames(); });
 
   /* =========================================================================
      Sample data for the palette's "Add sample" commands.

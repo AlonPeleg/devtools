@@ -163,7 +163,7 @@
             // Saves are held back until every stored entry is back in memory; otherwise a save that runs
             // half-way through loading would look like "the user deleted the rest".
             ready = true;
-            if (pendingBeforeReady) { pendingBeforeReady = false; run(); }   // flush immediately: a save requested before load finished must not wait out a fresh debounce window
+            if (pendingBeforeReady) { pendingBeforeReady = false; schedule(250); }
         }
 
         function migrateLegacy(db) {
@@ -3430,20 +3430,11 @@ function handleFileUpload(files) {
     const all = Array.from(files);
     const isImage = f => window.DTOcr ? DTOcr.isImage(f) : /^image\//.test(f.type || '');
     all.filter(isImage).forEach(f => DTOcr.enqueue(f));   // screenshots are read with OCR
-    const textFiles = all.filter(f => !isImage(f));
-    let pending = textFiles.length;
-    // Once every file in this batch has been added, flush to IndexedDB immediately instead of
-    // waiting out the normal 250ms debounce -- a page opened via "Open with" can be closed by the
-    // user within that window, and a scheduled-but-not-yet-run save is lost when that happens.
-    const settle = () => { pending--; if (pending <= 0) dtStore.flush(); };
-    if (!pending) return;
-    textFiles.forEach(file => {
+    all.filter(f => !isImage(f)).forEach(file => {
         const reader = new FileReader();
         reader.onload = e => {
             addEntryAndRender(e.target.result, { name: file.name.replace(/\.[^.]+$/, ''), filename: file.name });
-            settle();
         };
-        reader.onerror = settle;
         reader.readAsText(file);
     });
     const input = document.getElementById('fileInput');

@@ -13,21 +13,5 @@
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
-  ],
-  "file_handlers": [
-    {
-      "action": "./",
-      "accept": {
-        "application/json": [".json"],
-        "text/xml": [".xml"],
-        "application/xml": [".xml"],
-        "text/csv": [".csv"],
-        "text/tab-separated-values": [".tsv"],
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-        "application/vnd.ms-excel": [".xls"],
-        "text/plain": [".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".py", ".java", ".c", ".h", ".cpp", ".hpp", ".cc", ".cs", ".go", ".rs", ".php", ".rb", ".kt", ".kts", ".swift", ".sql", ".sh", ".bash", ".yml", ".yaml", ".css", ".scss", ".html", ".htm", ".md", ".txt"]
-      }
-    }
-  ],
-  "launch_handler": { "client_mode": "focus-existing" }
+  ]
 }

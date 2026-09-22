@@ -163,7 +163,7 @@
             // Saves are held back until every stored entry is back in memory; otherwise a save that runs
             // half-way through loading would look like "the user deleted the rest".
             ready = true;
-            if (pendingBeforeReady) { pendingBeforeReady = false; run(); }   // flush immediately: a save requested before load finished must not wait out a fresh debounce window
+            if (pendingBeforeReady) { pendingBeforeReady = false; schedule(250); }
         }
 
         function migrateLegacy(db) {
@@ -1839,13 +1839,7 @@ function exportLocalStorageBackup() {
 
     function handleFileUpload(fileList) {
         if (!fileList || !fileList.length) return;
-        const files = Array.from(fileList);
-        let pending = files.length;
-        // Once every file in this batch has settled, flush to IndexedDB immediately instead of
-        // waiting out the normal 250ms debounce -- a page opened via "Open with" can be closed by
-        // the user within that window, and a scheduled-but-not-yet-run save is lost when that happens.
-        const settle = () => { pending--; if (pending <= 0) dtStore.flush(); };
-        files.forEach(file => {
+        Array.from(fileList).forEach(file => {
             const ext = extOf(file.name);
             const name = file.name.replace(/\.[^/.]+$/, '');
             if (ext === 'xlsx' || ext === 'xls') {
@@ -1863,32 +1857,30 @@ function exportLocalStorageBackup() {
                     } catch (err) {
                         alert('Could not read "' + file.name + '": ' + err.message);
                     }
-                    settle();
                 };
-                reader.onerror = () => { alert('Failed to read file: ' + file.name); settle(); };
+                reader.onerror = () => alert('Failed to read file: ' + file.name);
                 reader.readAsArrayBuffer(file);
             } else {
                 const reader = new FileReader();
                 reader.onload = e => {
                     const raw = (e.target.result || '');
-                    if (!raw.trim()) { settle(); return; }
+                    if (!raw.trim()) return;
                     if (ext === 'json' || looksLikeJson(raw)) {
                         try {
                             const sheet = jsonToSheetRows(JSON.parse(raw));
-                            if (sheet) { addEntry(name, 'json', [makeSheet('Sheet1', sheet.rows, sheet.hasHeader)]); settle(); return; }
-                            if (ext === 'json') { alert('"' + file.name + '" parsed as JSON but isn\'t shaped like a table (expected an array of objects, an array of arrays, or a single object).'); settle(); return; }
+                            if (sheet) { addEntry(name, 'json', [makeSheet('Sheet1', sheet.rows, sheet.hasHeader)]); return; }
+                            if (ext === 'json') { alert('"' + file.name + '" parsed as JSON but isn\'t shaped like a table (expected an array of objects, an array of arrays, or a single object).'); return; }
                             // else: not a .json file, just happened to start with [ or { -- fall through to delimited parsing below
                         } catch (err) {
-                            if (ext === 'json') { alert('Could not parse "' + file.name + '" as JSON: ' + err.message); settle(); return; }
+                            if (ext === 'json') { alert('Could not parse "' + file.name + '" as JSON: ' + err.message); return; }
                             // else fall through: looked JSON-ish but didn't parse, try as delimited text
                         }
                     }
                     const delim = ext === 'tsv' ? '\t' : detectDelimiter(raw);
                     const rows = parseDelimited(raw, delim);
                     addEntry(name, delim === '\t' ? 'tsv' : 'csv', [makeSheet('Sheet1', rows, dtHeaderDefault())]);
-                    settle();
                 };
-                reader.onerror = () => { alert('Failed to read file: ' + file.name); settle(); };
+                reader.onerror = () => alert('Failed to read file: ' + file.name);
                 reader.readAsText(file);
             }
         });
