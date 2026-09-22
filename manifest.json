@@ -6,6 +6,9 @@
   "scope": "./",
   "display": "standalone",
   "launch_handler": { "client_mode": "navigate-existing" },
+  "related_applications": [
+    { "platform": "webapp", "url": "https://alonpeleg.github.io/devtools/manifest.json" }
+  ],
   "background_color": "#1e1e1e",
   "theme_color": "#252526",
   "categories": ["developer", "utilities", "productivity"],

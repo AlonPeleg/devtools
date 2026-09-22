@@ -290,7 +290,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .share-card .sc-meta { margin-top: 0.1875rem; font-size: 0.75rem; color: var(--text-dim); }
-  .share-card .sc-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
+  .share-card .sc-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
   .share-card .sc-close { position: absolute; top: 0.375rem; right: 0.375rem; }
   html[data-motion="reduce"] .share-card { transition: none; }
   @media (prefers-reduced-motion: reduce) { html:not([data-motion="full"]) .share-card { transition: none; } }
@@ -3200,7 +3200,19 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function isStandalone() {
     return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
   }
-  function canInstall() { return !!window.__dtInstall && !isStandalone(); }
+  // A real "is it installed" signal (Chrome/Edge only, feature-detected via related_applications
+  // in manifest.json) -- more reliable than inferring it from whether the install prompt fired.
+  // null = not yet known (or unsupported browser); true/false once resolved.
+  var appInstalled = isStandalone() ? true : null;   // already running standalone proves it on its own
+  function refreshAppInstalled() {
+    if (!navigator.getInstalledRelatedApps) return;
+    navigator.getInstalledRelatedApps().then(function (apps) {
+      appInstalled = apps.length > 0;
+      refreshInstallUi();
+    }).catch(function () {});
+  }
+  refreshAppInstalled();
+  function canInstall() { return !!window.__dtInstall && !isStandalone() && appInstalled !== true; }
   function refreshInstallUi() { if (settingsOpen && section === 'general') renderControls(); }
   function runInstall() {
     var ev = window.__dtInstall;
@@ -3223,7 +3235,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     ]);
   }
   window.addEventListener('dt-install-available', refreshInstallUi);
-  window.addEventListener('appinstalled', function () { window.__dtInstall = null; announce('Dev Toolkit was installed as an app'); refreshInstallUi(); });
+  window.addEventListener('appinstalled', function () { window.__dtInstall = null; appInstalled = true; announce('Dev Toolkit was installed as an app'); refreshInstallUi(); });
   // The service worker only exists so the browser offers installing; it caches nothing (see sw.js).
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
@@ -3278,22 +3290,45 @@ window.addEventListener('beforeinstallprompt', function (e) {
     el.classList.remove('show');
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
   }
-  function shareCard(title, name, meta, onAdd) {
+  // Re-fires a URL as a genuine link click (a real <a> element, real .click()) rather than a
+  // script-only redirect -- the same kind of navigation the browser's own "Open supported links"
+  // already routes into an installed app, so this gives it the best chance of doing that again.
+  function openAsRealLink(url) {
+    var a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+  function shareCard(title, name, meta, onAdd, openUrl) {
     closeShareCard();
     var el = document.createElement('div');
     el.className = 'share-card'; el.setAttribute('role', 'status');
+    // Dev Toolkit is only detected as installed once getInstalledRelatedApps() resolves (see
+    // refreshAppInstalled) -- on a very first share click right after boot that may not have
+    // settled yet, in which case this button just doesn't show. Later clicks always have it.
+    var showOpen = !!openUrl && appInstalled === true;
     el.innerHTML =
       '<div class="sc-icon">' + SHARE_ICON + '</div>' +
       '<div class="sc-body">' +
         '<div class="sc-title">' + esc(title) + '</div>' +
         '<div class="sc-name">' + esc(name) + '</div>' +
         (meta ? '<div class="sc-meta">' + esc(meta) + '</div>' : '') +
-        '<div class="sc-actions"><button type="button" class="btn primary">Add</button><button type="button" class="btn">Dismiss</button></div>' +
+        '<div class="sc-actions">' +
+          '<button type="button" class="btn primary sc-add">Add</button>' +
+          (showOpen ? '<button type="button" class="btn sc-open">Open in app</button>' : '') +
+          '<button type="button" class="btn sc-dismiss">Dismiss</button>' +
+        '</div>' +
       '</div>' +
       '<button type="button" class="icon-btn sc-close" aria-label="Dismiss"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button>';
-    el.querySelector('.sc-actions .btn.primary').addEventListener('click', function () { closeShareCard(); if (onAdd) onAdd(); });
-    el.querySelector('.sc-actions .btn:not(.primary)').addEventListener('click', closeShareCard);
+    el.querySelector('.sc-add').addEventListener('click', function () { closeShareCard(); if (onAdd) onAdd(); });
+    el.querySelector('.sc-dismiss').addEventListener('click', closeShareCard);
     el.querySelector('.sc-close').addEventListener('click', closeShareCard);
+    if (showOpen) {
+      // Left open on purpose: we can't be sure the browser actually captured this into the app
+      // (see the caveat on launch_handler above), so Add/Dismiss stay available right here too.
+      el.querySelector('.sc-open').addEventListener('click', function () { openAsRealLink(openUrl); });
+    }
     document.body.appendChild(el);
     shareCardEl = el;
     requestAnimationFrame(function () { el.classList.add('show'); });
@@ -3346,9 +3381,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
         var name = (payload.d && payload.d.n) || 'this';
         var noun = TYPE_NOUN[payload.t] || 'Snippet';
         var when = fmtShareTime(payload.ts);
+        var openUrl = location.origin + location.pathname + hash;
         shareCard('Someone shared a snippet with you', name, noun + (when ? ' · ' + when : '') + ' · nothing saved yet', function () {
           whenToolReady(payload.t, function (f) { postTo(f, { __devToolkitCmd: 'addSharedEntry', data: payload.d }); });
-        });
+        }, openUrl);
       }
     }).catch(function () {});
   }
