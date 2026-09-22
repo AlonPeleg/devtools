@@ -28,5 +28,6 @@
         "text/plain": [".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".py", ".java", ".c", ".h", ".cpp", ".hpp", ".cc", ".cs", ".go", ".rs", ".php", ".rb", ".kt", ".kts", ".swift", ".sql", ".sh", ".bash", ".yml", ".yaml", ".css", ".scss", ".html", ".htm", ".md", ".txt"]
       }
     }
-  ]
+  ],
+  "launch_handler": { "client_mode": "focus-existing" }
 }
