@@ -282,7 +282,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     background: var(--accent); color: var(--accent-fg);
   }
-  .share-card .sc-icon svg { width: 1.0625rem; height: 1.0625rem; transform: translate(0.75px, -0.75px); }
+  .share-card .sc-icon svg { width: 1.0625rem; height: 1.0625rem; }
   .share-card .sc-body { flex: 1 1 auto; min-width: 0; padding-right: 1.25rem; }
   .share-card .sc-title { font-size: 0.8125rem; font-weight: 500; color: var(--text-dim); line-height: 1.35; }
   .share-card .sc-name {
@@ -290,7 +290,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .share-card .sc-meta { margin-top: 0.1875rem; font-size: 0.75rem; color: var(--text-dim); }
-  .share-card .sc-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .share-card .sc-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
+  .share-card .sc-actions .btn { flex: 0 0 auto; min-width: 7rem; text-align: center; }
+  .share-card .sc-actions .btn.sc-open { display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; }
+  .share-card .sc-actions .btn.sc-open svg { width: 0.75rem; height: 0.75rem; flex: 0 0 auto; }
   .share-card .sc-close { position: absolute; top: 0.375rem; right: 0.375rem; }
   html[data-motion="reduce"] .share-card { transition: none; }
   @media (prefers-reduced-motion: reduce) { html:not([data-motion="full"]) .share-card { transition: none; } }
@@ -514,6 +517,14 @@ window.addEventListener('beforeinstallprompt', function (e) {
   html[data-theme="light"] .btn.danger:hover { background: #a40e26; border-color: #a40e26; color: #fff; }
   html[data-theme="light"] .btn.danger:active { background: #82061e; border-color: #82061e; color: #fff; }
   #dangerBox { margin-top: 1rem; }
+  /* Same bold-outline-that-fills-on-hover treatment as .btn.danger, but built from the theme's
+     own accent tokens (so it already tracks light/dark and any custom palette) instead of a
+     hardcoded color -- used for "Open in app", which deserves to stand out like a danger button
+     without looking like a destructive action. */
+  .btn.accent { background: var(--input); border-color: var(--accent); color: var(--accent-strong); font-weight: 600; }
+  .btn.accent:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .btn.accent:active { filter: brightness(0.92); }
+  .btn.accent:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .meter { height: 0.5rem; border-radius: 999px; background: var(--input); overflow: hidden; border: 1px solid var(--bar-border); }
   .meter > span { display: block; height: 100%; background: var(--accent-strong); min-width: 2px; }
@@ -3209,6 +3220,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     navigator.getInstalledRelatedApps().then(function (apps) {
       appInstalled = apps.length > 0;
       refreshInstallUi();
+      refreshShareCardOpenBtn();   // the promise can resolve after a share card is already showing
     }).catch(function () {});
   }
   refreshAppInstalled();
@@ -3271,6 +3283,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
      so this only ever gets one shot at a given link. ---------- */
   var TYPE_NOUN = { code: 'Code snippet', json: 'JSON snippet', xlsx: 'XLSX snippet' };
   var SHARE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg>';
+  // "External link" glyph (open-in-new-window box + arrow) so "Open in app" reads at a glance as
+  // leaving this tab for another window/app, not just another in-page action.
+  var EXTERNAL_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8.75v3.5A1.25 1.25 0 0 1 10.75 13.5h-6A1.25 1.25 0 0 1 3.5 12.25v-6A1.25 1.25 0 0 1 4.75 5h3.5"/><path d="M9.5 2.5h4v4"/><path d="M13 3 7.25 8.75"/></svg>';
+  var OPEN_IN_APP_LABEL = 'Open in app ' + EXTERNAL_ICON;
   // The timestamp on a shared entry is when the link was made (entries don't carry a
   // "created" date of their own), so this reads as "shared at", not "created at".
   function fmtShareTime(ts) {
@@ -3284,11 +3300,36 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // Not a dialog: no backdrop, nothing behind it is blocked, and Dismiss / the ~30s timeout /
   // just clicking elsewhere in the app all leave it exactly as safe as ignoring the old toast was.
   var shareCardEl = null;
+  var shareCardOpenUrl = null;   // the openUrl the *current* card was built with, so a later API
+                                  // resolution (see refreshShareCardOpenBtn) knows what to link to
   function closeShareCard() {
+    shareCardOpenUrl = null;
     if (!shareCardEl) return;
     var el = shareCardEl; shareCardEl = null;
     el.classList.remove('show');
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
+  }
+  // Whether "Open in app" should show right now: installed (per getInstalledRelatedApps), not
+  // already running as the installed app ourselves (nothing to "open" in that case), and only
+  // meaningful when this card actually carries a link to open.
+  function shouldShowOpenBtn() { return !!shareCardOpenUrl && appInstalled === true && !isStandalone(); }
+  // getInstalledRelatedApps() can resolve after the card is already on screen (it's a first-visit
+  // promise, and a share card can render within a few hundred ms of boot). When it does, sync the
+  // button in place on whatever card is currently showing, rather than leaving it stuck stale.
+  function refreshShareCardOpenBtn() {
+    if (!shareCardEl) return;
+    var actions = shareCardEl.querySelector('.sc-actions');
+    if (!actions) return;
+    var existing = actions.querySelector('.sc-open');
+    var should = shouldShowOpenBtn();
+    if (should && !existing) {
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'btn accent sc-open'; btn.innerHTML = OPEN_IN_APP_LABEL;
+      btn.addEventListener('click', function () { openAsRealLink(shareCardOpenUrl); });
+      actions.insertBefore(btn, actions.firstChild);   // Open in app - Add - Dismiss
+    } else if (!should && existing) {
+      existing.remove();
+    }
   }
   // Re-fires a URL as a genuine link click (a real <a> element, real .click()) rather than a
   // script-only redirect -- the same kind of navigation the browser's own "Open supported links"
@@ -3302,12 +3343,15 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   function shareCard(title, name, meta, onAdd, openUrl) {
     closeShareCard();
+    shareCardOpenUrl = openUrl || null;
     var el = document.createElement('div');
     el.className = 'share-card'; el.setAttribute('role', 'status');
     // Dev Toolkit is only detected as installed once getInstalledRelatedApps() resolves (see
     // refreshAppInstalled) -- on a very first share click right after boot that may not have
-    // settled yet, in which case this button just doesn't show. Later clicks always have it.
-    var showOpen = !!openUrl && appInstalled === true;
+    // settled yet, in which case this button just doesn't show yet; refreshShareCardOpenBtn()
+    // adds it in place once the promise does resolve. And when we're already running as the
+    // installed app (isStandalone), there's nothing to "open" -- we're already in it.
+    var showOpen = shouldShowOpenBtn();
     el.innerHTML =
       '<div class="sc-icon">' + SHARE_ICON + '</div>' +
       '<div class="sc-body">' +
@@ -3315,8 +3359,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
         '<div class="sc-name">' + esc(name) + '</div>' +
         (meta ? '<div class="sc-meta">' + esc(meta) + '</div>' : '') +
         '<div class="sc-actions">' +
+          (showOpen ? '<button type="button" class="btn accent sc-open">' + OPEN_IN_APP_LABEL + '</button>' : '') +
           '<button type="button" class="btn primary sc-add">Add</button>' +
-          (showOpen ? '<button type="button" class="btn sc-open">Open in app</button>' : '') +
           '<button type="button" class="btn sc-dismiss">Dismiss</button>' +
         '</div>' +
       '</div>' +
@@ -3428,6 +3472,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
     if (h) handleShareHash(h);
   });
   if (incomingShareHash) {
+    // Best-effort: if the browser just launched/switched to us (the installed app) for this
+    // link, ask for focus. This can't be relied on -- there's no web API to force focus onto a
+    // window from outside it, so whether the OS/browser actually brings this window to the
+    // front (vs. flashing it and returning to whatever was focused before) is entirely up to
+    // them, and varies by OS and browser build. This just gives it a nudge when we're allowed to.
+    if (isStandalone()) { try { window.focus(); } catch (e) {} }
     if (bus) {
       // Give any already-open Dev Toolkit tab ~220ms to answer. If one does, hand the share
       // to it and try to close this new, now-redundant tab. If none answers (or close() is
