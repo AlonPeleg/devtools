@@ -3547,15 +3547,29 @@ window.addEventListener('beforeinstallprompt', function (e) {
           postTo(f, { __devToolkitCmd: 'loadSharedCompare', data: { a: payload.a, b: payload.b } });
         });
         var articleNoun = COMPARE_ARTICLE_NOUN[payload.t] || 'a comparison';
-        if (appInstalled === true && !isStandalone()) {
-          var openUrlC = location.origin + location.pathname + hash;
-          toast('Someone shared ' + articleNoun + ' with you.', [
-            { label: 'Open in app', onClick: function () { handleOpenInAppClick(openUrlC); } },
-            { label: 'Dismiss' }
-          ], null, 10000);
-        } else {
-          toast('Someone shared ' + articleNoun + ' with you — nothing has been saved.', null, null, 8000);
-        }
+        // appInstalled can still be null (undecided) right here -- a compare link opened fresh
+        // gets to this point well before getInstalledRelatedApps() necessarily resolves on a real
+        // device (it's a native OS query, not the instant promise a local test mocks), and can be
+        // up to ~1800ms out from the last-resort silence fallback too (see appInstalled above).
+        // Deciding immediately on a still-null appInstalled always fell through to the plain
+        // "nothing has been saved" toast even when the app genuinely was installed, just not
+        // confirmed yet -- so wait (briefly, bounded) for a real answer first instead.
+        var showCompareToastTries = 0;
+        (function showCompareToast() {
+          if (appInstalled === null && installableBrowser && showCompareToastTries++ < 40) {   // ~2s ceiling
+            setTimeout(showCompareToast, 50);
+            return;
+          }
+          if (appInstalled === true && !isStandalone()) {
+            var openUrlC = location.origin + location.pathname + hash;
+            toast('Someone shared ' + articleNoun + ' with you.', [
+              { label: 'Open in app', onClick: function () { handleOpenInAppClick(openUrlC); } },
+              { label: 'Dismiss' }
+            ], null, 10000);
+          } else {
+            toast('Someone shared ' + articleNoun + ' with you — nothing has been saved.', [{ label: 'Dismiss' }], null, 5000);
+          }
+        })();
       } else if (payload.k === 'e') {
         var name = (payload.d && payload.d.n) || 'this';
         var noun = TYPE_NOUN[payload.t] || 'Snippet';
