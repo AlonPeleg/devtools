@@ -273,7 +273,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   /* Center card: a shared entry landed on this device. Not a modal -- no backdrop, nothing behind it is
      blocked, and ignoring it (or letting it time out) adds nothing. Just more visible than a corner toast. */
   .share-card {
-    position: fixed; left: 50%; top: 14vh; z-index: 2500; width: min(25rem, calc(100vw - 2rem));
+    position: fixed; left: 50%; top: 14vh; z-index: 2500; width: min(27rem, calc(100vw - 2rem));
     display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem 1.125rem;
     border-radius: 10px; background: var(--bar-bg); color: var(--text); border: 1px solid var(--bar-border);
     box-shadow: 0 16px 48px var(--shadow); opacity: 0; pointer-events: none;
@@ -296,8 +296,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .share-card .sc-meta { width: max-content; max-width: 100%; text-align: left; margin-top: 0.1875rem; font-size: 0.75rem; color: var(--text-dim); }
-  .share-card .sc-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
-  .share-card .sc-actions .btn { flex: 0 0 auto; min-width: 7rem; text-align: center; }
+  .share-card .sc-meta-sub { font-size: 0.6875rem; opacity: 0.8; margin-top: 0.125rem; }
+  /* Grid, not flex-wrap: grid-auto-flow:column lays out however many buttons there are (2 or 3) as
+     that many equal-width (1fr) columns in a single row -- they can never overflow into a second
+     row the way fixed min-widths under flex-wrap could. */
+  .share-card .sc-actions { margin-top: 0.75rem; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0.5rem; }
+  .share-card .sc-actions .btn { min-width: 0; text-align: center; }
   .share-card .sc-actions .btn.sc-open { display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; }
   .share-card .sc-actions .btn.sc-open svg { width: 0.75rem; height: 0.75rem; flex: 0 0 auto; }
   .share-card .sc-close { position: absolute; top: 0.375rem; right: 0.375rem; }
@@ -3388,12 +3392,18 @@ window.addEventListener('beforeinstallprompt', function (e) {
     // installed app (isStandalone), there's nothing to "open" -- we're already in it.
     var showOpen = shouldShowOpenBtn();
     try { console.log('[dt-install] share card rendered: openUrl=' + !!openUrl + ' appInstalled=' + appInstalled + ' standalone=' + isStandalone() + ' -> showOpen=' + showOpen); } catch (e5) {}
+    // meta can be a single string (one line) or an array of lines -- lines after the first render
+    // smaller/dimmer ("in small print"), for a secondary note like a still-unsaved status.
+    var metaLines = Array.isArray(meta) ? meta : (meta ? [meta] : []);
+    var metaHtml = metaLines.map(function (line, i) {
+      return line ? '<div class="sc-meta' + (i > 0 ? ' sc-meta-sub' : '') + '">' + esc(line) + '</div>' : '';
+    }).join('');
     el.innerHTML =
       '<div class="sc-icon">' + SHARE_ICON + '</div>' +
       '<div class="sc-body">' +
         '<div class="sc-title">' + esc(title) + '</div>' +
         '<div class="sc-name">' + esc(name) + '</div>' +
-        (meta ? '<div class="sc-meta">' + esc(meta) + '</div>' : '') +
+        metaHtml +
         '<div class="sc-actions">' +
           (showOpen ? '<button type="button" class="btn accent sc-open">' + OPEN_IN_APP_LABEL + '</button>' : '') +
           '<button type="button" class="btn primary sc-add">Add</button>' +
@@ -3462,7 +3472,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
         var noun = TYPE_NOUN[payload.t] || 'Snippet';
         var when = fmtShareTime(payload.ts);
         var openUrl = location.origin + location.pathname + hash;
-        shareCard('Someone shared a snippet with you', name, noun + (when ? ' · ' + when : '') + ' · nothing saved yet', function () {
+        var metaLines = [noun + (when ? ' - Created ' + when : ''), 'nothing saved yet'];
+        shareCard('Someone shared a snippet with you', name, metaLines, function () {
           whenToolReady(payload.t, function (f) { postTo(f, { __devToolkitCmd: 'addSharedEntry', data: payload.d }); });
         }, openUrl);
       }
