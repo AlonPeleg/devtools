@@ -3214,15 +3214,72 @@ window.addEventListener('beforeinstallprompt', function (e) {
     try { splash.focus({ preventScroll: true }); } catch (e) {}
   }
 
+  /* ---------- Share links: "#share=<g|r><base64url>" is decoded here and routed to the right
+     tool. The 'g' flag means gzip-compressed, 'r' means the raw JSON bytes (used when a browser
+     lacks CompressionStream). cleanUrl() (below) strips the hash from the address bar either way,
+     so this only ever gets one shot at a given link. ---------- */
+  function shareB64ToBytes(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    var bin = atob(s), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  function decodeSharePayload(enc) {
+    var flag = enc.charAt(0), bytes = shareB64ToBytes(enc.slice(1));
+    if (flag === 'g') {
+      if (!('DecompressionStream' in window)) return Promise.reject(new Error('unsupported'));
+      var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+      return new Response(stream).text().then(function (t) { return JSON.parse(t); });
+    }
+    return Promise.resolve(JSON.parse(new TextDecoder().decode(bytes)));
+  }
+  // Waits for a tool's iframe to finish loading before acting on it -- needed because a share
+  // link can switch to a tool that hasn't been opened yet this session.
+  function whenToolReady(tool, fn) {
+    if (TOOLS.indexOf(tool) < 0) return;
+    var tries = 0;
+    (function attempt() {
+      var f = toolFrame(tool);
+      if (f && frameLoaded[tool]) { fn(f); return; }
+      if (++tries > 150) return;   // ~7.5s: give up quietly rather than loop forever
+      setTimeout(attempt, 50);
+    })();
+  }
+  function handleShareHash(hash) {
+    var m = /^#share=(.+)$/.exec(hash || '');
+    if (!m) return;
+    decodeSharePayload(m[1]).then(function (payload) {
+      if (!payload || TOOLS.indexOf(payload.t) < 0) return;
+      activate(payload.t, { silent: true });
+      if (payload.k === 'c') {
+        // Nothing here is saved to an entry list, so it's safe to just show it -- no confirmation needed.
+        whenToolReady(payload.t, function (f) {
+          setInnerTab(payload.t, 'compare');
+          postTo(f, { __devToolkitCmd: 'loadSharedCompare', data: { a: payload.a, b: payload.b } });
+        });
+        toast('Someone shared a comparison with you — nothing has been saved.', null, null, 8000);
+      } else if (payload.k === 'e') {
+        // Adding a shared entry does change saved data, so it waits for an explicit "Add".
+        var name = (payload.d && payload.d.n) || 'this';
+        toast('Someone shared “' + name + '” with you — nothing saved yet.', 'Add', function () {
+          whenToolReady(payload.t, function (f) { postTo(f, { __devToolkitCmd: 'addSharedEntry', data: payload.d }); });
+        }, 30000);
+      }
+    }).catch(function () {});
+  }
+
   /* =========================================================================
      Boot
      ========================================================================= */
   applyGeneral();
   var start = lastTool() || 'code';
+  var incomingShareHash = location.hash;   // captured before cleanUrl() clears it below
   activate(start, { silent: true, noFocus: true });
   function cleanUrl() { if (location.hash) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } }   // keep the address bar clean
   cleanUrl();
   window.addEventListener('hashchange', cleanUrl);
+  if (incomingShareHash) handleShareHash(incomingShareHash);
 })();
 </script>
 </body>

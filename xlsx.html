@@ -365,6 +365,63 @@
         else if (TOOL === 'xlsx') addEntry(name, 'csv', [makeSheet('Sample', parseDelimited(String(text), ','), dtHeaderDefault())]);
     };
 
+    /* ---------- Share links: pack one entry or a comparison into a compressed, self-contained URL.
+       Nothing leaves the browser except the link itself -- there's no server, so the payload
+       (compressed + base64url-encoded) lives entirely in the URL's #fragment. ---------- */
+    DT.SHARE_WARN_CHARS = 8000;
+    DT.buildShareUrl = function (payload) {
+        var raw = new TextEncoder().encode(JSON.stringify(payload));
+        function b64url(bytes) {
+            var bin = ''; for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+            return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+        var packed = ('CompressionStream' in window)
+            ? new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer().then(function (buf) { return 'g' + b64url(new Uint8Array(buf)); })
+            : Promise.resolve('r' + b64url(raw));
+        return packed.then(function (enc) {
+            var base = (window.top.location.href || location.href).split('#')[0];
+            return { url: base + '#share=' + enc, chars: base.length + 8 + enc.length };
+        });
+    };
+    // Copies a share link -- or, if it's unusually long, shows a small warning with a choice
+    // instead of silently handing back a link that may not paste cleanly everywhere.
+    DT.shareEntry = function (payload, btn, onExportInstead, onCopied) {
+        DT.buildShareUrl(payload).then(function (res) {
+            if (res.chars > DT.SHARE_WARN_CHARS) DT.showShareWarning(res, btn, onExportInstead, onCopied);
+            else DT.copyShareUrl(res.url, btn, onCopied);
+        }).catch(function () { alert('Could not build a share link in this browser.'); });
+    };
+    DT.copyShareUrl = function (url, btn, onCopied) {
+        navigator.clipboard.writeText(url).then(function () {
+            if (onCopied) onCopied();
+            else if (btn && window.flashIcon) window.flashIcon(btn);
+        }).catch(function () {});
+    };
+    DT.showShareWarning = function (res, btn, onExportInstead, onCopied) {
+        var kb = Math.round(res.chars / 1024 * 10) / 10;
+        var t = document.createElement('div');
+        t.setAttribute('role', 'status');
+        t.style.cssText = 'position:fixed;left:50%;bottom:1.25rem;transform:translateX(-50%);z-index:99999;max-width:min(90vw,420px);background:#252526;color:#fff;border:1px solid #3c3c3c;border-radius:6px;padding:0.75rem 0.875rem;font:13px system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.4)';
+        var msg = document.createElement('div');
+        msg.textContent = 'This is large (~' + kb + ' KB) \u2014 the link may not paste reliably everywhere.';
+        msg.style.marginBottom = '0.5rem';
+        t.appendChild(msg);
+        var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:0.75rem;justify-content:flex-end';
+        function mkBtn(label, primary) { var b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.style.cssText = 'font:inherit;font-weight:600;background:none;border:0;cursor:pointer;color:' + (primary ? '#4fc1ff' : '#ccc'); return b; }
+        var done = function () { if (t.parentNode) t.parentNode.removeChild(t); };
+        var copyBtn = mkBtn('Copy anyway', true);
+        copyBtn.addEventListener('click', function () { done(); DT.copyShareUrl(res.url, btn, onCopied); });
+        row.appendChild(copyBtn);
+        if (onExportInstead) {
+            var expBtn = mkBtn('Export as file instead', false);
+            expBtn.addEventListener('click', function () { done(); onExportInstead(); });
+            row.appendChild(expBtn);
+        }
+        t.appendChild(row);
+        document.body.appendChild(t);
+        setTimeout(done, 20000);
+    };
+
     function apply(s, palette) {
         DT.settings = (s && typeof s === 'object') ? s : {};
         if (palette !== undefined) DT.applyPalette(palette);
@@ -414,6 +471,8 @@
             var upload = TOOL === 'json' ? window.handleJsonFileUpload : window.handleFileUpload;
             if (typeof upload === 'function') upload(d.files);
         }
+        else if (d.__devToolkitCmd === 'addSharedEntry' && d.data) { if (typeof window.addSharedEntry === 'function') window.addSharedEntry(d.data); }
+        else if (d.__devToolkitCmd === 'loadSharedCompare' && d.data) { if (typeof window.loadSharedCompare === 'function') window.loadSharedCompare(d.data); }
     });
 
     /* ---------- Tab inserts a tab in text boxes (instead of jumping to the next control) ----------
@@ -997,6 +1056,7 @@
                         <span class="split-toggle-half active" id="compareViewHalfList"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg></span>
                     </button>
                     <button class="btn" onclick="runCompare()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="8" height="10" rx="1.2"/><rect x="6.5" y="3" width="8" height="10" rx="1.2" fill="#ffffff" fill-opacity="0.35"/></svg> Compare</button>
+                    <button type="button" class="btn btn-secondary btn-iconbtn" title="Copy a link to this comparison" onclick="shareCompareLink(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg></button>
                     <button class="btn btn-secondary btn-iconbtn" title="Clear Results" onclick="clearCompareResults()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
@@ -1497,7 +1557,8 @@ function exportLocalStorageBackup() {
         json: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3c-1.5 0-2 1-2 2v4.5c0 1.5-1 2-1 2.5 0 .5 1 1 1 2.5V19c0 1 1 2 2 2M16 3c1.5 0 2 1 2 2v4.5c0 1.5-1 2-1 2.5 0 .5-1 1-1 2.5V19c0 1-1 2-2 2"/></svg>`,
         md: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6.3" x2="14.5" y2="6.3"/><line x1="6.1" y1="6.3" x2="6.1" y2="13.5"/><line x1="10.3" y1="6.3" x2="10.3" y2="13.5"/></svg>`,
         xlsx: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="13" height="13" rx="1.5"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="1.5" y1="10.3" x2="14.5" y2="10.3"/><line x1="6.6" y1="1.5" x2="6.6" y2="14.5"/></svg>`,
-        focus: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg>`
+        focus: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg>`,
+        share: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg>`
     };
 
     /* =========================================================================
@@ -1837,6 +1898,45 @@ function exportLocalStorageBackup() {
         return m ? m[1].toLowerCase() : '';
     }
 
+    function shareEntryLink(entryId, btn) {
+        const entry = findEntry(entryId); if (!entry) return;
+        const payload = { v: 1, k: 'e', t: 'xlsx', d: { n: entry.name || '', y: entry.type, s: entry.sheets.map(s => ({ n: s.name, r: s.allRows, h: s.hasHeader })) } };
+        DT.shareEntry(payload, btn, () => saveAsCsv(entryId));
+    }
+    // Called by the shell after decoding a "#share=" link that points at this tool -- adds the
+    // shared table the same way an upload would (the user already agreed to add it).
+    function addSharedEntry(data) {
+        if (!data) return;
+        const sheets = (data.s || []).map(s => makeSheet(s.n, s.r, s.h));
+        if (!sheets.length) return;
+        addEntry(data.n || '', data.y || 'xlsx', sheets);
+    }
+    function shareCompareLink(btn) {
+        const a = comparePanels['compareLeft'], b = comparePanels['compareRight'];
+        if (!a.allRows.length && !b.allRows.length) { alert('Load a table into Panel A or Panel B first.'); return; }
+        const payload = { v: 1, k: 'c', t: 'xlsx',
+            a: { r: a.allRows, h: a.hasHeader },
+            b: { r: b.allRows, h: b.hasHeader } };
+        DT.shareEntry(payload, btn, null);
+    }
+    // Called by the shell after decoding a "#share=" comparison link -- fills both panels directly,
+    // since nothing here is saved to the entry list, there's nothing that needs an "Add" confirmation.
+    function loadSharedCompare(data) {
+        const a = (data && data.a) || {}, b = (data && data.b) || {};
+        const pa = comparePanels['compareLeft'];
+        pa.allRows = (a.r || []).map(r => r.slice());
+        pa.hasHeader = a.h !== false;
+        pa.sourceEntryId = null; pa.activeCell = null; pa.selectedCell = null;
+        renderComparePanel('compareLeft');
+        const pb = comparePanels['compareRight'];
+        pb.allRows = (b.r || []).map(r => r.slice());
+        pb.hasHeader = b.h !== false;
+        pb.sourceEntryId = null; pb.activeCell = null; pb.selectedCell = null;
+        renderComparePanel('compareRight');
+        const big = ((a.r || []).length + (b.r || []).length) > 5000;
+        if (big) { const results = document.getElementById('compareResults'); if (results) results.innerHTML = 'Large comparison — click "Compare" above to run it.'; }
+        else runCompare();
+    }
     function handleFileUpload(fileList) {
         if (!fileList || !fileList.length) return;
         Array.from(fileList).forEach(file => {
@@ -2046,6 +2146,7 @@ function exportLocalStorageBackup() {
                     <div class="btn-icon" title="Copy as Markdown table" onclick="copyAsMarkdown('${entry.id}', this)">${icons.md}</div>
                     <div class="btn-icon" title="Save as .xlsx" style="color:var(--xlsx-color)" onclick="saveAsXlsx('${entry.id}')">${icons.xlsx}</div>
                     <div class="btn-icon" title="Save as .csv" onclick="saveAsCsv('${entry.id}')">${icons.save}</div>
+                    <div class="btn-icon" title="Copy share link" onclick="shareEntryLink('${entry.id}', this)">${icons.share}</div>
                     <div class="btn-icon" title="Focus" onclick="focusEntry(this)">${icons.focus}</div>
                 </div>
                 <div class="btn-delete" title="Remove" onclick="removeEntry('${entry.id}')">×</div>

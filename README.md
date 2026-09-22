@@ -123,6 +123,7 @@ Open it, press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type `add sample`, and press Enter 
 - **Per-tool settings** with a live preview: font (a switch for your system’s monospace font), font size, line spacing, tab width, wrap, tree depth, row density and more.
 - **Your work is saved automatically** in your browser, with one-click backup and restore.
 - **Undo for deletes.** Removing an entry with its red × (or Clear all) shows “deleted · Undo” for 10 seconds; an entry comes back in the same place.
+- **Share a link.** The share icon on any entry, or on a Compare tab, copies a link that carries the content itself — compressed and packed into the URL, with nothing sent to any server. Opening it on someone else's Dev Toolkit offers to add the entry (nothing is added without saying so), or, for a comparison, drops straight into Compare with both panels filled in and already diffed. A large entry shows a size warning first, with the option to copy anyway or export a file instead.
 - **Installable** as a desktop app from Chrome or Edge.
 - The top bar and dialogs adapt to narrow screens.
 
@@ -296,6 +297,8 @@ The Code tab can turn a screenshot of code into text, entirely in your browser. 
 
 Two libraries are loaded from public CDNs when the page opens, so those two hosts can see your IP address like any website you visit: the Monaco editor (jsDelivr) and the Excel reader SheetJS (cdnjs). Your data is never sent to them. The OCR engine (about 7 MB) is only fetched from jsDelivr the first time you use OCR, and the screenshot itself never leaves your device.
 
+The one exception is a **share link** you choose to create: the entry (or comparison) is compressed and packed directly into the URL, with no server involved — but a link is, by nature, meant to be sent somewhere, so treat it like you would a file, and avoid sharing anything sensitive that way.
+
 **Saved automatically.** Snippets, JSON entries and tables you add are stored in your browser's **IndexedDB** (database `dev_toolkit_v1`), one record per item, so saving is fast and large files are fine. Settings and a few small preferences are in `localStorage` (`dev_toolkit_settings_v1`, `dev_toolkit_last_tab_v1`, and layout choices).
 
 **Backups, export and import.** Everything lives in **Settings**, so nothing clutters the main window. **General → Export all** opens a list of checkboxes: *Settings*, *Shortcuts, aliases and palette order*, and the data of each tool (Code, JSON / XML, CSV / XLSX); tick what you want in the file. **Import all** shows what the chosen file contains, with the same checkboxes (items the file doesn’t have are greyed out). **Keyboard shortcuts** has its own **Export shortcuts / Import shortcuts** buttons, and each tool’s settings page has an export / import for just that tool. The small export / import icons on the Viewer / Compare tab bar of every tool export and import that tool’s entries. Every export uses the same file format, so any file can be opened with **Import all**: for example, a file exported from the JSON tab shows only *JSON / XML entries* as available. When you import into a single tool (its tab, or its settings page) you get **Cancel**, **Replace** (swaps what you have; Undo is available for 10 seconds) or **Add** (keeps what you have and skips items that are already there). In **Import all**, choose Add or Replace with the radio buttons. The same actions are in the command palette. Older backup files from earlier versions still import.
@@ -460,7 +463,6 @@ Not promises, just things that would fit:
 - OCR for the JSON/XML tab, a crop tool for screenshots, and more languages
 - Bundle Monaco and SheetJS so the app works fully **offline**
 - JSONPath queries, JSON ↔ YAML/CSV conversion, and TypeScript type generation
-- Shareable links for small snippets
 - Column statistics and quick charts for tables
 - A "Utilities" tab (Base64, JWT decoder, timestamps, regex tester)
 - More palette commands (Swap panels, Copy a diff, and others) and more color palettes
