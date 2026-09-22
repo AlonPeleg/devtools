@@ -63,7 +63,6 @@
         if (tc) tc.setAttribute('content', theme === 'light' ? '#f3f3f3' : '#252526');
         if (g.contrast === 'high') root.setAttribute('data-hc', '1');
         if (g.motion === 'reduce' || g.motion === 'full') root.setAttribute('data-motion', g.motion);
-        if (g.splash === false) root.setAttribute('data-splash', 'off');
         var scale = [90, 100, 110, 125, 150].indexOf(Number(g.uiScale)) >= 0 ? Number(g.uiScale) / 100 : 1;
         root.style.setProperty('--ui-scale', scale);
         root.style.fontSize = (16 * scale) + 'px';
@@ -236,26 +235,29 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   .placeholder { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 0.8125rem; }
 
-  /* ---------- Welcome screen ---------- */
-  #splash {
-    position: absolute; inset: 0; z-index: 50; background: var(--bg); color: var(--text);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
-    padding: 1rem; cursor: pointer; outline: none; transition: opacity 0.18s;
+  /* ---------- Intro banner: shown once, only on a browser's genuine first-ever visit. Not a modal --
+     no backdrop, doesn't trap focus or require a click to use the app underneath it. Auto-dismisses;
+     the fuller pitch (image, GitHub link, license) lives permanently in Settings -> About instead. */
+  .intro-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 3000;
+    display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap;
+    padding: 0.5rem 2.25rem; background: var(--accent); color: var(--accent-fg);
+    font-size: 0.8125rem; line-height: 1.4; text-align: center;
+    transform: translateY(-100%); transition: transform 0.25s ease;
   }
-  #splash img {
-    display: block; max-width: min(100%, 1200px); max-height: calc(100% - 3.5rem); width: auto; height: auto;
-    border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.55); user-select: none; -webkit-user-drag: none;
+  .intro-banner[hidden] { display: none; }
+  .intro-banner.show { transform: translateY(0); }
+  .intro-banner .ib-link {
+    font: inherit; font-weight: 600; color: inherit; background: transparent; border: 0; cursor: pointer;
+    padding: 0; text-decoration: underline; text-underline-offset: 2px; flex: 0 0 auto;
   }
-  #splash .splash-foot { display: flex; gap: 1.5rem; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 0.8125rem; color: var(--text-dim); }
-  #splash .splash-gh { color: var(--accent-strong); text-decoration: none; padding: 0.25rem 0.5rem; border-radius: 4px; }
-  #splash .splash-gh:hover { text-decoration: underline; }
-  #splash:focus-visible .splash-hint { text-decoration: underline; }
-  #splash .splash-off {
-    font: inherit; color: var(--text-dim); background: transparent; border: 1px solid var(--bar-border);
-    padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer;
+  .intro-banner .ib-close {
+    position: absolute; top: 50%; right: 0.375rem; transform: translateY(-50%); color: inherit;
   }
-  #splash .splash-off:hover { color: var(--text); background: var(--hover-bg, rgba(127,127,127,0.15)); }
-  #splash .splash-off:focus-visible { outline: 2px solid var(--focus, #0e8fd9); outline-offset: 2px; }
+  .intro-banner .ib-close:hover { background: rgba(0,0,0,0.15); color: inherit; }
+  .intro-banner .ib-close:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 1px; }
+  html[data-motion="reduce"] .intro-banner { transition: none; }
+  @media (prefers-reduced-motion: reduce) { html:not([data-motion="full"]) .intro-banner { transition: none; } }
   .toast {
     position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 2500;
     display: flex; align-items: center; gap: 0.875rem; max-width: min(34rem, calc(100vw - 1.5rem));
@@ -266,8 +268,28 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .toast.hide { opacity: 0; }
   .toast button { font: inherit; font-weight: 600; color: var(--accent-strong); background: transparent; border: 0; cursor: pointer; padding: 0.125rem 0.375rem; border-radius: 4px; }
   .toast button:hover { text-decoration: underline; }
-  html[data-theme="light"] #splash img { box-shadow: 0 16px 48px rgba(0,0,0,0.18); border: 1px solid var(--bar-border); }
-  #splash.hide { opacity: 0; pointer-events: none; }
+  /* Center card: a shared entry landed on this device. Not a modal -- no backdrop, nothing behind it is
+     blocked, and ignoring it (or letting it time out) adds nothing. Just more visible than a corner toast. */
+  .share-card {
+    position: fixed; left: 50%; top: 14vh; z-index: 2500; width: min(25rem, calc(100vw - 2rem));
+    display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem 1.125rem;
+    border-radius: 10px; background: var(--bar-bg); color: var(--text); border: 1px solid var(--bar-border);
+    box-shadow: 0 16px 48px var(--shadow); opacity: 0; pointer-events: none;
+    transform: translate(-50%, -6px); transition: opacity 0.2s, transform 0.2s;
+  }
+  .share-card.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+  .share-card .sc-icon {
+    flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: var(--accent); color: var(--accent-fg);
+  }
+  .share-card .sc-icon svg { width: 1.0625rem; height: 1.0625rem; }
+  .share-card .sc-body { flex: 1 1 auto; min-width: 0; padding-right: 1.25rem; }
+  .share-card .sc-title { font-size: 0.875rem; font-weight: 600; color: var(--text-bright); line-height: 1.35; }
+  .share-card .sc-sub { margin-top: 0.1875rem; font-size: 0.8125rem; color: var(--text-dim); }
+  .share-card .sc-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
+  .share-card .sc-close { position: absolute; top: 0.375rem; right: 0.375rem; }
+  html[data-motion="reduce"] .share-card { transition: none; }
+  @media (prefers-reduced-motion: reduce) { html:not([data-motion="full"]) .share-card { transition: none; } }
   #staleNotice {
     position: fixed; left: 0.75rem; bottom: 0.75rem; z-index: 2000; max-width: min(34rem, calc(100vw - 1.5rem));
     display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.625rem 0.75rem; border-radius: 6px;
@@ -275,9 +297,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   #staleNotice b { display: block; margin-bottom: 2px; font-size: 0.8125rem; }
   #staleNotice .btn { background: rgba(255,255,255,0.14); color: #fff; border-color: rgba(255,255,255,0.35); flex: 0 0 auto; }
-  html[data-splash="off"] #splash { display: none; }
-  html[data-motion="reduce"] #splash { transition: none; }
-  @media (prefers-reduced-motion: reduce) { html:not([data-motion="full"]) #splash { transition: none; } }
 
   /* ---------- Overlays (palette, settings) ---------- */
   .overlay {
@@ -560,6 +579,13 @@ window.addEventListener('beforeinstallprompt', function (e) {
 </style>
 </head>
 <body>
+<div id="introBanner" class="intro-banner" hidden role="status">
+  <span class="ib-text">Dev Toolkit — view &amp; compare code, JSON/XML and CSV/XLSX. Free, open source, and it runs entirely in your browser.</span>
+  <button type="button" id="ibAbout" class="ib-link">Learn more</button>
+  <button type="button" id="ibClose" class="icon-btn ib-close" aria-label="Dismiss">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>
+  </button>
+</div>
 <div id="app">
   <header id="tabbar">
     <h1 class="brand">Dev Toolkit</h1>
@@ -588,10 +614,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
     <div class="pane" id="pane-code" role="tabpanel" aria-labelledby="tab-code" data-tool="code"><div class="placeholder">Loading Code Viewer…</div></div>
     <div class="pane" id="pane-json" role="tabpanel" aria-labelledby="tab-json" data-tool="json"><div class="placeholder">Loading JSON Viewer…</div></div>
     <div class="pane" id="pane-xlsx" role="tabpanel" aria-labelledby="tab-xlsx" data-tool="xlsx"><div class="placeholder">Loading XLSX Viewer…</div></div>
-    <div id="splash" role="button" tabindex="0" aria-label="Welcome to Dev Toolkit. Click, or press any key, to continue.">
-      <img id="splashImg" width="1200" height="630" alt="Dev Toolkit: view and compare code, JSON/XML and CSV/XLSX, free, open source and running in your browser." fetchpriority="high" draggable="false">
-      <div class="splash-foot"><span class="splash-hint">Click anywhere to continue</span><a class="splash-gh" href="https://github.com/AlonPeleg/devtools" target="_blank" rel="noopener noreferrer">GitHub</a><button type="button" class="splash-off" id="splashOff">Don’t show this page again</button></div>
-    </div>
     <noscript>
       <div class="placeholder" style="flex-direction:column; gap:.5rem; padding:1rem; text-align:center">
         <p>Dev Toolkit needs JavaScript. It offers a code viewer &amp; compare, a JSON/XML viewer &amp; compare and a CSV/XLSX viewer, all running locally in your browser.</p>
@@ -805,6 +827,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     { id: 'settingsJson', group: G_SET, label: 'Settings: JSON / XML Viewer', def: '', run: 'settingsJson' },
     { id: 'settingsXlsx', group: G_SET, label: 'Settings: CSV / XLSX Viewer', def: '', run: 'settingsXlsx' },
     { id: 'shortcuts', group: G_SET, label: 'Open these keyboard shortcuts', def: '', run: 'shortcuts' },
+    { id: 'about', group: G_SET, label: 'About Dev Toolkit', def: '', run: 'about' },
     { id: 'exportAll', group: G_IO, label: 'Export all (settings, shortcuts and data)…', def: '', run: 'exportAll' },
     { id: 'importAll', group: G_IO, label: 'Import all from a file…', def: '', run: 'importAll' },
     { id: 'exportShortcuts', group: G_IO, label: 'Export my shortcuts, aliases and palette order', def: '', run: 'exportShortcuts' },
@@ -826,7 +849,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     ['Compare', ['compareLoad', 'compareRun', 'compareSwap', 'compareNext', 'comparePrev', 'compareFormat', 'compareMinify', 'cmpWhitespace', 'cmpCase', 'cmpBlank', 'cmpHeader']],
     ['Appearance', ['themeToggle', 'themeSystem', 'themeDark', 'themeLight', 'palPicker', 'palNext', 'palStock', 'contrast', 'motion', 'scaleUp', 'scaleDown', 'scaleReset']],
     ['Import & export', ['exportAll', 'importAll', 'exportShortcuts', 'importShortcuts', 'exportCode', 'importCode', 'exportJson', 'importJson', 'exportXlsx', 'importXlsx', 'backup']],
-    ['Settings pages', ['settingsCode', 'settingsJson', 'settingsXlsx']],
+    ['Settings pages', ['settingsCode', 'settingsJson', 'settingsXlsx', 'about']],
     ['App', ['install', 'github']]
   ];
   // Short codes typed in the palette. Editable in Settings → Keyboard shortcuts (up to 3 per command).
@@ -872,7 +895,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   KEY_DEFS.forEach(function (d) { DEFAULT_KEYS[d.id] = d.def; });
 
   var DEFAULTS = {
-    general: { theme: 'system', uiScale: 100, motion: 'system', contrast: 'normal', splash: true },
+    general: { theme: 'system', uiScale: 100, motion: 'system', contrast: 'normal' },
     keys: DEFAULT_KEYS,
     palette: { sort: 'none', order: null },   // order: null = not customised yet
     code: { font: 'default', size: 12, lineHeight: 1.5, tabSize: 4, wrap: false },
@@ -890,8 +913,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
         uiScale: pick(Number(g.uiScale), [90, 100, 110, 125, 150], 100),
         motion: pick(g.motion, ['system', 'reduce', 'full'], 'system'),
         contrast: pick(g.contrast, ['normal', 'high'], 'normal'),
-        palette: pick(g.palette, PALETTE_IDS, 'stock'),
-        splash: g.splash !== false
+        palette: pick(g.palette, PALETTE_IDS, 'stock')
       },
       keys: {}, aliases: {},
       palette: { sort: pick((raw.palette || {}).sort, ['none', 'type', 'alpha', 'custom'], 'none'), order: null },
@@ -1060,8 +1082,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
     $('themeToggleIcon').innerHTML = theme === 'light' ? sunIcon : moonIcon;
     var tcm = $('themeColorMeta');
     if (tcm) tcm.setAttribute('content', ap ? ap.panel : (theme === 'light' ? '#f3f3f3' : '#252526'));
-    var si = $('splashImg');
-    if (si && settings.general.splash !== false) { var want = theme === 'light' ? 'og-image-light.png' : 'og-image.png'; if (si.getAttribute('src') !== want) si.setAttribute('src', want); }
+    var ai = $('aboutImg');   // only present while Settings -> About is open
+    if (ai) { var want = theme === 'light' ? 'og-image-light.png' : 'og-image.png'; if (ai.getAttribute('src') !== want) ai.setAttribute('src', want); }
     var other = theme === 'light' ? 'dark' : 'light';
     var label = 'Theme: ' + (g.theme === 'system' ? 'System (' + theme + ')' : theme) + '. Switch to ' + other + '.';
     $('themeToggleBtn').title = label;
@@ -1165,7 +1187,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       setTimeout(function () { if (!hello[tool] && loaded[tool] && iframe.isConnected) showStaleNotice(); }, 2500);
       attachFrameKeys(iframe);
       pushStateToFrame(iframe);
-      if (active === tool && !overlayOpen() && !splashShown()) { try { iframe.contentWindow.focus(); } catch (e) {} }
+      if (active === tool && !overlayOpen()) { try { iframe.contentWindow.focus(); } catch (e) {} }
       if (wantInput[tool] && active === tool && !overlayOpen()) focusToolInput(tool);
     });
     pane.innerHTML = '';
@@ -1615,7 +1637,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   function focusActivePane() {
     var f = active && document.querySelector('#pane-' + active + ' iframe');
-    if (f && f.contentWindow && !overlayOpen() && !splashShown()) { try { f.contentWindow.focus(); } catch (e) {} }
+    if (f && f.contentWindow && !overlayOpen()) { try { f.contentWindow.focus(); } catch (e) {} }
   }
   function resetPanes() {   // used after a backup import so every tool re-reads storage
     TOOLS.forEach(function (t) {
@@ -1738,6 +1760,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     list.push({ id: 'settingsCode', title: 'Settings: Code Viewer (font, size, tabs, wrap)', kw: 'code font size line height tab wrap', run: function () { openSettings('code'); } });
     list.push({ id: 'settingsJson', title: 'Settings: JSON / XML Viewer (font, size, expand)', kw: 'json xml font size expand levels', run: function () { openSettings('json'); } });
     list.push({ id: 'settingsXlsx', title: 'Settings: CSV / XLSX Viewer (font, density, header)', kw: 'csv xlsx sheet font size density header', run: function () { openSettings('xlsx'); } });
+    list.push({ id: 'about', title: 'About Dev Toolkit', kw: 'help info version license github pitch welcome', run: function () { openSettings('about'); } });
     list.push({ id: 'themeToggle', title: 'Toggle light / dark theme', kw: 'appearance color mode', run: toggleTheme });
     list.push({ id: 'themeSystem', title: 'Theme: follow system', kw: 'automatic auto os', run: function () { selectSystem(); announce('Theme follows system'); } });
     list.push({ id: 'palPicker', title: 'Color palette picker…', kw: 'appearance theme colors monokai solarized dracula nord github stock system', pick: PAL_PICK_TC });
@@ -1897,7 +1920,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   /* =========================================================================
      Settings dialog
      ========================================================================= */
-  var SECTIONS = [['general', 'General'], ['keys', 'Keyboard shortcuts'], ['code', 'Code Viewer'], ['json', 'JSON / XML'], ['xlsx', 'CSV / XLSX']];
+  var SECTIONS = [['general', 'General'], ['keys', 'Keyboard shortcuts'], ['code', 'Code Viewer'], ['json', 'JSON / XML'], ['xlsx', 'CSV / XLSX'], ['about', 'About']];
   var section = 'general';
   var pendingScroll = null;
   var SCHEMA = {
@@ -1908,8 +1931,6 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { group: 'Accessibility' },
       { key: 'contrast', type: 'seg', label: 'Contrast', options: [['normal', 'Normal'], ['high', 'High']], help: 'High contrast brightens text and strengthens borders.' },
       { key: 'motion', type: 'seg', label: 'Animations', options: [['system', 'System'], ['reduce', 'Reduce'], ['full', 'Full']], help: 'Reduce turns off blinking, transitions and smooth scrolling. System follows your device setting.' },
-      { group: 'Startup' },
-      { key: 'splash', type: 'switch', label: 'Show the welcome screen when Dev Toolkit opens', help: 'Click anywhere (or press a key) to dismiss it. Takes effect the next time you open the page.' },
       { custom: 'install' },
       { custom: 'storage' },
       { custom: 'io' },
@@ -1944,6 +1965,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { key: 'density', type: 'seg', label: 'Row density', options: [['compact', 'Compact'], ['normal', 'Normal'], ['relaxed', 'Relaxed']] },
       { key: 'header', type: 'switch', label: 'Treat the first row as a header', help: 'Default for newly opened CSV/XLSX files. You can still change it per file.' },
       { custom: 'io' }
+    ],
+    about: [
+      { custom: 'about' }
     ]
   };
 
@@ -2262,9 +2286,11 @@ window.addEventListener('beforeinstallprompt', function (e) {
       else if (spec.custom === 'io') box.appendChild(buildIo(section));
       else if (spec.custom === 'danger') box.appendChild(buildDanger());
       else if (spec.custom === 'themes') box.appendChild(buildThemes());
+      else if (spec.custom === 'about') box.appendChild(buildAbout());
       else box.appendChild(buildControl(spec, section));
     });
     box.setAttribute('aria-labelledby', 'setnav-' + section);
+    $('resetSection').hidden = !DEFAULTS[section];   // 'about' has no settings of its own to reset
     box.scrollTop = scrollTop;
     if (focusFk) { var el = box.querySelector('[data-fk="' + focusFk + '"]'); if (el) el.focus(); }
     if (pendingScroll) { var t = $(pendingScroll + 'Box'); if (t) t.scrollIntoView({ block: 'start' }); pendingScroll = null; }
@@ -2319,8 +2345,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
 
   function renderPreview() {
     var pv = $('setPreview'), note = $('setPreviewNote'), s = settings, scale = s.general.uiScale / 100;
-    $('setMain').classList.toggle('no-preview', section === 'keys');
-    if (section === 'keys') return;
+    $('setMain').classList.toggle('no-preview', section === 'keys' || section === 'about');
+    if (section === 'keys' || section === 'about') return;
     var sec = s[section] || {};
     pv.removeAttribute('style');
     if (section !== 'general') {
@@ -2775,6 +2801,26 @@ window.addEventListener('beforeinstallprompt', function (e) {
       resetPanes(); toast('The app was reset.');
     }).catch(function (err) { toast('Couldn’t reset the app: ' + ((err && err.message) || 'unknown error')); });
   }
+  function buildAbout() {
+    var box = h('div', { id: 'aboutBox' });
+    var img = h('img', {
+      id: 'aboutImg', alt: 'Dev Toolkit: view and compare code, JSON/XML and CSV/XLSX, free, open source and running in your browser.',
+      src: effectiveTheme() === 'light' ? 'og-image-light.png' : 'og-image.png',
+      style: 'display:block; width:100%; max-width:32rem; border-radius:10px; box-shadow:0 12px 36px var(--shadow); margin:0 0 1rem'
+    });
+    box.appendChild(h('div', { class: 'ctl' }, [
+      img,
+      h('p', { style: 'margin:0 0 0.5rem; font-size:0.9375rem; font-weight:600; color:var(--text-bright)', text: 'Dev Toolkit' }),
+      h('p', { class: 'help', style: 'margin-top:0', text: 'View and compare code, JSON/XML and CSV/XLSX files side by side. Everything runs locally in this browser tab — nothing you open or paste is ever uploaded anywhere.' }),
+      h('p', { class: 'help', text: 'Three tools, one window: a Code Viewer with syntax highlighting and diff, a JSON/XML tree viewer with diff, and a CSV/XLSX table viewer. Switch tools, compare entries, or share a self-contained link — all without a server.' }),
+      h('div', { class: 'io-btns', style: 'margin-top:0.75rem' }, [
+        h('a', { class: 'btn', href: REPO_URL, target: '_blank', rel: 'noopener noreferrer', text: 'GitHub repo' }),
+        h('a', { class: 'btn', href: REPO_URL + '/blob/main/LICENSE', target: '_blank', rel: 'noopener noreferrer', text: 'MIT License' })
+      ]),
+      h('p', { class: 'help', style: 'margin-top:0.75rem', text: 'Version ' + BUILD + '.' })
+    ]));
+    return box;
+  }
   function buildDanger() {
     var box = h('div', { id: 'dangerBox' }, [h('div', { class: 'grp', text: 'Danger zone' })]);
     var body = h('div', { class: 'ctl' }), btns = h('div', { class: 'io-btns' });
@@ -3024,6 +3070,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     settingsCode: function () { openSettings('code'); },
     settingsJson: function () { openSettings('json'); },
     settingsXlsx: function () { openSettings('xlsx'); },
+    about: function () { openSettings('about'); },
     backup: function () { var ct = active || 'code'; ioExport({ tools: [ct], name: ct }); },
     install: function () { if (canInstall()) runInstall(); else announce('Dev Toolkit is already installed, or this browser can’t install it'); },
     github: function () { window.open(REPO_URL, '_blank', 'noopener'); },
@@ -3179,45 +3226,66 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
 
   /* =========================================================================
-     Welcome screen: shown on every open until you click / press a key.
-     The GitHub links are the exception: they open GitHub and leave the screen up.
+     Intro banner: a one-line, non-blocking summary shown once, only on a
+     genuine first-ever visit (no settings ever saved in this browser). It
+     isn't a dialog -- no backdrop, no focus trap, the app underneath is fully
+     usable right away. Returning users never see it; the fuller pitch (image,
+     GitHub link, license) lives permanently in Settings -> About instead.
      ========================================================================= */
-  var splash = $('splash');
-  function splashShown() { return !!(splash && splash.isConnected && !splash.classList.contains('hide')); }
-  function dismissSplash() {
-    if (!splashShown()) return;
-    splash.classList.add('hide');
-    var el = splash;
-    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 260);
-    if (!overlayOpen()) focusActivePane();
-  }
-  if (splash && settings.general.splash === false) { splash.parentNode.removeChild(splash); splash = null; }
-  if (splash) {
-    document.addEventListener('pointerdown', function (e) {
-      if (!splashShown()) return;
-      if (e.target.closest && e.target.closest('#githubLink, .splash-gh, .splash-off')) return;
-      dismissSplash();
-    }, true);
-    document.addEventListener('keydown', function (e) {
-      if (!splashShown()) return;
-      if (['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'ContextMenu'].indexOf(e.key) >= 0) return;
-      if ((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('.splash-off')) return;   // let the button do its job
-      dismissSplash();
-    }, true);
-    $('splashOff').addEventListener('click', function () {
-      dismissSplash();
-      setVal('general', 'splash', false);
-      announce('The welcome screen is turned off.');
-      toast('The welcome screen is turned off. You can turn it back on in Settings → General → Startup.', 'Undo', function () { setVal('general', 'splash', true); announce('The welcome screen is turned on again.'); });
-    });
-    window.addEventListener('DOMContentLoaded', function () { try { splash.focus({ preventScroll: true }); } catch (e) {} });
-    try { splash.focus({ preventScroll: true }); } catch (e) {}
-  }
+  var INTRO_KEY = 'dev_toolkit_intro_seen_v1';
+  (function () {
+    var hadSettings = true, introSeen = true;
+    try { hadSettings = !!localStorage.getItem(SETTINGS_KEY); } catch (e) {}
+    try { introSeen = !!localStorage.getItem(INTRO_KEY); } catch (e) {}
+    if (hadSettings || introSeen) return;   // not a first-ever visit -- nothing to show
+    try { localStorage.setItem(INTRO_KEY, '1'); } catch (e) {}   // mark seen now, so a refresh mid-banner doesn't repeat it
+    var banner = $('introBanner');
+    if (!banner) return;
+    banner.hidden = false;
+    requestAnimationFrame(function () { banner.classList.add('show'); });
+    function dismiss() { banner.classList.remove('show'); setTimeout(function () { banner.hidden = true; }, 260); }
+    var timer = setTimeout(dismiss, 5000);
+    $('ibClose').addEventListener('click', function () { clearTimeout(timer); dismiss(); });
+    $('ibAbout').addEventListener('click', function () { clearTimeout(timer); dismiss(); openSettings('about'); });
+  })();
 
   /* ---------- Share links: "#share=<g|r><base64url>" is decoded here and routed to the right
      tool. The 'g' flag means gzip-compressed, 'r' means the raw JSON bytes (used when a browser
      lacks CompressionStream). cleanUrl() (below) strips the hash from the address bar either way,
      so this only ever gets one shot at a given link. ---------- */
+  var TYPE_NOUN = { code: 'code snippet', json: 'JSON / XML entry', xlsx: 'CSV / XLSX file' };
+  var SHARE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg>';
+  // A more visible, non-modal alternative to toast() for "someone shared X with you -- Add?".
+  // Not a dialog: no backdrop, nothing behind it is blocked, and Dismiss / the ~30s timeout /
+  // just clicking elsewhere in the app all leave it exactly as safe as ignoring the old toast was.
+  var shareCardEl = null;
+  function closeShareCard() {
+    if (!shareCardEl) return;
+    var el = shareCardEl; shareCardEl = null;
+    el.classList.remove('show');
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
+  }
+  function shareCard(title, sub, onAdd) {
+    closeShareCard();
+    var el = document.createElement('div');
+    el.className = 'share-card'; el.setAttribute('role', 'status');
+    el.innerHTML =
+      '<div class="sc-icon">' + SHARE_ICON + '</div>' +
+      '<div class="sc-body">' +
+        '<div class="sc-title">' + esc(title) + '</div>' +
+        '<div class="sc-sub">' + esc(sub) + '</div>' +
+        '<div class="sc-actions"><button type="button" class="btn primary">Add</button><button type="button" class="btn">Dismiss</button></div>' +
+      '</div>' +
+      '<button type="button" class="icon-btn sc-close" aria-label="Dismiss"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button>';
+    el.querySelector('.sc-actions .btn.primary').addEventListener('click', function () { closeShareCard(); if (onAdd) onAdd(); });
+    el.querySelector('.sc-actions .btn:not(.primary)').addEventListener('click', closeShareCard);
+    el.querySelector('.sc-close').addEventListener('click', closeShareCard);
+    document.body.appendChild(el);
+    shareCardEl = el;
+    requestAnimationFrame(function () { el.classList.add('show'); });
+    setTimeout(closeShareCard, 30000);
+    return el;
+  }
   function shareB64ToBytes(s) {
     s = s.replace(/-/g, '+').replace(/_/g, '/');
     while (s.length % 4) s += '=';
@@ -3262,11 +3330,32 @@ window.addEventListener('beforeinstallprompt', function (e) {
       } else if (payload.k === 'e') {
         // Adding a shared entry does change saved data, so it waits for an explicit "Add".
         var name = (payload.d && payload.d.n) || 'this';
-        toast('Someone shared “' + name + '” with you — nothing saved yet.', 'Add', function () {
+        var noun = TYPE_NOUN[payload.t] || 'entry';
+        shareCard('Someone shared “' + name + '” with you', 'A ' + noun + ' · nothing saved yet', function () {
           whenToolReady(payload.t, function (f) { postTo(f, { __devToolkitCmd: 'addSharedEntry', data: payload.d }); });
-        }, 30000);
+        });
       }
     }).catch(function () {});
+  }
+
+  /* =========================================================================
+     Cross-tab bus: lets a brand-new tab opened by a share link hand the link
+     off to a Dev Toolkit tab that's already open, instead of the two of them
+     sitting open side by side. Every tab listens from boot; only a tab that
+     *arrives* with a "#share=..." hash pings for one. A browser only lets a
+     script close a tab it opened itself, so the self-close below is a
+     best-effort bonus, not a guarantee -- it works for many share-link opens,
+     but not every one. (The one guarantee-strength fix is installing the app:
+     see manifest.json's launch_handler, which the browser enforces itself.)
+     ========================================================================= */
+  var bus = null;
+  try { if ('BroadcastChannel' in window) bus = new BroadcastChannel('dev_toolkit_bus_v1'); } catch (e) {}
+  if (bus) {
+    bus.addEventListener('message', function (e) {
+      var d = e.data || {};
+      if (d.type === 'ping') { try { bus.postMessage({ type: 'pong' }); } catch (e2) {} }
+      else if (d.type === 'share' && d.hash) { handleShareHash(d.hash); try { window.focus(); } catch (e2) {} }
+    });
   }
 
   /* =========================================================================
@@ -3287,7 +3376,29 @@ window.addEventListener('beforeinstallprompt', function (e) {
     cleanUrl();
     if (h) handleShareHash(h);
   });
-  if (incomingShareHash) handleShareHash(incomingShareHash);
+  if (incomingShareHash) {
+    if (bus) {
+      // Give any already-open Dev Toolkit tab ~220ms to answer. If one does, hand the share
+      // to it and try to close this new, now-redundant tab. If none answers (or close() is
+      // refused, per the note above), fall back to handling the share right here as usual.
+      var handedOff = false;
+      var onPong = function (e) {
+        if ((e.data || {}).type !== 'pong' || handedOff) return;
+        handedOff = true;
+        bus.removeEventListener('message', onPong);
+        bus.postMessage({ type: 'share', hash: incomingShareHash });
+        try { window.close(); } catch (e2) {}
+      };
+      bus.addEventListener('message', onPong);
+      try { bus.postMessage({ type: 'ping' }); } catch (e2) {}
+      setTimeout(function () {
+        bus.removeEventListener('message', onPong);
+        if (!handedOff) handleShareHash(incomingShareHash);
+      }, 220);
+    } else {
+      handleShareHash(incomingShareHash);
+    }
+  }
 })();
 </script>
 </body>

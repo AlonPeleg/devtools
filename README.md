@@ -123,8 +123,8 @@ Open it, press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type `add sample`, and press Enter 
 - **Per-tool settings** with a live preview: font (a switch for your system’s monospace font), font size, line spacing, tab width, wrap, tree depth, row density and more.
 - **Your work is saved automatically** in your browser, with one-click backup and restore.
 - **Undo for deletes.** Removing an entry with its red × (or Clear all) shows “deleted · Undo” for 10 seconds; an entry comes back in the same place.
-- **Share a link.** The share icon on any entry, or on a Compare tab, copies a link that carries the content itself — compressed and packed into the URL, with nothing sent to any server. Opening it on someone else's Dev Toolkit offers to add the entry (nothing is added without saying so), or, for a comparison, drops straight into Compare with both panels filled in and already diffed. A large entry shows a size warning first, with the option to copy anyway or export a file instead.
-- **Installable** as a desktop app from Chrome or Edge.
+- **Share a link.** The share icon on any entry, or on a Compare tab, copies a link that carries the content itself — compressed and packed into the URL, with nothing sent to any server. Opening it on someone else's Dev Toolkit shows a card offering to add the entry (nothing is added without saying so), or, for a comparison, drops straight into Compare with both panels filled in and already diffed. A large entry shows a size warning first, with the option to copy anyway or export a file instead. Opening a share link while Dev Toolkit is already open in another tab hands it to that tab instead of loading a second copy, where the browser allows it.
+- **Installable** as a desktop app from Chrome or Edge. Installed, opening a share link reuses the app's own window instead of a browser tab where possible.
 - The top bar and dialogs adapt to narrow screens.
 
 ---
@@ -243,11 +243,12 @@ Open them with the gear icon, <kbd>Ctrl</kbd>+<kbd>,</kbd>, or the palette. Chan
 
 | Section | Options |
 |---|---|
-| **General** | A **System** button (on by default: stock colors, light or dark as your device says; it turns off when you pick a palette), **color palette** (Stock, Monokai, Solarized, Dracula, Nord, GitHub; click again for stock; a dark-only or light-only palette switches to that mode), **Export all / Import all** (see [backups](#your-data-privacy-storage-and-backups)), interface size (90-150%), contrast, animations, welcome screen on/off (you can also switch it off right on the welcome screen with **Don’t show this page again**), install as an app, storage meter and "protect my data" |
+| **General** | A **System** button (on by default: stock colors, light or dark as your device says; it turns off when you pick a palette), **color palette** (Stock, Monokai, Solarized, Dracula, Nord, GitHub; click again for stock; a dark-only or light-only palette switches to that mode), **Export all / Import all** (see [backups](#your-data-privacy-storage-and-backups)), interface size (90-150%), contrast, animations, install as an app, storage meter and "protect my data" |
 | **Keyboard shortcuts** | Rebind or remove any shortcut and assign one to any palette command (per shortcut or all at once) |
 | **Code Viewer** | Export / import your snippets, font, font size, line spacing, tab width, wrap long lines by default |
 | **JSON / XML** | Export / import your entries, font, font size, how many tree levels open by default |
 | **CSV / XLSX** | Export / import your files, font, font size, row density, treat the first row as a header by default |
+| **About** | The pitch, what's inside, the GitHub repo, the license and the current version |
 
 **Fonts.** Each tool has one switch, **Use my system’s monospace font**: off is the tool’s own default font, on is your device’s code font (`ui-monospace`, then SF Mono, Menlo, Consolas, Liberation Mono, and finally the browser’s `monospace`; the first one your device has is used). No font files are shipped, so nothing extra is downloaded.
 
@@ -369,19 +370,19 @@ All paths in the project are relative, so it works from a sub-folder as well as 
 
 ```
 devtools/
-├── index.html              The shell: tabs, command palette, settings, welcome screen, install
+├── index.html              The shell: tabs, command palette, settings (incl. About), first-visit banner, install
 ├── code.html               Code Viewer & Compare
 ├── json.html               JSON / XML Viewer & Compare
 ├── xlsx.html               CSV / XLSX Viewer & Compare
 ├── samples.js              Sample data (code, JSON and table templates) used by the sample commands
-├── manifest.json           Web app manifest (name, colours, icons) for "Install app"
+├── manifest.json           Web app manifest (name, colours, icons, window reuse) for "Install app"
 ├── sw.js                   Tiny service worker that only enables installing; caches nothing
 ├── docs/                   Screenshots used in this README
 ├── favicon.svg / .ico      Browser-tab icon
 ├── apple-touch-icon.png    iPhone / iPad home-screen icon
 ├── icon-192.png, icon-512.png, icon-maskable-512.png   App icons
-├── og-image.png            Link preview and welcome screen (dark)
-├── og-image-light.png      Welcome screen (light)
+├── og-image.png            Link preview and Settings -> About (dark)
+├── og-image-light.png      Settings -> About (light)
 └── LICENSE
 ```
 
