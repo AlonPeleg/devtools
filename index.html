@@ -297,12 +297,16 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   .share-card .sc-meta { width: max-content; max-width: 100%; text-align: left; margin-top: 0.1875rem; font-size: 0.75rem; color: var(--text-dim); }
   .share-card .sc-meta-sub { font-size: 0.6875rem; opacity: 0.8; margin-top: 0.125rem; }
-  /* Grid, not flex-wrap: grid-auto-flow:column lays out however many buttons there are (2 or 3) as
-     that many equal-width (1fr) columns in a single row -- they can never overflow into a second
-     row the way fixed min-widths under flex-wrap could. */
-  .share-card .sc-actions { margin-top: 0.75rem; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0.5rem; }
-  .share-card .sc-actions .btn { min-width: 0; text-align: center; }
-  .share-card .sc-actions .btn.sc-open { display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; }
+  /* Add/Dismiss match each other's width (both sized to fit "Dismiss", the wider of the two); Open
+     in app is deliberately larger/wider than them and sized to its own (longer, icon-bearing)
+     label, which never wraps to a second line no matter how the other two are sized. */
+  .share-card .sc-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; justify-content: center; }
+  .share-card .sc-actions .btn { flex: 0 0 auto; white-space: nowrap; text-align: center; }
+  .share-card .sc-actions .btn.sc-add, .share-card .sc-actions .btn.sc-dismiss { min-width: 6rem; }
+  .share-card .sc-actions .btn.sc-open {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;
+    padding-left: 1.125rem; padding-right: 1.125rem;
+  }
   .share-card .sc-actions .btn.sc-open svg { width: 0.75rem; height: 0.75rem; flex: 0 0 auto; }
   .share-card .sc-close { position: absolute; top: 0.375rem; right: 0.375rem; }
   html[data-motion="reduce"] .share-card { transition: none; }
@@ -3326,14 +3330,15 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // leaving this tab for another window/app, not just another in-page action.
   var EXTERNAL_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8.75v3.5A1.25 1.25 0 0 1 10.75 13.5h-6A1.25 1.25 0 0 1 3.5 12.25v-6A1.25 1.25 0 0 1 4.75 5h3.5"/><path d="M9.5 2.5h4v4"/><path d="M13 3 7.25 8.75"/></svg>';
   var OPEN_IN_APP_LABEL = 'Open in app ' + EXTERNAL_ICON;
-  // The timestamp on a shared entry is when the link was made (entries don't carry a
-  // "created" date of their own), so this reads as "shared at", not "created at".
+  // The timestamp on a shared entry is when the link was made (entries don't carry a "created"
+  // date of their own) -- shown on the card as "Created <this>". Always includes the date, not
+  // just the time, even for links made earlier today.
   function fmtShareTime(ts) {
     if (!ts) return '';
     var d = new Date(ts); if (isNaN(d.getTime())) return '';
     var time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    var sameDay = d.toDateString() === new Date().toDateString();
-    return sameDay ? time : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + time;
+    var date = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return date + ' · ' + time;
   }
   // A more visible, non-modal alternative to toast() for "someone shared X with you -- Add?".
   // Not a dialog: no backdrop, nothing behind it is blocked, and Dismiss / the ~30s timeout /
@@ -3472,8 +3477,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
         var noun = TYPE_NOUN[payload.t] || 'Snippet';
         var when = fmtShareTime(payload.ts);
         var openUrl = location.origin + location.pathname + hash;
-        var metaLines = [noun + (when ? ' - Created ' + when : ''), 'nothing saved yet'];
-        shareCard('Someone shared a snippet with you', name, metaLines, function () {
+        var meta = noun + (when ? ' - Created ' + when : '');
+        shareCard('Someone shared a snippet with you', name, meta, function () {
           whenToolReady(payload.t, function (f) { postTo(f, { __devToolkitCmd: 'addSharedEntry', data: payload.d }); });
         }, openUrl);
       }
