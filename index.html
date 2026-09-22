@@ -3393,10 +3393,15 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // docs) meant to work even when the app isn't already running. Only meaningful for someone who
   // has actually installed the app *since* this field was added to the manifest (the protocol
   // association registers at install time), so this is experimental for now.
+  // The payload goes after "open?share=", not right after "://" -- with nothing to separate scheme
+  // from payload, "web+devtoolkit://<payload>" puts the whole payload in the URL's *host* position,
+  // which non-http(s) schemes parse as an "opaque host" under different, stricter rules than a
+  // normal query string gets, and is the suspected reason an early version of this occasionally
+  // arrived corrupted after Chrome's own percent-encode/decode round-trip.
   function protocolUrlFor(openUrl) {
     var i = openUrl.indexOf('#share=');
     if (i < 0) return null;
-    return 'web+devtoolkit://share=' + openUrl.slice(i + '#share='.length);
+    return 'web+devtoolkit://open?share=' + openUrl.slice(i + '#share='.length);
   }
   function handleOpenInAppClick(openUrl) {
     var protoUrl = protocolUrlFor(openUrl);
@@ -3460,7 +3465,18 @@ window.addEventListener('beforeinstallprompt', function (e) {
     return bytes;
   }
   function decodeSharePayload(enc) {
-    var flag = enc.charAt(0), bytes = shareB64ToBytes(enc.slice(1));
+    // atob() throws SYNCHRONOUSLY on malformed input. Wrapped in try/catch and returned as a
+    // rejected promise instead, so every caller's existing .then().catch() actually runs --
+    // without this, the throw happens while evaluating decodeSharePayload(...) itself, before
+    // .then() is even reached, and becomes an uncaught exception at the call site instead.
+    var flag, bytes;
+    try {
+      flag = enc.charAt(0);
+      bytes = shareB64ToBytes(enc.slice(1));
+    } catch (err) {
+      try { console.log('[dt-install] decodeSharePayload: malformed input, length=' + enc.length + ' value=' + JSON.stringify(enc), err); } catch (e0) {}
+      return Promise.reject(err);
+    }
     if (flag === 'g') {
       if (!('DecompressionStream' in window)) return Promise.reject(new Error('unsupported'));
       var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
@@ -3504,7 +3520,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
           whenToolReady(payload.t, function (f) { postTo(f, { __devToolkitCmd: 'addSharedEntry', data: payload.d }); });
         }, openUrl);
       }
-    }).catch(function () {});
+    }).catch(function (err) { try { console.log('[dt-install] handleShareHash: could not decode/handle share link', err); } catch (e) {} });
   }
 
   /* =========================================================================
@@ -3538,12 +3554,18 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // above). Feed it into the exact same #share=... pipeline as an ordinary link, just from a
   // different entry door -- everything downstream (the card, the bus, Add/Dismiss) is identical.
   (function () {
+    try { console.log('[dt-install] boot location.search=' + JSON.stringify(location.search)); } catch (e0) {}
     var dtlink;
     try { dtlink = new URLSearchParams(location.search).get('dtlink'); } catch (e) {}
     if (!dtlink) return;
-    try { console.log('[dt-install] arrived via protocol_handlers, dtlink=', dtlink); } catch (e2) {}
+    try { console.log('[dt-install] arrived via protocol_handlers, decoded dtlink=' + JSON.stringify(dtlink)); } catch (e2) {}
     var m = /share=([^&]+)/.exec(dtlink);
-    if (m) incomingShareHash = '#share=' + m[1];
+    if (m) {
+      incomingShareHash = '#share=' + m[1];
+      try { console.log('[dt-install] extracted share payload, length=' + m[1].length + ' value=' + JSON.stringify(m[1])); } catch (e4) {}
+    } else {
+      try { console.log('[dt-install] dtlink did not match the expected "share=..." pattern'); } catch (e5) {}
+    }
     try { history.replaceState(null, '', location.pathname); } catch (e3) {}   // drop ?dtlink= from the address bar
   })();
   activate(start, { silent: true, noFocus: true });
