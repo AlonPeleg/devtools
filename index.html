@@ -3333,12 +3333,14 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // The timestamp on a shared entry is when the link was made (entries don't carry a "created"
   // date of their own) -- shown on the card as "Created <this>". Always includes the date, not
   // just the time, even for links made earlier today.
+  // Fixed DD/MM/YYYY HH:MM, built by hand rather than via toLocaleDateString/toLocaleTimeString --
+  // those follow the browser's own locale (e.g. Hebrew month names on a he-IL system), which reads
+  // as garbled/inconsistent here. This format never changes with the viewer's locale.
   function fmtShareTime(ts) {
     if (!ts) return '';
     var d = new Date(ts); if (isNaN(d.getTime())) return '';
-    var time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    var date = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    return date + ' · ' + time;
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
   // A more visible, non-modal alternative to toast() for "someone shared X with you -- Add?".
   // Not a dialog: no backdrop, nothing behind it is blocked, and Dismiss / the ~30s timeout /
@@ -3369,7 +3371,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     if (should && !existing) {
       var btn = document.createElement('button');
       btn.type = 'button'; btn.className = 'btn accent sc-open'; btn.innerHTML = OPEN_IN_APP_LABEL;
-      btn.addEventListener('click', function () { openAsRealLink(shareCardOpenUrl); });
+      btn.addEventListener('click', function () { handleOpenInAppClick(shareCardOpenUrl); });
       actions.insertBefore(btn, actions.firstChild);   // Open in app - Add - Dismiss
     } else if (!should && existing) {
       existing.remove();
@@ -3384,6 +3386,26 @@ window.addEventListener('beforeinstallprompt', function (e) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+  // Builds the custom-scheme link for the SAME share (see manifest.json's protocol_handlers).
+  // Clicking a "web+devtoolkit://" link is dispatched by the OS/browser the way "mailto:" links
+  // are -- a different code path from ordinary https navigation-capturing, and (per Chrome's own
+  // docs) meant to work even when the app isn't already running. Only meaningful for someone who
+  // has actually installed the app *since* this field was added to the manifest (the protocol
+  // association registers at install time), so this is experimental for now.
+  function protocolUrlFor(openUrl) {
+    var i = openUrl.indexOf('#share=');
+    if (i < 0) return null;
+    return 'web+devtoolkit://share=' + openUrl.slice(i + '#share='.length);
+  }
+  function handleOpenInAppClick(openUrl) {
+    var protoUrl = protocolUrlFor(openUrl);
+    try { console.log('[dt-install] "Open in app" clicked. protocol url:', protoUrl, ' https fallback:', openUrl); } catch (e) {}
+    if (protoUrl) openAsRealLink(protoUrl);
+    // Also try the ordinary https link shortly after, as a second attempt via the older path --
+    // harmless if the protocol link already worked (the cross-tab bus just hands off and closes
+    // the redundant tab, same as it always has).
+    setTimeout(function () { openAsRealLink(openUrl); }, 400);
   }
   function shareCard(title, name, meta, onAdd, openUrl) {
     closeShareCard();
@@ -3422,7 +3444,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     if (showOpen) {
       // Left open on purpose: we can't be sure the browser actually captured this into the app
       // (see the caveat on launch_handler above), so Add/Dismiss stay available right here too.
-      el.querySelector('.sc-open').addEventListener('click', function () { openAsRealLink(openUrl); });
+      el.querySelector('.sc-open').addEventListener('click', function () { handleOpenInAppClick(openUrl); });
     }
     document.body.appendChild(el);
     shareCardEl = el;
@@ -3511,6 +3533,19 @@ window.addEventListener('beforeinstallprompt', function (e) {
   applyGeneral();
   var start = lastTool() || 'code';
   var incomingShareHash = location.hash;   // captured before cleanUrl() clears it below
+  // Arrived via manifest.json's protocol_handlers: a "web+devtoolkit://share=..." click gets
+  // dispatched by the browser as "?dtlink=<percent-encoded original link>" (see protocolUrlFor
+  // above). Feed it into the exact same #share=... pipeline as an ordinary link, just from a
+  // different entry door -- everything downstream (the card, the bus, Add/Dismiss) is identical.
+  (function () {
+    var dtlink;
+    try { dtlink = new URLSearchParams(location.search).get('dtlink'); } catch (e) {}
+    if (!dtlink) return;
+    try { console.log('[dt-install] arrived via protocol_handlers, dtlink=', dtlink); } catch (e2) {}
+    var m = /share=([^&]+)/.exec(dtlink);
+    if (m) incomingShareHash = '#share=' + m[1];
+    try { history.replaceState(null, '', location.pathname); } catch (e3) {}   // drop ?dtlink= from the address bar
+  })();
   activate(start, { silent: true, noFocus: true });
   function cleanUrl() { if (location.hash) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } }   // keep the address bar clean
   cleanUrl();

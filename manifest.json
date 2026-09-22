@@ -9,6 +9,9 @@
   "related_applications": [
     { "platform": "webapp", "url": "https://alonpeleg.github.io/devtools/manifest.json" }
   ],
+  "protocol_handlers": [
+    { "protocol": "web+devtoolkit", "url": "./?dtlink=%s" }
+  ],
   "background_color": "#1e1e1e",
   "theme_color": "#252526",
   "categories": ["developer", "utilities", "productivity"],
