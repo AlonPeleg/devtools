@@ -3587,7 +3587,15 @@ window.addEventListener('beforeinstallprompt', function (e) {
     // front (vs. flashing it and returning to whatever was focused before) is entirely up to
     // them, and varies by OS and browser build. This just gives it a nudge when we're allowed to.
     if (isStandalone()) { try { window.focus(); } catch (e) {} }
-    if (bus) {
+    // The hand-off dance below is for ordinary browser tabs piling up -- it's what makes a
+    // second https tab defer to one that's already open instead of sitting side by side. It
+    // must NOT run when this window IS the installed app (isStandalone()): the whole point of
+    // arriving here via protocol_handlers is to show the share *in the app*, and an already-open
+    // browser tab answering the ping would make the app immediately hand its own share back to
+    // that tab and close itself -- which looked like the app "flashing and closing" with nothing
+    // opening, reported from a real device. So a standalone window always handles its share
+    // locally, regardless of what other tabs are open.
+    if (bus && !isStandalone()) {
       // Give any already-open Dev Toolkit tab ~220ms to answer. If one does, hand the share
       // to it and try to close this new, now-redundant tab. If none answers (or close() is
       // refused, per the note above), fall back to handling the share right here as usual.
