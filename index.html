@@ -76,6 +76,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
   window.__dtInstall = e;
   window.__dtInstallPromptSeen = true;   // permanent record that it fired at least once, even after __dtInstall is later consumed/cleared
+  try { console.log('[dt-install] beforeinstallprompt fired -> treating as NOT installed'); } catch (e2) {}
   window.dispatchEvent(new Event('dt-install-available'));
 });
 </script>
@@ -3228,7 +3229,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // null = not yet known (or an unsupported browser, e.g. Firefox/Safari -- no signal there at all).
   var appInstalled = isStandalone() ? true : null;   // already running standalone proves it on its own
   var installableBrowser = !!navigator.getInstalledRelatedApps;   // Chrome/Edge/Opera/Samsung Internet family
-  function setAppInstalled(v) {
+  // Temporary: logs every step of the install-detection decision to the console (prefixed
+  // "[dt-install]") so a real-device report can be traced back to which signal did what, instead
+  // of guessing. Safe to leave in -- a handful of console lines, no UI, no behavior change.
+  try { console.log('[dt-install] boot: standalone=' + isStandalone() + ' installableBrowser=' + installableBrowser + ' initial appInstalled=' + appInstalled); } catch (e0) {}
+  function setAppInstalled(v, why) {
+    try { console.log('[dt-install] setAppInstalled(' + v + ') via ' + why + (appInstalled === v ? ' [no change]' : ' [was ' + appInstalled + ']')); } catch (e1) {}
     if (appInstalled === v) return;
     appInstalled = v;
     refreshInstallUi();
@@ -3237,16 +3243,18 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function refreshAppInstalled() {
     if (!navigator.getInstalledRelatedApps) return;
     navigator.getInstalledRelatedApps().then(function (apps) {
-      if (apps.length > 0) setAppInstalled(true);
-    }).catch(function () {});
+      try { console.log('[dt-install] getInstalledRelatedApps() resolved:', apps); } catch (e2) {}
+      if (apps.length > 0) setAppInstalled(true, 'getInstalledRelatedApps');
+    }).catch(function (err) { try { console.log('[dt-install] getInstalledRelatedApps() rejected:', err); } catch (e3) {} });
   }
   refreshAppInstalled();
-  if (window.__dtInstallPromptSeen) setAppInstalled(false);   // beforeinstallprompt already fired before this ran
+  if (window.__dtInstallPromptSeen) setAppInstalled(false, 'beforeinstallprompt already seen at boot');   // beforeinstallprompt already fired before this ran
   else if (installableBrowser) {
     setTimeout(function () {
       // Still nothing after a couple of seconds, on a browser that would otherwise offer to
       // install us: read that silence as "already installed" rather than "never checked".
-      if (!window.__dtInstallPromptSeen && !isStandalone() && appInstalled !== true) setAppInstalled(true);
+      try { console.log('[dt-install] 1800ms silence check: promptSeen=' + !!window.__dtInstallPromptSeen + ' standalone=' + isStandalone() + ' appInstalled=' + appInstalled); } catch (e4) {}
+      if (!window.__dtInstallPromptSeen && !isStandalone() && appInstalled !== true) setAppInstalled(true, '1800ms silence');
     }, 1800);
   }
   function canInstall() { return !!window.__dtInstall && !isStandalone() && appInstalled !== true; }
@@ -3273,8 +3281,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
   }
   // beforeinstallprompt firing (see the early listener in <head>, which sets both of these even if
   // it fires before this script runs) is itself the authoritative "not installed" signal above.
-  window.addEventListener('dt-install-available', function () { setAppInstalled(false); refreshInstallUi(); });
-  window.addEventListener('appinstalled', function () { window.__dtInstall = null; setAppInstalled(true); announce('Dev Toolkit was installed as an app'); refreshInstallUi(); });
+  window.addEventListener('dt-install-available', function () { setAppInstalled(false, 'dt-install-available'); refreshInstallUi(); });
+  window.addEventListener('appinstalled', function () { window.__dtInstall = null; setAppInstalled(true, 'appinstalled event'); announce('Dev Toolkit was installed as an app'); refreshInstallUi(); });
   // The service worker only exists so the browser offers installing; it caches nothing (see sw.js).
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
@@ -3379,6 +3387,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     // adds it in place once the promise does resolve. And when we're already running as the
     // installed app (isStandalone), there's nothing to "open" -- we're already in it.
     var showOpen = shouldShowOpenBtn();
+    try { console.log('[dt-install] share card rendered: openUrl=' + !!openUrl + ' appInstalled=' + appInstalled + ' standalone=' + isStandalone() + ' -> showOpen=' + showOpen); } catch (e5) {}
     el.innerHTML =
       '<div class="sc-icon">' + SHARE_ICON + '</div>' +
       '<div class="sc-body">' +
