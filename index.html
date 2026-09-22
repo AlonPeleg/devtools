@@ -3406,11 +3406,37 @@ window.addEventListener('beforeinstallprompt', function (e) {
   function handleOpenInAppClick(openUrl) {
     var protoUrl = protocolUrlFor(openUrl);
     try { console.log('[dt-install] "Open in app" clicked. protocol url:', protoUrl, ' https fallback:', openUrl); } catch (e) {}
-    if (protoUrl) openAsRealLink(protoUrl);
-    // Also try the ordinary https link shortly after, as a second attempt via the older path --
-    // harmless if the protocol link already worked (the cross-tab bus just hands off and closes
-    // the redundant tab, same as it always has).
-    setTimeout(function () { openAsRealLink(openUrl); }, 400);
+    if (!protoUrl) { openAsRealLink(openUrl); return; }
+    // Used to always fire the plain https link ~400ms after the protocol link too, "just in case".
+    // On a real device that turned into a genuine double-open: the protocol link launched the app
+    // fine, and then that unconditional https fallback got captured *into the now-running app* a
+    // moment later (navigation capturing does reliably reach an already-running instance -- it's
+    // only cold-launching a closed one that's unreliable), which looked like the app opening,
+    // flashing, and opening again. So now the fallback only fires if we have a real signal the
+    // protocol link did NOT hand off: this tab briefly losing focus (blur) is a solid signal it
+    // did, since the OS/browser steals focus to show a picker or switch to the external app even
+    // when it hands right back. No blur within the window below means nothing external responded.
+    var settled = false;
+    function onBlur() {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('blur', onBlur);
+      try { console.log('[dt-install] tab lost focus after the protocol click -- treating as handed off, not firing the https fallback'); } catch (e2) {}
+      // Best-effort: close this now-redundant tab. Browsers only let a script close a tab/window
+      // it opened itself (or one whose entire history is this one page) -- there's no web API to
+      // force-close a tab the person opened by hand, by design, so on an ordinary tab this is very
+      // likely a silent no-op rather than something we can guarantee.
+      try { window.close(); } catch (e3) {}
+    }
+    window.addEventListener('blur', onBlur);
+    openAsRealLink(protoUrl);
+    setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('blur', onBlur);
+      try { console.log('[dt-install] no blur after the protocol click -- falling back to the https link'); } catch (e4) {}
+      openAsRealLink(openUrl);
+    }, 900);
   }
   function shareCard(title, name, meta, onAdd, openUrl) {
     closeShareCard();
@@ -3496,7 +3522,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       setTimeout(attempt, 50);
     })();
   }
-  function handleShareHash(hash) {
+  function handleShareHash(hash, opts) {
     var m = /^#share=(.+)$/.exec(hash || '');
     if (!m) return;
     decodeSharePayload(m[1]).then(function (payload) {
@@ -3510,9 +3536,17 @@ window.addEventListener('beforeinstallprompt', function (e) {
         });
         toast('Someone shared a comparison with you — nothing has been saved.', null, null, 8000);
       } else if (payload.k === 'e') {
-        // Adding a shared entry does change saved data, so it waits for an explicit "Add".
         var name = (payload.d && payload.d.n) || 'this';
         var noun = TYPE_NOUN[payload.t] || 'Snippet';
+        if (opts && opts.autoAdd) {
+          // Arrived via the "Open in app" button itself (see arrivedViaDtlink) -- for whoever
+          // clicked that, "open in app" already means "open the app and add it", so skip the
+          // confirm card entirely and add it straight away, then just toast that it happened.
+          whenToolReady(payload.t, function (f) { postTo(f, { __devToolkitCmd: 'addSharedEntry', data: payload.d }); });
+          toast('Added "' + name + '" from your shared link.', null, null, 6000);
+          return;
+        }
+        // Adding a shared entry does change saved data, so it waits for an explicit "Add".
         var when = fmtShareTime(payload.ts);
         var openUrl = location.origin + location.pathname + hash;
         var meta = noun + (when ? ' - Created ' + when : '');
@@ -3553,6 +3587,11 @@ window.addEventListener('beforeinstallprompt', function (e) {
   // dispatched by the browser as "?dtlink=<percent-encoded original link>" (see protocolUrlFor
   // above). Feed it into the exact same #share=... pipeline as an ordinary link, just from a
   // different entry door -- everything downstream (the card, the bus, Add/Dismiss) is identical.
+  // Set when a share arrives via manifest.json's protocol_handlers (below), which only ever
+  // happens as the result of the user clicking our own "Open in app" button -- so for them,
+  // "open in app" means "open the app AND add it", not "show me the card again to decide". See
+  // the autoAdd use below.
+  var arrivedViaDtlink = false;
   (function () {
     try { console.log('[dt-install] boot location.search=' + JSON.stringify(location.search)); } catch (e0) {}
     var dtlink;
@@ -3562,6 +3601,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     var m = /share=([^&]+)/.exec(dtlink);
     if (m) {
       incomingShareHash = '#share=' + m[1];
+      arrivedViaDtlink = true;
       try { console.log('[dt-install] extracted share payload, length=' + m[1].length + ' value=' + JSON.stringify(m[1])); } catch (e4) {}
     } else {
       try { console.log('[dt-install] dtlink did not match the expected "share=..." pattern'); } catch (e5) {}
@@ -3611,10 +3651,10 @@ window.addEventListener('beforeinstallprompt', function (e) {
       try { bus.postMessage({ type: 'ping' }); } catch (e2) {}
       setTimeout(function () {
         bus.removeEventListener('message', onPong);
-        if (!handedOff) handleShareHash(incomingShareHash);
+        if (!handedOff) handleShareHash(incomingShareHash, { autoAdd: arrivedViaDtlink });
       }, 220);
     } else {
-      handleShareHash(incomingShareHash);
+      handleShareHash(incomingShareHash, { autoAdd: arrivedViaDtlink });
     }
   }
 })();
