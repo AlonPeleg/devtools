@@ -2356,7 +2356,7 @@ function exportLocalStorageBackup() {
             const shareBtn = entry.querySelector('.btn-share');
             shareBtn.onclick = () => {
                 const name = entry.querySelector('.name-input').value.trim();
-                const payload = { v: 1, k: 'e', t: 'json', d: { n: name, r: rawString } };
+                const payload = { v: 1, k: 'e', t: 'json', ts: Date.now(), d: { n: name, r: rawString } };
                 DT.shareEntry(payload, shareBtn, () => entry.querySelector('.btn-save').click(), () => {
                     shareBtn.innerHTML = '<span style="color:#89d185; font-size:11px; font-weight:bold;">✓</span>';
                     setTimeout(() => shareBtn.innerHTML = shareIconSvg, 800);

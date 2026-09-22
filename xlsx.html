@@ -1900,7 +1900,7 @@ function exportLocalStorageBackup() {
 
     function shareEntryLink(entryId, btn) {
         const entry = findEntry(entryId); if (!entry) return;
-        const payload = { v: 1, k: 'e', t: 'xlsx', d: { n: entry.name || '', y: entry.type, s: entry.sheets.map(s => ({ n: s.name, r: s.allRows, h: s.hasHeader })) } };
+        const payload = { v: 1, k: 'e', t: 'xlsx', ts: Date.now(), d: { n: entry.name || '', y: entry.type, s: entry.sheets.map(s => ({ n: s.name, r: s.allRows, h: s.hasHeader })) } };
         DT.shareEntry(payload, btn, () => saveAsCsv(entryId));
     }
     // Called by the shell after decoding a "#share=" link that points at this tool -- adds the

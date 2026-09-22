@@ -3489,7 +3489,7 @@ function downloadEntry(id) {
 
 function shareEntryLink(entryId, btn) {
     const item = findEntry(entryId); if (!item) return;
-    const payload = { v: 1, k: 'e', t: 'code', d: { n: item.name || '', l: item.override || '', c: item.rawCode } };
+    const payload = { v: 1, k: 'e', t: 'code', ts: Date.now(), d: { n: item.name || '', l: item.override || '', c: item.rawCode } };
     DT.shareEntry(payload, btn, () => downloadEntry(entryId));
 }
 // Called by the shell after decoding a "#share=" link that points at this tool -- adds the

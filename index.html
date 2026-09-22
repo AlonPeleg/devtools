@@ -282,10 +282,14 @@ window.addEventListener('beforeinstallprompt', function (e) {
     flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     background: var(--accent); color: var(--accent-fg);
   }
-  .share-card .sc-icon svg { width: 1.0625rem; height: 1.0625rem; }
+  .share-card .sc-icon svg { width: 1.0625rem; height: 1.0625rem; transform: translate(0.75px, -0.75px); }
   .share-card .sc-body { flex: 1 1 auto; min-width: 0; padding-right: 1.25rem; }
-  .share-card .sc-title { font-size: 0.875rem; font-weight: 600; color: var(--text-bright); line-height: 1.35; }
-  .share-card .sc-sub { margin-top: 0.1875rem; font-size: 0.8125rem; color: var(--text-dim); }
+  .share-card .sc-title { font-size: 0.8125rem; font-weight: 500; color: var(--text-dim); line-height: 1.35; }
+  .share-card .sc-name {
+    margin-top: 0.25rem; font-size: 0.9375rem; font-weight: 700; color: var(--text-bright); line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .share-card .sc-meta { margin-top: 0.1875rem; font-size: 0.75rem; color: var(--text-dim); }
   .share-card .sc-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
   .share-card .sc-close { position: absolute; top: 0.375rem; right: 0.375rem; }
   html[data-motion="reduce"] .share-card { transition: none; }
@@ -3253,8 +3257,17 @@ window.addEventListener('beforeinstallprompt', function (e) {
      tool. The 'g' flag means gzip-compressed, 'r' means the raw JSON bytes (used when a browser
      lacks CompressionStream). cleanUrl() (below) strips the hash from the address bar either way,
      so this only ever gets one shot at a given link. ---------- */
-  var TYPE_NOUN = { code: 'code snippet', json: 'JSON / XML entry', xlsx: 'CSV / XLSX file' };
+  var TYPE_NOUN = { code: 'Code snippet', json: 'JSON snippet', xlsx: 'XLSX snippet' };
   var SHARE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg>';
+  // The timestamp on a shared entry is when the link was made (entries don't carry a
+  // "created" date of their own), so this reads as "shared at", not "created at".
+  function fmtShareTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts); if (isNaN(d.getTime())) return '';
+    var time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    var sameDay = d.toDateString() === new Date().toDateString();
+    return sameDay ? time : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + time;
+  }
   // A more visible, non-modal alternative to toast() for "someone shared X with you -- Add?".
   // Not a dialog: no backdrop, nothing behind it is blocked, and Dismiss / the ~30s timeout /
   // just clicking elsewhere in the app all leave it exactly as safe as ignoring the old toast was.
@@ -3265,7 +3278,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     el.classList.remove('show');
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
   }
-  function shareCard(title, sub, onAdd) {
+  function shareCard(title, name, meta, onAdd) {
     closeShareCard();
     var el = document.createElement('div');
     el.className = 'share-card'; el.setAttribute('role', 'status');
@@ -3273,7 +3286,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       '<div class="sc-icon">' + SHARE_ICON + '</div>' +
       '<div class="sc-body">' +
         '<div class="sc-title">' + esc(title) + '</div>' +
-        '<div class="sc-sub">' + esc(sub) + '</div>' +
+        '<div class="sc-name">' + esc(name) + '</div>' +
+        (meta ? '<div class="sc-meta">' + esc(meta) + '</div>' : '') +
         '<div class="sc-actions"><button type="button" class="btn primary">Add</button><button type="button" class="btn">Dismiss</button></div>' +
       '</div>' +
       '<button type="button" class="icon-btn sc-close" aria-label="Dismiss"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button>';
@@ -3330,8 +3344,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
       } else if (payload.k === 'e') {
         // Adding a shared entry does change saved data, so it waits for an explicit "Add".
         var name = (payload.d && payload.d.n) || 'this';
-        var noun = TYPE_NOUN[payload.t] || 'entry';
-        shareCard('Someone shared “' + name + '” with you', 'A ' + noun + ' · nothing saved yet', function () {
+        var noun = TYPE_NOUN[payload.t] || 'Snippet';
+        var when = fmtShareTime(payload.ts);
+        shareCard('Someone shared a snippet with you', name, noun + (when ? ' · ' + when : '') + ' · nothing saved yet', function () {
           whenToolReady(payload.t, function (f) { postTo(f, { __devToolkitCmd: 'addSharedEntry', data: payload.d }); });
         });
       }
