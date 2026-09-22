@@ -3278,7 +3278,15 @@ window.addEventListener('beforeinstallprompt', function (e) {
   activate(start, { silent: true, noFocus: true });
   function cleanUrl() { if (location.hash) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } }   // keep the address bar clean
   cleanUrl();
-  window.addEventListener('hashchange', cleanUrl);
+  // Pasting a "#share=..." link into the address bar of a tab that already has this page open
+  // (or clicking a same-tab link to it) doesn't reload the page -- it's a same-document
+  // navigation, which only fires hashchange. Without this, cleanUrl() alone would just erase
+  // the hash and the share link would silently do nothing.
+  window.addEventListener('hashchange', function () {
+    var h = location.hash;
+    cleanUrl();
+    if (h) handleShareHash(h);
+  });
   if (incomingShareHash) handleShareHash(incomingShareHash);
 })();
 </script>
