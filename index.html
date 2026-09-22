@@ -3567,7 +3567,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
               { label: 'Dismiss' }
             ], null, 10000);
           } else {
-            toast('Someone shared ' + articleNoun + ' with you — nothing has been saved.', [{ label: 'Dismiss' }], null, 5000);
+            // Same wording either way -- whether the app isn't installed, or this IS the app
+            // (isStandalone(), so there's nothing to "open" into) -- just a shorter action list.
+            toast('Someone shared ' + articleNoun + ' with you.', [{ label: 'Dismiss' }], null, 5000);
           }
         })();
       } else if (payload.k === 'e') {
