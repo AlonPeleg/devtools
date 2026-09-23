@@ -3639,7 +3639,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
           }
         })();
       } else if (payload.k === 'e') {
-        var name = (payload.d && payload.d.n) || 'this';
+        var name = (payload.d && payload.d.n) || 'Untitled';
         var noun = TYPE_NOUN[payload.t] || 'Snippet';
         if (opts && opts.autoAdd) {
           // Arrived via the "Open in app" button itself (see arrivedViaDtlink) -- for whoever
