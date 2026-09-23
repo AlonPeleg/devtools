@@ -876,15 +876,18 @@
         animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
         transition-duration: 0.001ms !important; scroll-behavior: auto !important;
     }
+    /* !important so this wins over a chosen palette's inline vars (DT.applyPalette sets the same
+       custom properties) -- high contrast used to discard the palette entirely instead, which
+       also reverted Monaco's editor theme to stock. See index.html's matching comment. */
     html[data-hc="1"]:not([data-theme="light"]) {
-        --text: #ffffff; --text-dim: #d6d6d6; --text-bright: #ffffff;
-        --border: #9a9a9a; --border-soft: rgba(200,200,200,0.55);
-        --accent: #3db4ff; --accent-hover: #6cc6ff; --focus: #ffd54a;
+        --text: #ffffff !important; --text-dim: #d6d6d6 !important; --text-bright: #ffffff !important;
+        --border: #9a9a9a !important; --border-soft: rgba(200,200,200,0.55) !important;
+        --accent: #3db4ff !important; --accent-hover: #6cc6ff !important; --focus: #ffd54a !important;
     }
     html[data-hc="1"][data-theme="light"] {
-        --text: #000000; --text-dim: #2b2b2b; --text-bright: #000000;
-        --border: #4a4a4a; --border-soft: rgba(0,0,0,0.6);
-        --accent: #0a4f8a; --accent-hover: #083b66; --focus: #7a2e00;
+        --text: #000000 !important; --text-dim: #2b2b2b !important; --text-bright: #000000 !important;
+        --border: #4a4a4a !important; --border-soft: rgba(0,0,0,0.6) !important;
+        --accent: #0a4f8a !important; --accent-hover: #083b66 !important; --focus: #7a2e00 !important;
     }
     html[data-hc="1"] :focus-visible { outline: 2px solid var(--focus) !important; outline-offset: 1px; }
 
@@ -1175,7 +1178,7 @@ function exportLocalStorageBackup() {
 
     let postedEntries = [];   // { id, name, type, timeStr, sheets:[Sheet], activeSheet }
     let entryIdCounter = 0;
-    let isGridView = false;
+    let isGridView = true;   // default is Grid, not Stack -- loadLayout() below still honors an explicit saved preference
 
     // Sheet = { name, allRows: [[...]], hasHeader: bool, sortCol: number|null, sortDir: 1|-1, filterQuery: '' }
 
@@ -1882,7 +1885,7 @@ function exportLocalStorageBackup() {
     }
 
     function loadLayout() {
-        try { if (localStorage.getItem(LAYOUT_KEY) === 'grid') isGridView = true; } catch (e) {}
+        try { if (localStorage.getItem(LAYOUT_KEY) === 'stack') isGridView = false; } catch (e) {}
         applyLayout();
     }
 

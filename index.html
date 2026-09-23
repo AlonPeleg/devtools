@@ -132,14 +132,19 @@ window.addEventListener('beforeinstallprompt', function (e) {
     --tok-comment: #008000; --tok-string: #a31515; --tok-keyword: #0000ff; --tok-number: #098658;
     --tok-type: #267f99;    --tok-func: #795e26;   --tok-key: #001080;
   }
-  /* High contrast: brighter text, firmer borders. */
+  /* High contrast: brighter text, firmer borders. !important so this always wins over a chosen
+     palette's inline CSS vars (applyShellPalette sets the very same custom properties) -- high
+     contrast used to be implemented by discarding the palette entirely instead (activePalette()
+     returned null whenever contrast was 'high'), which also silently reverted Monaco's editor
+     theme back to stock. Layering it on top like this keeps the chosen palette (Monaco included)
+     and just boosts the handful of properties that matter for contrast. */
   html[data-hc="1"]:not([data-theme="light"]) {
-    --text: #ffffff; --text-dim: #d6d6d6; --tab-fg: #d6d6d6; --bar-border: #9a9a9a;
-    --accent: #3db4ff; --accent-strong: #3db4ff; --focus: #ffd54a; --input: #1e1e1e;
+    --text: #ffffff !important; --text-dim: #d6d6d6 !important; --tab-fg: #d6d6d6 !important; --bar-border: #9a9a9a !important;
+    --accent: #3db4ff !important; --accent-strong: #3db4ff !important; --focus: #ffd54a !important; --input: #1e1e1e !important;
   }
   html[data-hc="1"][data-theme="light"] {
-    --text: #000000; --text-dim: #2b2b2b; --tab-fg: #2b2b2b; --bar-border: #4a4a4a;
-    --accent: #0a4f8a; --accent-strong: #0a4f8a; --focus: #7a2e00; --input: #ffffff;
+    --text: #000000 !important; --text-dim: #2b2b2b !important; --tab-fg: #2b2b2b !important; --bar-border: #4a4a4a !important;
+    --accent: #0a4f8a !important; --accent-strong: #0a4f8a !important; --focus: #7a2e00 !important; --input: #ffffff !important;
   }
 
   * { box-sizing: border-box; }
@@ -1052,10 +1057,15 @@ window.addEventListener('beforeinstallprompt', function (e) {
   /* ===== Color palettes (editor-style presets). "stock" is the built-in dark / light look and is the default.
      A palette can have a dark and/or a light variant; when the current mode has none, the stock colors are used. ===== */
   function paletteById(id) { return PALETTES.filter(function (p) { return p.id === id; })[0] || PALETTES[0]; }
-  // The colors of the chosen palette for the current light / dark mode, or null (stock look; also null in high contrast).
+  // The colors of the chosen palette for the current light / dark mode, or null (stock look).
+  // High contrast no longer forces this to null -- it used to, which meant turning on high
+  // contrast silently discarded a chosen palette (Monaco's editor theme included) instead of
+  // just boosting contrast on top of it; see the [data-hc="1"] !important rules above/in each
+  // tool's own CSS, which now handle the actual contrast boost regardless of which palette (or
+  // none) is active.
   function activePalette() {
     var g = settings.general;
-    if (g.contrast === 'high' || !g.palette || g.palette === 'stock') return null;
+    if (!g.palette || g.palette === 'stock') return null;
     return paletteById(g.palette).variants[effectiveTheme()] || null;
   }
   var SHELL_PAL_VARS = [];

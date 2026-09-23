@@ -836,17 +836,20 @@
         animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
         transition-duration: 0.001ms !important; scroll-behavior: auto !important;
     }
+    /* !important so this wins over a chosen palette's inline vars (DT.applyPalette sets the same
+       custom properties) -- high contrast used to discard the palette entirely instead, which
+       also reverted Monaco's editor theme to stock. See index.html's matching comment. */
     html[data-hc="1"]:not([data-theme="light"]) {
-        --vscode-editor-foreground: #ffffff; --vscode-foreground: #ffffff; --vscode-input-foreground: #ffffff;
-        --vscode-menu-foreground: #ffffff; --vscode-tab-inactiveForeground: #d6d6d6;
-        --vscode-panel-border: #9a9a9a; --vscode-input-border: #9a9a9a; --vscode-menu-border: #9a9a9a;
-        --vscode-focusBorder: #ffd54a; --vscode-textLink-foreground: #6cc6ff;
+        --vscode-editor-foreground: #ffffff !important; --vscode-foreground: #ffffff !important; --vscode-input-foreground: #ffffff !important;
+        --vscode-menu-foreground: #ffffff !important; --vscode-tab-inactiveForeground: #d6d6d6 !important;
+        --vscode-panel-border: #9a9a9a !important; --vscode-input-border: #9a9a9a !important; --vscode-menu-border: #9a9a9a !important;
+        --vscode-focusBorder: #ffd54a !important; --vscode-textLink-foreground: #6cc6ff !important;
     }
     html[data-hc="1"][data-theme="light"] {
-        --vscode-editor-foreground: #000000; --vscode-foreground: #000000; --vscode-input-foreground: #000000;
-        --vscode-menu-foreground: #000000; --vscode-tab-inactiveForeground: #2b2b2b;
-        --vscode-panel-border: #4a4a4a; --vscode-input-border: #4a4a4a; --vscode-menu-border: #4a4a4a;
-        --vscode-focusBorder: #7a2e00; --vscode-textLink-foreground: #0a4f8a;
+        --vscode-editor-foreground: #000000 !important; --vscode-foreground: #000000 !important; --vscode-input-foreground: #000000 !important;
+        --vscode-menu-foreground: #000000 !important; --vscode-tab-inactiveForeground: #2b2b2b !important;
+        --vscode-panel-border: #4a4a4a !important; --vscode-input-border: #4a4a4a !important; --vscode-menu-border: #4a4a4a !important;
+        --vscode-focusBorder: #7a2e00 !important; --vscode-textLink-foreground: #0a4f8a !important;
     }
     html[data-hc="1"] :focus-visible { outline: 2px solid var(--vscode-focusBorder) !important; outline-offset: 1px; }
 
@@ -1136,7 +1139,7 @@ function exportLocalStorageBackup() {
         const editorRightScroll = document.getElementById('editorRight');
         let isEditorSyncing = false;
 
-        let isGridView = false;
+        let isGridView = true;   // default is Grid, not Line -- loadViewerLayout() below still honors an explicit saved preference
 
         function toggleViewerLayout() {
             isGridView = !isGridView;
@@ -1162,8 +1165,8 @@ function exportLocalStorageBackup() {
         function loadViewerLayout() {
             try {
                 const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
-                if (saved === 'grid') {
-                    isGridView = true;
+                if (saved === 'line') {
+                    isGridView = false;
                 }
             } catch (err) {
                 console.error("Failed to load layout preference:", err);
