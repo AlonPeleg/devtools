@@ -213,6 +213,47 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .tab[data-tool="json"] .dot { background: var(--dot-json); }
   .tab[data-tool="xlsx"] .dot { background: var(--dot-xlsx); }
 
+  /* Header ticker: the banner's message sweeps up through the empty middle of the tab bar on every
+     page load -- rises in, holds a beat, then keeps rising and exits off the top. Pure CSS (no JS)
+     so it just naturally replays on every fresh visit; a tab switch (no page reload) never retriggers
+     it. Reduced motion drops the sweep for a plain appear-then-fade, same as the rest of the app's
+     motion handling (data-motion="full" forces the sweep back on even under a reduced-motion OS). */
+  .header-ticker {
+    flex: 1 1 auto; min-width: 0; height: 100%; overflow: hidden; position: relative;
+    display: flex; align-items: center; justify-content: center; pointer-events: none;
+  }
+  .header-ticker .ht-text {
+    display: flex; align-items: baseline; gap: 0.5rem; max-width: 100%; min-width: 0;
+    animation: headerTickerSweep 5s cubic-bezier(.22,.61,.36,1) 1 both;
+  }
+  .header-ticker .ht-msg {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 0.75rem; color: var(--text-dim); padding-left: 0.75rem;
+  }
+  .header-ticker .ht-link {
+    flex: 0 0 auto; pointer-events: auto; font: inherit; font-size: 0.75rem; font-weight: 600;
+    color: var(--accent-strong); background: transparent; border: 0; cursor: pointer;
+    padding: 0 0.75rem 0 0; text-decoration: underline; text-underline-offset: 2px;
+  }
+  .header-ticker .ht-link:hover, .header-ticker .ht-link:focus-visible { color: var(--accent); }
+  @keyframes headerTickerSweep {
+    0%   { transform: translateY(1.9rem); }
+    18%  { transform: translateY(0); }
+    68%  { transform: translateY(0); }
+    100% { transform: translateY(-1.9rem); }
+  }
+  @keyframes headerTickerFade {
+    0%   { opacity: 0; transform: none; }
+    12%  { opacity: 1; }
+    75%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  html[data-motion="reduce"] .header-ticker .ht-text { animation-name: headerTickerFade; }
+  @media (prefers-reduced-motion: reduce) {
+    html:not([data-motion="full"]) .header-ticker .ht-text { animation-name: headerTickerFade; }
+  }
+  @media (max-width: 900px) { .header-ticker { display: none; } }
+
   .bar-actions { margin-left: auto; display: flex; align-items: center; gap: 0.125rem; padding: 0 0.625rem 0 0.5rem; flex: 0 0 auto; }
   .icon-btn {
     display: flex; align-items: center; justify-content: center;
@@ -628,6 +669,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
       <button class="tab" role="tab" id="tab-json" aria-controls="pane-json" data-tool="json" title="JSON / XML Viewer &amp; Compare (Ctrl+2)" aria-label="JSON / XML Viewer &amp; Compare"><span class="dot"></span><span class="full">JSON / XML Viewer &amp; Compare</span><span class="short">JSON / XML</span></button>
       <button class="tab" role="tab" id="tab-xlsx" aria-controls="pane-xlsx" data-tool="xlsx" title="CSV / XLSX Viewer (Ctrl+3)" aria-label="CSV / XLSX Viewer"><span class="dot"></span><span class="full">CSV / XLSX Viewer</span><span class="short">CSV / XLSX</span></button>
     </nav>
+    <div class="header-ticker" aria-hidden="true">
+      <span class="ht-text">
+        <span class="ht-msg">Dev Toolkit — view &amp; compare code, JSON/XML and CSV/XLSX. Free, open source, and it runs entirely in your browser.</span>
+        <button type="button" id="htAbout" class="ht-link" tabindex="-1">Learn more</button>
+      </span>
+    </div>
     <div class="bar-actions">
       <button id="paletteBtn" class="palette-btn" type="button" aria-haspopup="dialog" title="Open the command palette" aria-label="Open the command palette">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l4 3.5-4 3.5M8.5 12H13"/></svg>
@@ -3334,6 +3381,15 @@ window.addEventListener('beforeinstallprompt', function (e) {
     var timer = setTimeout(dismiss, 5000);
     $('ibClose').addEventListener('click', function () { clearTimeout(timer); dismiss(); });
     $('ibAbout').addEventListener('click', function () { clearTimeout(timer); dismiss(); openSettings('about'); });
+  })();
+
+  // The header ticker's own "Learn more" (mouse-only by design, see its tabindex="-1" -- the whole
+  // ticker is a decorative, auto-vanishing echo of this same banner text, and About stays reachable
+  // for keyboard/AT users at all times via Settings or the command palette). Wired unconditionally,
+  // since unlike the intro banner above, the ticker plays on every visit, not just the first.
+  (function () {
+    var lnk = $('htAbout');
+    if (lnk) lnk.addEventListener('click', function () { openSettings('about'); });
   })();
 
   /* ---------- Share links: "#share=<g|r><base64url>" is decoded here and routed to the right
