@@ -209,6 +209,13 @@ window.addEventListener('beforeinstallprompt', function (e) {
     content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent);
   }
   .tab .dot { width: 0.5rem; height: 0.5rem; border-radius: 2px; flex: 0 0 auto; }
+  .tab-count {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 1.125rem; height: 1.125rem;
+    padding: 0 0.3rem; border-radius: 999px; background: var(--hover); color: var(--text-dim);
+    font-size: 0.6875rem; font-weight: 700; line-height: 1; flex: 0 0 auto;
+  }
+  .tab[aria-selected="true"] .tab-count { background: var(--accent); color: var(--accent-fg); }
+  .tab-count[hidden] { display: none; }
   .tab[data-tool="code"] .dot { background: var(--dot-code); }
   .tab[data-tool="json"] .dot { background: var(--dot-json); }
   .tab[data-tool="xlsx"] .dot { background: var(--dot-xlsx); }
@@ -546,6 +553,22 @@ window.addEventListener('beforeinstallprompt', function (e) {
   .seg button:last-child { border-right: none; }
   .seg button:hover { background: var(--hover); }
   .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+  /* A live sample of the Swap Panel A/B button, next to the "Swap button color" control -- so
+     switching styles shows the result immediately instead of only after closing Settings. Not a
+     real button (decorative, matches the tool pages' .swap-mid-btn / .swap-style-* look using the
+     shell's own theme tokens, which track the chosen palette the same way). */
+  .swap-preview-wrap { display: inline-flex; align-items: center; gap: 0.5rem; }
+  .swap-preview-label { font-size: 0.6875rem; color: var(--text-dim); }
+  .swap-preview-btn {
+    border: none; cursor: default; border-radius: 4px; padding: 0.375rem 1.25rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--input); color: var(--text-bright); pointer-events: none;
+  }
+  .swap-preview-btn .ic { width: 14px; height: 14px; display: block; }
+  .swap-preview-btn.swap-style-b { background: color-mix(in srgb, var(--accent) 16%, var(--input)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--input)); }
+  .swap-preview-btn.swap-style-c { background: var(--input); color: var(--accent); border: 1.5px solid var(--accent); }
+  .swap-preview-btn.swap-style-d { background: var(--accent); color: var(--accent-fg); border: 1px solid var(--accent); }
+  .swap-preview-btn.swap-style-e { background: var(--input); color: var(--accent); border: none; }
   .field, select.field {
     width: 100%; background: var(--input); color: var(--text-bright); border: 1px solid var(--bar-border);
     border-radius: 4px; padding: 0.375rem 0.5rem; font-size: 0.8125rem; font-family: inherit;
@@ -665,9 +688,9 @@ window.addEventListener('beforeinstallprompt', function (e) {
   <header id="tabbar">
     <h1 class="brand">Dev Toolkit</h1>
     <nav class="tabs" role="tablist" aria-label="Tools">
-      <button class="tab" role="tab" id="tab-code" aria-controls="pane-code" data-tool="code" title="Code Viewer &amp; Compare (Ctrl+1)" aria-label="Code Viewer &amp; Compare"><span class="dot"></span><span class="full">Code Viewer &amp; Compare</span><span class="short">Code</span></button>
-      <button class="tab" role="tab" id="tab-json" aria-controls="pane-json" data-tool="json" title="JSON / XML Viewer &amp; Compare (Ctrl+2)" aria-label="JSON / XML Viewer &amp; Compare"><span class="dot"></span><span class="full">JSON / XML Viewer &amp; Compare</span><span class="short">JSON / XML</span></button>
-      <button class="tab" role="tab" id="tab-xlsx" aria-controls="pane-xlsx" data-tool="xlsx" title="CSV / XLSX Viewer (Ctrl+3)" aria-label="CSV / XLSX Viewer"><span class="dot"></span><span class="full">CSV / XLSX Viewer</span><span class="short">CSV / XLSX</span></button>
+      <button class="tab" role="tab" id="tab-code" aria-controls="pane-code" data-tool="code" title="Code Viewer &amp; Compare (Ctrl+1)" aria-label="Code Viewer &amp; Compare"><span class="dot"></span><span class="full">Code Viewer &amp; Compare</span><span class="short">Code</span><span class="tab-count" id="tabCount-code" hidden aria-hidden="true"></span></button>
+      <button class="tab" role="tab" id="tab-json" aria-controls="pane-json" data-tool="json" title="JSON / XML Viewer &amp; Compare (Ctrl+2)" aria-label="JSON / XML Viewer &amp; Compare"><span class="dot"></span><span class="full">JSON / XML Viewer &amp; Compare</span><span class="short">JSON / XML</span><span class="tab-count" id="tabCount-json" hidden aria-hidden="true"></span></button>
+      <button class="tab" role="tab" id="tab-xlsx" aria-controls="pane-xlsx" data-tool="xlsx" title="CSV / XLSX Viewer (Ctrl+3)" aria-label="CSV / XLSX Viewer"><span class="dot"></span><span class="full">CSV / XLSX Viewer</span><span class="short">CSV / XLSX</span><span class="tab-count" id="tabCount-xlsx" hidden aria-hidden="true"></span></button>
     </nav>
     <div class="header-ticker" aria-hidden="true">
       <span class="ht-text">
@@ -805,6 +828,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
   var SETTINGS_KEY = 'dev_toolkit_settings_v1';
   var LEGACY_THEME_KEY = 'dev_toolkit_theme_v1';
   var LAST_TAB_KEY = 'dev_toolkit_last_tab_v1';
+  var ENTRY_COUNTS_KEY = 'dev_toolkit_entry_counts_v1';
   var DEFAULT_STACK = '"Cascadia Code", "SF Mono", Consolas, "Courier New", monospace';
   var isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
   var MOD = isMac ? '⌘' : 'Ctrl';
@@ -820,6 +844,16 @@ window.addEventListener('beforeinstallprompt', function (e) {
 
   function pick(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt; }
   function num(v, min, max, dflt) { v = Number(v); return isFinite(v) ? Math.min(max, Math.max(min, v)) : dflt; }
+  // Per-view show/hide for a tool's Compare-tab segmented control (List/Side-by-side/Unified in
+  // code.html, Changes/Split/Unified in json.html and xlsx.html). Each key defaults to shown; if
+  // every key would end up off (a corrupted or hand-edited settings blob), the first one is forced
+  // back on so the tool never ends up with no way to run a comparison at all.
+  function sanitizeViewButtons(raw, keys) {
+    var out = {}, any = false;
+    keys.forEach(function (k) { out[k] = !(raw && raw[k] === false); if (out[k]) any = true; });
+    if (!any) out[keys[0]] = true;
+    return out;
+  }
 
   // '' means "keep the tool's own default font".
   function stackFor(sec) {
@@ -976,12 +1010,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
   KEY_DEFS.forEach(function (d) { DEFAULT_KEYS[d.id] = d.def; });
 
   var DEFAULTS = {
-    general: { theme: 'system', uiScale: 100, motion: 'system', contrast: 'normal' },
+    general: { theme: 'system', uiScale: 100, motion: 'system', contrast: 'normal', swapStyle: 'C' },
     keys: DEFAULT_KEYS,
     palette: { sort: 'none', order: null },   // order: null = not customised yet
-    code: { font: 'default', size: 12, lineHeight: 1.5, tabSize: 4, wrap: false },
-    json: { font: 'default', size: 11, expand: 'all' },
-    xlsx: { font: 'default', size: 11.5, density: 'normal', header: true }
+    code: { font: 'default', size: 12, lineHeight: 1.5, tabSize: 4, wrap: false, liveCompare: true, viewButtons: { list: true, side: true, unified: true } },
+    json: { font: 'default', size: 11, expand: 'all', liveCompare: true, viewButtons: { changes: true, split: true, unified: true } },
+    xlsx: { font: 'default', size: 11.5, density: 'normal', header: true, viewButtons: { changes: true, split: true, unified: true } }
   };
 
   function sanitize(raw) {
@@ -994,23 +1028,29 @@ window.addEventListener('beforeinstallprompt', function (e) {
         uiScale: pick(Number(g.uiScale), [90, 100, 110, 125, 150], 100),
         motion: pick(g.motion, ['system', 'reduce', 'full'], 'system'),
         contrast: pick(g.contrast, ['normal', 'high'], 'normal'),
-        palette: pick(g.palette, PALETTE_IDS, 'stock')
+        palette: pick(g.palette, PALETTE_IDS, 'stock'),
+        showEntryCounts: g.showEntryCounts !== false,
+        swapStyle: pick(g.swapStyle, ['B', 'C', 'D', 'E'], 'C')
       },
       keys: {}, aliases: {},
       palette: { sort: pick((raw.palette || {}).sort, ['none', 'type', 'alpha', 'custom'], 'none'), order: null },
       code: {
         font: pick(c.font, FONT_IDS, 'default'),
         size: num(c.size, 9, 24, 12), lineHeight: pick(Number(c.lineHeight), [1.3, 1.5, 1.7], 1.5),
-        tabSize: pick(Number(c.tabSize), [2, 4, 8], 4), wrap: !!c.wrap
+        tabSize: pick(Number(c.tabSize), [2, 4, 8], 4), wrap: !!c.wrap, liveCompare: c.liveCompare !== false,
+        viewButtons: sanitizeViewButtons(c.viewButtons, ['list', 'side', 'unified'])
       },
       json: {
         font: pick(j.font, FONT_IDS, 'default'),
-        size: num(j.size, 9, 24, 11), expand: pick(String(j.expand), ['all', '1', '2', '3'], 'all')
+        size: num(j.size, 9, 24, 11), expand: pick(String(j.expand), ['all', '1', '2', '3'], 'all'),
+        liveCompare: j.liveCompare !== false,
+        viewButtons: sanitizeViewButtons(j.viewButtons, ['changes', 'split', 'unified'])
       },
       xlsx: {
         font: pick(x.font, FONT_IDS, 'default'),
         size: num(x.size, 9, 24, 11.5), density: pick(x.density, ['compact', 'normal', 'relaxed'], 'normal'),
-        header: x.header !== false
+        header: x.header !== false,
+        viewButtons: sanitizeViewButtons(x.viewButtons, ['changes', 'split', 'unified'])
       }
     };
     TOOLS.forEach(function (t) { out[t].fontStack = stackFor(out[t]); });   // tools read the resolved stack directly
@@ -1175,6 +1215,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     $('themeToggleBtn').title = label;
     $('themeToggleBtn').setAttribute('aria-label', label);
     applyKeyHints();
+    applyTabCounts();
   }
   // Shows the current bindings in the tab tooltips, the settings button and the palette button.
   function keyHint(id) { var v = settings.keys[id]; return v ? comboLabel(v) : ''; }
@@ -1261,6 +1302,28 @@ window.addEventListener('beforeinstallprompt', function (e) {
      Tabs and lazy-loaded panes
      ========================================================================= */
   var loaded = { code: false, json: false, xlsx: false };
+  // Entry counts for the little badge on each shell tab -- each tool page posts its own count
+  // (see the __devToolkit:'entryCount' message case below) whenever its entries load or change.
+  // A tool's pane is lazy-loaded (see loadPane below), so its real count isn't known until the
+  // user actually visits that tab at least once. Rather than showing 0/hidden for every
+  // not-yet-visited tab after a refresh, seed the counts from whatever was last seen and posted
+  // to localStorage, so all three badges can render immediately from cache; each one is then
+  // silently corrected the moment its tool actually loads and reports the real, current count.
+  var entryCounts = { code: 0, json: 0, xlsx: 0 };
+  try {
+    var cachedEntryCounts = JSON.parse(localStorage.getItem(ENTRY_COUNTS_KEY) || '{}');
+    TOOLS.forEach(function (t) { if (typeof cachedEntryCounts[t] === 'number' && cachedEntryCounts[t] >= 0) entryCounts[t] = cachedEntryCounts[t]; });
+  } catch (e) {}
+  function updateTabCount(tool, n) {
+    entryCounts[tool] = n;
+    try { localStorage.setItem(ENTRY_COUNTS_KEY, JSON.stringify(entryCounts)); } catch (e) {}
+    var el = $('tabCount-' + tool);
+    if (!el) return;
+    var show = n > 0 && settings.general.showEntryCounts;
+    el.hidden = !show;
+    if (show) el.textContent = n > 99 ? '99+' : String(n);
+  }
+  function applyTabCounts() { TOOLS.forEach(function (t) { updateTabCount(t, entryCounts[t]); }); }
   var hello = {};
   var innerTab = {};   // last Viewer/Compare tab a tool reported ('viewer' | 'compare')
   var frameLoaded = {}, wantInput = {};   // wantInput: put the cursor in the paste box as soon as that tool finishes loading
@@ -2020,6 +2083,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { group: 'Appearance' },
       { custom: 'themes' },
       { key: 'uiScale', type: 'seg', label: 'Interface size', options: [[90, '90%'], [100, '100%'], [110, '110%'], [125, '125%'], [150, '150%']], help: 'Scales everything, like browser zoom, but only for Dev Toolkit.' },
+      { key: 'showEntryCounts', type: 'switch', label: 'Show entry counts on tabs', help: 'A small badge on each tool tab shows how many snippets or files it holds. Hidden automatically when a tool is empty.' },
+      { key: 'swapStyle', type: 'seg', label: 'Swap button color', options: [['B', 'Soft tint'], ['C', 'Outline'], ['D', 'Solid'], ['E', 'Accent icon']], help: 'Color style for the Swap Panel A/B button in the Code, JSON and XLSX Compare / Edit & Compare tools. Applies everywhere, adjusted to fit whichever palette you’re using. Shown live in the Preview panel on the right.' },
       { group: 'Accessibility' },
       { key: 'contrast', type: 'seg', label: 'Contrast', options: [['normal', 'Normal'], ['high', 'High']], help: 'High contrast brightens text and strengthens borders.' },
       { key: 'motion', type: 'seg', label: 'Animations', options: [['system', 'System'], ['reduce', 'Reduce'], ['full', 'Full']], help: 'Reduce turns off blinking, transitions and smooth scrolling. System follows your device setting.' },
@@ -2039,6 +2104,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { key: 'tabSize', type: 'seg', label: 'Tab width', options: [[2, '2'], [4, '4'], [8, '8']] },
       { group: 'Behavior' },
       { key: 'wrap', type: 'switch', label: 'Wrap long lines by default', help: 'Applies to snippets you add from now on. You can still toggle it per snippet.' },
+      { key: 'liveCompare', type: 'switch', label: 'Live compare', help: 'In the Compare tab, once you’ve clicked Compare, editing either panel re-runs the comparison automatically after a short pause. Turn this off to only compare when you click the button.' },
+      { key: 'viewButtons', type: 'viewToggles', label: 'Compare view buttons', options: [['list', 'List'], ['side', 'Side-by-side'], ['unified', 'Unified']], help: 'Which of the three view buttons show in the Compare tab. Click one to hide or show it — at least one always stays on.' },
       { custom: 'io' }
     ],
     json: [
@@ -2047,6 +2114,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { key: 'size', type: 'range', label: 'Font size', min: 9, max: 24, step: 0.5, unit: 'px' },
       { group: 'Behavior' },
       { key: 'expand', type: 'seg', label: 'Expanded levels for new files', options: [['all', 'All'], ['1', '1'], ['2', '2'], ['3', '3']], help: 'How deep the tree opens when you load a file. Deeper nodes start collapsed.' },
+      { key: 'liveCompare', type: 'switch', label: 'Live compare', help: 'In Edit & Compare, once you’ve clicked Compare, editing either panel re-runs the comparison automatically after a short pause. Turn this off to only compare when you click the button.' },
+      { key: 'viewButtons', type: 'viewToggles', label: 'Compare view buttons', options: [['changes', 'Changes'], ['split', 'Split'], ['unified', 'Unified']], help: 'Which of the three view buttons show in Edit & Compare. Click one to hide or show it — at least one always stays on.' },
       { custom: 'io' }
     ],
     xlsx: [
@@ -2056,6 +2125,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
       { group: 'Table' },
       { key: 'density', type: 'seg', label: 'Row density', options: [['compact', 'Compact'], ['normal', 'Normal'], ['relaxed', 'Relaxed']] },
       { key: 'header', type: 'switch', label: 'Treat the first row as a header', help: 'Default for newly opened CSV/XLSX files. You can still change it per file.' },
+      { group: 'Behavior' },
+      { key: 'viewButtons', type: 'viewToggles', label: 'Compare view buttons', options: [['changes', 'Changes'], ['split', 'Split'], ['unified', 'Unified']], help: 'Which of the three view buttons show in the Compare tab. Click one to hide or show it — at least one always stays on.' },
       { custom: 'io' }
     ],
     about: [
@@ -2064,6 +2135,8 @@ window.addEventListener('beforeinstallprompt', function (e) {
   };
 
   function focusKey(section, key, val) { return 'set:' + section + ':' + key + (val === undefined ? '' : ':' + val); }
+
+  var SWAP_ICON_SVG = '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h6"/><path d="M12 1.5l3 3-3 3"/><path d="M10 11.5H4"/><path d="M4 8.5l-3 3 3 3"/></svg>';
 
   function buildControl(spec, sec) {
     var wrap = h('div', { class: 'ctl' });
@@ -2080,6 +2153,33 @@ window.addEventListener('beforeinstallprompt', function (e) {
         }));
       });
       wrap.appendChild(g);
+    } else if (spec.type === 'viewToggles') {
+      // Unlike 'seg' (one value picked from several, mutually exclusive), each button here is its
+      // own independent on/off switch, styled as a filled pill when on. Clicking the last button
+      // still on is a no-op -- turning it off would leave the tool with no compare view at all.
+      wrap.appendChild(h('div', { class: 'lbl', id: lid, text: spec.label }));
+      var vg = h('div', { class: 'seg view-toggle-seg', role: 'group', 'aria-labelledby': lid });
+      spec.options.forEach(function (o) {
+        var subkey = o[0];
+        var on = (cur || {})[subkey] !== false;
+        var btn = h('button', {
+          type: 'button', 'aria-pressed': on ? 'true' : 'false',
+          'data-fk': focusKey(sec, spec.key, subkey), text: o[1],
+          onclick: function () {
+            var obj = {}; var keys = spec.options.map(function (oo) { return oo[0]; });
+            keys.forEach(function (k) { obj[k] = settings[sec][spec.key][k] !== false; });
+            var onCount = keys.filter(function (k) { return obj[k]; }).length;
+            if (obj[subkey] && onCount <= 1) return;   // keep at least one view on
+            obj[subkey] = !obj[subkey];
+            // No keepControls here (unlike 'switch'/'range'): these are plain buttons, not native
+            // inputs that update their own visual state when clicked, so aria-pressed only ever
+            // reflects the truth if the controls panel actually re-renders after the click.
+            setVal(sec, spec.key, obj);
+          }
+        });
+        vg.appendChild(btn);
+      });
+      wrap.appendChild(vg);
     } else if (spec.type === 'range') {
       wrap.appendChild(h('label', { for: lid, text: spec.label }));
       var out = h('output', { for: lid, text: cur + spec.unit });
@@ -2446,10 +2546,12 @@ window.addEventListener('beforeinstallprompt', function (e) {
       pv.style.setProperty('--pv-size', (sec.size * scale) + 'px');
     }
     if (section === 'general') {
+      var swapCls = 'swap-style-' + String(s.general.swapStyle || 'C').toLowerCase();
       pv.innerHTML = '<div class="pv-window"><div class="pv-bar"><span class="b">Dev Toolkit</span>' +
         '<span class="t on"><i style="background:var(--dot-code)"></i>Code</span><span class="t"><i style="background:var(--dot-json)"></i>JSON</span><span class="t"><i style="background:var(--dot-xlsx)"></i>Sheets</span></div>' +
         '<div class="pv-body"><p>Regular text: the quick brown fox jumps over the lazy dog.</p><p class="dim">Secondary text, hints and timestamps.</p>' +
-        '<div class="row"><button class="btn primary" tabindex="-1">Button</button><button class="btn" tabindex="-1">Secondary</button><span class="pv-badge">JSON</span></div></div></div>';
+        '<div class="row"><button class="btn primary" tabindex="-1">Button</button><button class="btn" tabindex="-1">Secondary</button><span class="pv-badge">JSON</span></div>' +
+        '<div class="row swap-preview-wrap" style="margin-top:0.625rem;"><span class="swap-preview-label">Swap Panel A/B button:</span><button type="button" class="swap-preview-btn ' + swapCls + '" tabindex="-1" aria-hidden="true">' + SWAP_ICON_SVG + '</button></div></div></div>';
       note.textContent = 'Shows the theme, size and contrast you picked. Currently ' + effectiveTheme() + ' theme' + (s.general.contrast === 'high' ? ', high contrast' : '') + '.';
     } else if (section === 'code') {
       pv.style.setProperty('--pv-lh', sec.lineHeight);
@@ -3272,6 +3374,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
     if (!d || typeof d !== 'object') return;
     if (d.__devToolkit === 'hello') { hello[d.tool] = true; }
     else if (d.__devToolkit === 'innerTab') { innerTab[d.tool] = d.pane === 'viewer' ? 'viewer' : 'compare'; }
+    else if (d.__devToolkit === 'entryCount' && TOOLS.indexOf(d.tool) >= 0) updateTabCount(d.tool, d.count | 0);
     else if (d.__devToolkit === 'key') {
       var s = shortcutFor({ metaKey: !!d.meta, ctrlKey: !!d.ctrl, altKey: !!d.alt, shiftKey: !!d.shift, key: d.key, code: d.code });
       if (s) runShortcut(s);

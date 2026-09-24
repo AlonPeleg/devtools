@@ -317,6 +317,8 @@
         return !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
     };
     DT.post = function (msg) { if (!embedded) return; try { window.parent.postMessage(msg, TARGET); } catch (e) {} };
+    // Tells the shell how many entries this tool currently holds, for the little count badge on its tab.
+    DT.notifyEntryCount = function (n) { DT.post({ __devToolkit: 'entryCount', tool: TOOL, count: n }); };
     // "N entries deleted · Undo": shown by the shell (10 s); standalone pages show a small one of their own.
     DT.undoToast = function (message, onUndo, method) {
         if (embedded) { DT.post({ __devToolkit: 'undoToast', tool: TOOL, message: message, method: method || 'undoClearAll' }); return; }
@@ -768,7 +770,7 @@
        With flex:1 1 auto here, #compare-pane's own ">*:not(#compareResults){flex-shrink:0}"
        rule (below) would strip the shrink back out, leaving a grid that only grows to fit
        its content and never shrinks — exactly the "box is too large, can't scroll" bug. */
-    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 52vh; flex-shrink: 0; }
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 52vh; flex-shrink: 0; position: relative; }
     .compare-col { display: flex; flex-direction: column; height: 100%; border: 1px solid var(--border-soft); border-radius: 6px; overflow: hidden; background: var(--bg-panel); min-height: 0; }
     .compare-col.drop-target { outline: 2px dashed var(--focus); outline-offset: 3px; }
     .compare-col-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border-soft); flex-wrap: wrap; flex-shrink: 0; }
@@ -908,6 +910,87 @@
     .split-toggle-half { padding: 6px 9px; display: flex; align-items: center; color: var(--text); opacity: 0.6; }
     .split-toggle:hover .split-toggle-half:not(.active) { opacity: 0.85; background: var(--hover-bg, #48484b); }
     .split-toggle-half.active { background: var(--accent); color: var(--accent-fg, #fff); opacity: 1; }
+    /* .view-seg reuses the same look for a REAL segmented picker (3 independently clickable
+       options: Changes/Split/Unified) rather than the single two-icon toggle above -- each segment
+       is its own <button>, so the group-wide "click anywhere" hover is turned off in favor of a
+       normal per-button hover, and the button element needs its native chrome reset. That reset
+       (two classes plus a tag) would otherwise out-specify plain ".split-toggle-half.active" (two
+       classes) and leave the active button with no colored background (see code.html/json.html,
+       where this exact bug made the active button nearly invisible in light theme) -- the final
+       rule below restores the accent-colored active pill. */
+    .view-seg { cursor: default; }
+    .view-seg:hover .split-toggle-half:not(.active) { opacity: 0.6; background: transparent; }
+    .view-seg button.split-toggle-half { border: none; background: transparent; font: inherit; font-size: 11px; gap: 5px; cursor: pointer; }
+    .view-seg button.split-toggle-half:hover:not(.active) { opacity: 0.85; background: var(--hover-bg); }
+    .view-seg button.split-toggle-half.active { background: var(--accent); color: var(--accent-fg, #fff); opacity: 1; }
+    /* Swap Panel A/B: a plain scaleX(-1) mirrors the two-arrow icon exactly (the "point right on
+       top, point left on bottom" glyph is left-right symmetric to itself, so mirroring it swaps
+       which arrow is on top vs. bottom without needing a second icon). The spin is a pure flourish;
+       reduced motion collapses the animation duration globally (see the html:not([data-motion="full"])
+       / [data-motion="reduce"] rules) so it degrades to a plain flip with no spin. */
+    .swap-panels-btn .ic { display: inline-block; transform: scaleX(1); }
+    .swap-panels-btn.swap-flipped .ic { transform: scaleX(-1); }
+    .swap-panels-btn.swap-spin-in .ic { animation: swap-spin-in 0.9s ease forwards; }
+    .swap-panels-btn.swap-spin-out .ic { animation: swap-spin-out 0.9s ease forwards; }
+    @keyframes swap-spin-in { 0% { transform: rotate(0deg) scaleX(1); } 100% { transform: rotate(360deg) scaleX(-1); } }
+    @keyframes swap-spin-out { 0% { transform: rotate(0deg) scaleX(-1); } 100% { transform: rotate(360deg) scaleX(1); } }
+    /* Lives inside the results toolbar itself (title on the left, view/Compare buttons on the
+       right) rather than a separate row of its own, so it sits on the same line -- and the same
+       height -- as "Panel A vs Panel B" and the other buttons. Absolutely positioned and centered
+       so it stays truly centered between the panels regardless of how wide the title or the
+       button group are (a plain flex gap would put it off-center whenever those two differ).
+       swap-toolbar-row just adds the positioning context; it doesn't otherwise change that row. */
+    .swap-toolbar-row { position: relative; }
+    .swap-mid-btn { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding-left: 26px; padding-right: 26px; z-index: 2; }
+    /* Color styles for the swap button, chosen in Settings -> General -> "Swap button color".
+       Each is built from the same theme tokens every other button uses, so it re-tints correctly
+       under any palette rather than only looking right in the stock theme. */
+    .swap-mid-btn.swap-style-b { background: color-mix(in srgb, var(--accent) 16%, var(--input-bg)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--input-bg)); }
+    .swap-mid-btn.swap-style-b:hover { background: color-mix(in srgb, var(--accent) 28%, var(--input-bg)); }
+    .swap-mid-btn.swap-style-c { background: var(--input-bg); color: var(--accent); border: 1.5px solid var(--accent); }
+    .swap-mid-btn.swap-style-c:hover { background: color-mix(in srgb, var(--accent) 14%, var(--input-bg)); }
+    .swap-mid-btn.swap-style-d { background: var(--accent); color: var(--accent-fg, #fff); border: 1px solid var(--accent); }
+    .swap-mid-btn.swap-style-d:hover { background: var(--accent-hover); }
+    .swap-mid-btn.swap-style-e { color: var(--accent); }
+    /* Focus mode for the Compare tab: takes over the viewport as a centered floating card over a
+       dimmed, blurred backdrop -- the same visual language as the Viewer's per-entry Focus
+       (maximize) overlay (#focus-overlay / .entry.focused-entry), just applied to the whole Compare
+       layout instead of a single file card. Nothing is reparented: #compare-pane IS the card
+       (position:fixed, sized/padded/shadowed like one), #compareFocusBackdrop is a separate,
+       persistent backdrop element behind it, and the header/panels/results rows are purely
+       reordered in place with the `order` property -- the DOM tree never moves. */
+    #compareFocusBackdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 8998; }
+    #compareFocusBackdrop.active { display: block; }
+    /* Anchors the close button to the card's corner without being clipped by the card's own
+       overflow:hidden (needed so the diff results scroll inside the card without spilling past its
+       rounded corners) -- see the matching comment in code.html for the full rationale. */
+    #compareFocusBackdrop .focus-anchor { position: fixed; top: 16px; left: 0; right: 0; width: min(1400px, calc(100vw - 60px)); margin: 0 auto; height: 0; pointer-events: none; }
+    #compareFocusBackdrop .compare-focus-close-btn { position: absolute; top: -14px; right: -14px; pointer-events: auto; }
+    /* Top keeps a small gap (room to click the backdrop, or the close button poking just above the
+       card, to get out of focus) -- bottom is flush with the viewport edge on purpose, so the card
+       visibly ends there instead of floating with a strip of backdrop showing beneath it. height
+       must be reset to auto here -- .tab-pane sets a flat height:100% that otherwise wins (equal
+       specificity to .active, and this rule never touched height before), which pinned the card to
+       the full viewport height regardless of top/bottom and pushed its bottom edge past the screen
+       by exactly the top offset -- the "keeps going, cut off past the bottom" bug. */
+    #compare-pane.compare-focus {
+        position: fixed; top: 16px; bottom: 0; left: 0; right: 0; margin: 0 auto; height: auto;
+        width: min(1400px, calc(100vw - 60px)); z-index: 8999; background: var(--bg-panel);
+        border: 1px solid var(--border-soft); border-bottom: none; border-radius: 8px 8px 0 0;
+        box-shadow: 0 10px 50px rgba(0,0,0,0.7); padding: 16px 20px;
+    }
+    /* Header row: the swap-toolbar-row already carries the "Panel A vs Panel B" title, the swap
+       button and the view/Compare/share/clear button group, so promoting it to the top via `order`
+       (instead of the top "Compare Sheets" toolbar) gives a one-line header for free. The Focus and
+       Clear Results buttons are hidden here -- Focus is redundant once you're already in it (Esc /
+       the × / the backdrop all exit), and Clear Results is one accidental click away from wiping the
+       very diff you opened focus to read. */
+    #compare-pane.compare-focus > .toolbar:not(.swap-toolbar-row) { display: none; }
+    #compare-pane.compare-focus .chips-box, #compare-pane.compare-focus .chip-hint { display: none; }
+    #compare-pane.compare-focus .compare-grid { height: 26vh; }
+    #compare-pane.compare-focus .swap-toolbar-row { order: -1; margin-top: 0 !important; }
+    #compare-pane.compare-focus #compareFocusBtn, #compare-pane.compare-focus #compareClearBtn { display: none; }
+    #compareFocusBtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg, #fff); }
 </style>
 </head>
 <body>
@@ -1049,22 +1132,29 @@
                 </div>
             </div>
 
-            <div class="toolbar" style="margin-top:10px;">
+            <div class="toolbar swap-toolbar-row" style="margin-top:10px;">
                 <div class="title-group">
                     <h3 style="font-size:12px;">Panel A vs Panel B</h3>
                 </div>
+                <button type="button" class="btn btn-secondary btn-iconbtn swap-panels-btn swap-mid-btn" id="compareSwapBtn" title="Swap Panel A and B" onclick="swapComparePanels(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h6"/><path d="M12 1.5l3 3-3 3"/><path d="M10 11.5H4"/><path d="M4 8.5l-3 3 3 3"/></svg></button>
                 <div class="btn-group">
-                    <button type="button" class="split-toggle" id="compareToggleDiffView" title="List view — click for Side-by-side view" onclick="toggleCompareDiffMode()">
-                        <span class="split-toggle-half" id="compareViewHalfSide"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="2.5" width="5.5" height="11" rx="1"/><rect x="9" y="2.5" width="5.5" height="11" rx="1"/></svg></span>
-                        <span class="split-toggle-half active" id="compareViewHalfList"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg></span>
-                    </button>
+                    <div class="split-toggle view-seg" id="compareViewSeg" role="group" aria-label="Compare view">
+                        <button type="button" class="split-toggle-half active" id="compareViewBtnChanges" title="Changes view — a compact list of what changed" onclick="setCompareViewMode('changes')"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>Changes</button>
+                        <button type="button" class="split-toggle-half" id="compareViewBtnSplit" title="Split view — side by side" onclick="setCompareViewMode('split')"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="2.5" width="5.5" height="11" rx="1"/><rect x="9" y="2.5" width="5.5" height="11" rx="1"/></svg>Split</button>
+                        <button type="button" class="split-toggle-half" id="compareViewBtnUnified" title="Unified view — removed and added lines together" onclick="setCompareViewMode('unified')"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.5 3.5h2M6 3.5h7.5M2.5 8h2M6 8h7.5M2.5 12.5h2M6 12.5h5"/></svg>Unified</button>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-iconbtn" id="compareFocusBtn" title="Focus — compact panels, larger results" aria-pressed="false" onclick="toggleCompareFocus()"><svg class="ic" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg></button>
                     <button class="btn" onclick="runCompare()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="8" height="10" rx="1.2"/><rect x="6.5" y="3" width="8" height="10" rx="1.2" fill="#ffffff" fill-opacity="0.35"/></svg> Compare</button>
                     <button type="button" class="btn btn-secondary btn-iconbtn" title="Copy a link to this comparison" onclick="shareCompareLink(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg></button>
-                    <button class="btn btn-secondary btn-iconbtn" title="Clear Results" onclick="clearCompareResults()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
+                    <button class="btn btn-secondary btn-iconbtn" id="compareClearBtn" title="Clear Results" onclick="clearCompareResults()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
             <div id="compareResults" class="diff-output">Load a table into each panel, then click "Compare".</div>
         </div>
+    </div>
+
+    <div id="compareFocusBackdrop" onclick="if(event.target === this) toggleCompareFocus();">
+        <div class="focus-anchor"><div class="focus-close-btn compare-focus-close-btn" title="Exit focus (Esc)" onclick="toggleCompareFocus()">×</div></div>
     </div>
 
     <div id="focus-overlay" onclick="if(event.target === this) closeFocusEntry();">
@@ -1758,7 +1848,7 @@ function exportLocalStorageBackup() {
             sheets: e.sheets.map(s => ({ name: s.name, allRows: s.allRows, hasHeader: s.hasHeader }))
         })
     });
-    function saveEntriesToStorage() { dtStore.save(); }
+    function saveEntriesToStorage() { dtStore.save(); DT.notifyEntryCount(postedEntries.length); }
 
     function loadEntriesFromStorage() {
         return dtStore.load(item => {
@@ -1801,6 +1891,19 @@ function exportLocalStorageBackup() {
        Layout / tabs
        ========================================================================= */
     function switchTab(paneId, el) {
+        // Leaving Compare while focused (e.g. clicking the Viewer tab directly instead of the focus
+        // overlay's own close button) -- clean up its overlay chrome so it doesn't linger, fixed and
+        // blurred, over whichever tab we're switching to.
+        const comparePane = document.getElementById('compare-pane');
+        if (comparePane && comparePane.classList.contains('compare-focus') && paneId !== 'compare-pane') {
+            comparePane.classList.remove('compare-focus');
+            const backdrop = document.getElementById('compareFocusBackdrop');
+            if (backdrop) backdrop.classList.remove('active');
+            document.body.style.overflow = '';
+            const fb = document.getElementById('compareFocusBtn');
+            if (fb) { fb.setAttribute('aria-pressed', 'false'); fb.title = 'Focus — compact panels, larger results'; }
+            compareFocusReturnToViewer = false;
+        }
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
         document.getElementById(paneId).classList.add('active');
@@ -1849,6 +1952,11 @@ function exportLocalStorageBackup() {
         const link = document.querySelector('.tab-link[data-tab="compare-pane"]');
         if (link) link.click();
         api.compareRun();
+        // Picking two files from the Viewer is a "just show me the diff" gesture, so jump straight
+        // into focus mode -- and remember to land back on the Viewer (not the bare Compare tab) once
+        // the user's done, via toggleCompareFocus()'s own return flag.
+        compareFocusReturnToViewer = true;
+        if (!document.getElementById('compare-pane').classList.contains('compare-focus')) toggleCompareFocus();
     }
     (function () {
         const c = document.getElementById('container');
@@ -2408,8 +2516,39 @@ function exportLocalStorageBackup() {
     }
 
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && document.getElementById('focus-overlay').classList.contains('active')) closeFocusEntry();
+        if (e.key !== 'Escape') return;
+        if (document.getElementById('focus-overlay').classList.contains('active')) closeFocusEntry();
+        else if (document.getElementById('compare-pane').classList.contains('compare-focus')) toggleCompareFocus();
     });
+
+    /* Focus mode for the Compare tab: turns the whole Compare layout into a full-screen floating
+       card over a dimmed, blurred backdrop (see the #compare-pane.compare-focus /
+       #compareFocusBackdrop rules) -- the same look as the per-entry Focus overlay above.
+       compareFocusReturnToViewer is set by the Viewer's "pick two files" flow (finishComparePick)
+       so that exiting focus in that case lands back on the Viewer tab instead of the bare Compare
+       tab -- see its other use at the bottom of this function and in switchTab(). */
+    let compareFocusReturnToViewer = false;
+    function toggleCompareFocus() {
+        const pane = document.getElementById('compare-pane');
+        const btn = document.getElementById('compareFocusBtn');
+        const backdrop = document.getElementById('compareFocusBackdrop');
+        const on = !pane.classList.contains('compare-focus');
+        pane.classList.toggle('compare-focus', on);
+        if (backdrop) backdrop.classList.toggle('active', on);
+        document.body.style.overflow = on ? 'hidden' : '';
+        if (btn) {
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            btn.title = on ? 'Exit focus' : 'Focus — compact panels, larger results';
+        }
+        if (!on) {
+            const returnToViewer = compareFocusReturnToViewer;
+            compareFocusReturnToViewer = false;
+            if (returnToViewer) {
+                const link = document.querySelector('.tab-link[data-tab="viewer-pane"]');
+                if (link) link.click();
+            }
+        }
+    }
 
     /* =========================================================================
        Export / copy
@@ -2633,6 +2772,31 @@ function exportLocalStorageBackup() {
         clearComparePanel('compareLeft');
         clearComparePanel('compareRight');
         clearCompareResults();
+    }
+
+    // Spins the swap button's icon (a mirror of itself, see the .swap-panels-btn CSS) and flips
+    // it to the "just swapped" orientation. Purely cosmetic -- reduced motion collapses the
+    // animation duration globally, so this degrades to a plain state flip with no spin.
+    function animateSwapIcon(btn) {
+        if (!btn) return;
+        const flipping = !btn.classList.contains('swap-flipped');
+        btn.classList.remove('swap-spin-in', 'swap-spin-out');
+        void btn.offsetWidth; // restart the animation if the button is clicked again mid-flight
+        btn.classList.add(flipping ? 'swap-spin-in' : 'swap-spin-out');
+        btn.classList.toggle('swap-flipped', flipping);
+        setTimeout(() => btn.classList.remove('swap-spin-in', 'swap-spin-out'), 920);
+    }
+    // Shared by the toolbar button and DTAPI.compareSwap() (the command-palette entry point),
+    // so both animate the same button and re-run the comparison the same way.
+    function swapComparePanels(btn) {
+        animateSwapIcon(btn || document.getElementById('compareSwapBtn'));
+        const t = comparePanels.compareLeft;
+        comparePanels.compareLeft = comparePanels.compareRight;
+        comparePanels.compareRight = t;
+        renderComparePanel('compareLeft');
+        renderComparePanel('compareRight');
+        const res = document.getElementById('compareResults');
+        if (res && res.querySelector('.diff-summary, div[style]')) runCompare(); else clearCompareResults();
     }
 
     function startBlankPanel(panelId) {
@@ -3464,21 +3628,62 @@ function exportLocalStorageBackup() {
         return { diffs, colsA, colsB, extraColsA, extraColsB };
     }
 
-    let isCompareSideMode = false;
+    // Three independently-clickable segments (Changes/Split/Unified), matching the pattern in
+    // code.html/json.html's Compare tabs -- just move the active class to whichever was clicked,
+    // matching it up with its own render branch in runCompare() below.
+    let compareViewMode = 'changes'; // 'changes' | 'split' | 'unified'
+    const COMPARE_VIEW_BTN_IDS = { changes: 'compareViewBtnChanges', split: 'compareViewBtnSplit', unified: 'compareViewBtnUnified' };
 
     function updateCompareViewToggleUI() {
-        const sideHalf = document.getElementById('compareViewHalfSide');
-        const listHalf = document.getElementById('compareViewHalfList');
-        if (sideHalf) sideHalf.classList.toggle('active', isCompareSideMode);
-        if (listHalf) listHalf.classList.toggle('active', !isCompareSideMode);
-        const btn = document.getElementById('compareToggleDiffView');
-        if (btn) btn.title = isCompareSideMode ? 'Side-by-side view — click for List view' : 'List view — click for Side-by-side view';
+        Object.keys(COMPARE_VIEW_BTN_IDS).forEach(mode => {
+            const btn = document.getElementById(COMPARE_VIEW_BTN_IDS[mode]);
+            if (btn) btn.classList.toggle('active', mode === compareViewMode);
+        });
     }
 
-    function toggleCompareDiffMode() {
-        isCompareSideMode = !isCompareSideMode;
+    function setCompareViewMode(mode) {
+        if (COMPARE_VIEW_BTN_IDS[mode] == null) return;
+        compareViewMode = mode;
         updateCompareViewToggleUI();
+        // Re-render from the freshest data rather than caching the last diff -- table cells can be
+        // edited directly in the panels, and runCompare() also re-applies the diff-cell/-row marks
+        // on the panel tables themselves, not just the results box.
         runCompare();
+    }
+    // Kept around (rather than removed) because the shell's keyboard shortcut / command palette
+    // entry and the postMessage 'call' allowlist both still invoke it by this name -- it now cycles
+    // through all three views instead of flipping a single boolean.
+    function toggleCompareDiffMode() {
+        const order = ['changes', 'split', 'unified'];
+        setCompareViewMode(order[(order.indexOf(compareViewMode) + 1) % order.length]);
+    }
+    // Settings -> "Compare view buttons": hides whichever of Changes/Split/Unified the user has
+    // turned off. Uses an inline style rather than the `hidden` attribute, because
+    // .split-toggle-half already sets display:flex at equal (class) specificity to [hidden] and
+    // an author rule always wins a same-specificity tie against a UA default. If the currently
+    // active view just got hidden, falls back to the first still-visible one.
+    function applyCompareViewButtonVisibility() {
+        const vb = (typeof DT !== 'undefined' && DT.sec && DT.sec().viewButtons) || {};
+        const order = ['changes', 'split', 'unified'];
+        order.forEach(mode => {
+            const btn = document.getElementById(COMPARE_VIEW_BTN_IDS[mode]);
+            if (btn) btn.style.display = vb[mode] === false ? 'none' : '';
+        });
+        if (vb[compareViewMode] === false) {
+            const fallback = order.find(m => vb[m] !== false) || 'changes';
+            setCompareViewMode(fallback);
+        }
+    }
+    // Settings -> General -> "Swap button color": re-styles the Swap Panel A/B button with whichever
+    // of the B/C/D/E color treatments the user picked (default C, an accent outline). It's a general
+    // (shell-wide) setting rather than a per-tool one so Code/JSON/xlsx all match, but each tool's CSS
+    // translates the same letter into its own theme tokens (see the .swap-style-* rules above).
+    function applySwapButtonStyle() {
+        const style = ((typeof DT !== 'undefined' && DT.settings && DT.settings.general && DT.settings.general.swapStyle) || 'C').toLowerCase();
+        const btn = document.getElementById('compareSwapBtn');
+        if (!btn) return;
+        btn.classList.remove('swap-style-b', 'swap-style-c', 'swap-style-d', 'swap-style-e');
+        btn.classList.add('swap-style-' + (['b', 'c', 'd', 'e'].includes(style) ? style : 'c'));
     }
 
     // Builds one diff-line's inner content (icon + text + tag); shared by both the plain
@@ -3588,7 +3793,7 @@ function exportLocalStorageBackup() {
             }
         });
 
-        if (isCompareSideMode) {
+        if (compareViewMode === 'split') {
             const container = document.createElement('div');
             container.className = 'side-diff-container';
             const leftCol = document.createElement('div');
@@ -3600,6 +3805,17 @@ function exportLocalStorageBackup() {
             });
             container.appendChild(leftCol); container.appendChild(rightCol);
             results.appendChild(container);
+        } else if (compareViewMode === 'unified') {
+            // Unlike Changes (one combined "old → new" line per changed row), Unified lays the
+            // removed and added lines out one after another, the way a text unified diff would.
+            entries.forEach(e => {
+                if (e.side === 'both') {
+                    results.appendChild(buildDiffLineEl('removed', e.oldHtml, e.onClick));
+                    results.appendChild(buildDiffLineEl('added', e.newHtml, e.onClick));
+                } else {
+                    results.appendChild(buildDiffLineEl(e.type, e.html, e.onClick));
+                }
+            });
         } else {
             entries.forEach(e => {
                 if (e.side === 'both') results.appendChild(buildDiffLineEl('changed', e.bothHtml, e.onClick));
@@ -3726,18 +3942,7 @@ function exportLocalStorageBackup() {
                     return true;
                 }, false);
             },
-            compareSwap() {
-                return safe(() => {
-                    const t = comparePanels.compareLeft;
-                    comparePanels.compareLeft = comparePanels.compareRight;
-                    comparePanels.compareRight = t;
-                    renderComparePanel('compareLeft');
-                    renderComparePanel('compareRight');
-                    const res = document.getElementById('compareResults');
-                    if (res && res.querySelector('.diff-summary, div[style]')) runCompare(); else clearCompareResults();
-                    return true;
-                }, false);
-            },
+            compareSwap() { return safe(() => { swapComparePanels(); return true; }, false); },
             compareReset() { return safe(() => { resetCompareSection(); return true; }, false); },
             compareClearResults() { return safe(() => { clearCompareResults(); return true; }, false); },
             compareRun() { return safe(() => { runCompare(); diffCursor = -1; return true; }, false); },
@@ -3745,7 +3950,7 @@ function exportLocalStorageBackup() {
                 return safe(() => {
                     if (option === 'view') {
                         toggleCompareDiffMode();
-                        return 'Compare view: ' + (isCompareSideMode ? 'side-by-side' : 'list');
+                        return 'Compare view: ' + compareViewMode;
                     }
                     if (option === 'header') {
                         const on = !(comparePanels.compareLeft.hasHeader && comparePanels.compareRight.hasHeader);
@@ -3793,7 +3998,8 @@ function exportLocalStorageBackup() {
     wireCompareSyncScroll();
     setupFormulaPointClick('compareLeft');
     setupFormulaPointClick('compareRight');
-    loadEntriesFromStorage();
+    loadEntriesFromStorage().then(function () { DT.notifyEntryCount(postedEntries.length); });
+    if (window.DT && DT.onChange) DT.onChange(function () { try { applyCompareViewButtonVisibility(); } catch (e) {} try { applySwapButtonStyle(); } catch (e) {} });
     </script>
 <script>
 (function () {
