@@ -786,9 +786,6 @@
         .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 42vh; flex-shrink: 0; position: relative; }
         .editor-panel-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
         .editor-name { width: 140px; flex-shrink: 0; }
-        .editor-mode-toggle { display: flex; gap: 4px; align-items: center; }
-        .editor-mode-btn { font-size: 10px; padding: 2px 7px; opacity: 0.6; }
-        .editor-mode-btn.active { opacity: 1; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
         /* No-wrap (horizontal scroll) is the default per-panel state, matching the Code tool's
            compare panels; .wrap-on switches to soft-wrap. */
         .editor-textarea { flex-grow: 1; height: 100%; resize: none; margin-bottom: 0; font-family: var(--dt-mono, monospace); font-size: var(--dt-fs, 11px); white-space: pre; overflow: auto; }
@@ -990,6 +987,10 @@
        duplicate the normal one. */
     #editorSharedModeToggleFocus { display: none; }
     #editor-pane.editor-focus #editorSharedModeToggleFocus { display: flex; }
+    /* Same idea for "Format Both": #editorFormatBothFocusBtn is a second copy of the icon button
+       living in .swap-toolbar-row so it stays reachable in Focus mode too. */
+    #editorFormatBothFocusBtn { display: none; }
+    #editor-pane.editor-focus #editorFormatBothFocusBtn { display: flex; }
 
     /* ---------- Compare options menu (Sort keys / Wrap lines) ---------- */
     .compare-options { position: relative; }
@@ -1154,12 +1155,11 @@
             <div class="toolbar">
                 <h3 style="margin:0; font-size:14px;">Edit &amp; Compare (Side by Side)</h3>
                 <div class="btn-group">
-                    <div class="editor-mode-toggle" id="editorSharedModeToggle" title="Applies to both panels">
-                        <button class="btn btn-secondary editor-mode-btn active" data-mode="edit" onclick="setEditorModeShared('edit')">Edit</button>
-                        <button class="btn btn-secondary editor-mode-btn" data-mode="tree" onclick="setEditorModeShared('tree')">Tree</button>
-                    </div>
-                    <div class="btn-icon wrap-toggle" id="editorSharedWrapToggle" title="Wrap long lines (both panels)" onclick="toggleEditorPanelWrapShared(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
-                    <button class="btn btn-secondary" onclick="formatEditorPanel('editorLeft'); formatEditorPanel('editorRight');">Format Both</button>
+                    <button type="button" id="editorSharedModeToggle" class="split-toggle editor-mode-split" title="Edit view (both panels) — click for Tree view" onclick="toggleEditorModeShared()">
+                        <span class="split-toggle-half active" data-mode="edit"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-7.5 7.5-2.8.8.8-2.8 7.5-7.5z"/><path d="M9.5 4.5l2 2"/></svg></span>
+                        <span class="split-toggle-half" data-mode="tree"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-iconbtn" id="editorFormatBothBtn" title="Format Both (beautify)" onclick="formatEditorPanel('editorLeft'); formatEditorPanel('editorRight');"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></button>
                     <button class="btn btn-secondary btn-iconbtn" title="Reset Both Panels" onclick="clearEditorCompareAll()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
@@ -1224,10 +1224,12 @@
                 <h3 style="margin:0; font-size:12px;">Panel A vs Panel B</h3>
                 <button type="button" class="btn btn-secondary btn-iconbtn swap-panels-btn swap-mid-btn" id="editorSwapBtn" title="Swap Panel A and B" onclick="swapEditorPanels(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h6"/><path d="M12 1.5l3 3-3 3"/><path d="M10 11.5H4"/><path d="M4 8.5l-3 3 3 3"/></svg></button>
                 <div class="btn-group">
-                    <div class="editor-mode-toggle" id="editorSharedModeToggleFocus" title="Applies to both panels">
-                        <button class="btn btn-secondary editor-mode-btn active" data-mode="edit" onclick="setEditorModeShared('edit')">Edit</button>
-                        <button class="btn btn-secondary editor-mode-btn" data-mode="tree" onclick="setEditorModeShared('tree')">Tree</button>
-                    </div>
+                    <button type="button" id="editorSharedModeToggleFocus" class="split-toggle editor-mode-split" title="Edit view (both panels) — click for Tree view" onclick="toggleEditorModeShared()">
+                        <span class="split-toggle-half active" data-mode="edit"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-7.5 7.5-2.8.8.8-2.8 7.5-7.5z"/><path d="M9.5 4.5l2 2"/></svg></span>
+                        <span class="split-toggle-half" data-mode="tree"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
+                    </button>
+                    <div class="btn-icon wrap-toggle" id="editorSharedWrapToggle" title="Wrap long lines (both panels)" onclick="toggleEditorPanelWrapShared(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
+                    <button type="button" class="btn btn-secondary btn-iconbtn" id="editorFormatBothFocusBtn" title="Format Both (beautify)" onclick="formatEditorPanel('editorLeft'); formatEditorPanel('editorRight');"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></button>
                     <label class="switch-container" title="Keep both panels scrolled to the same position">
                         <span>Sync Scroll</span>
                         <div class="switch">
@@ -1931,7 +1933,16 @@ function exportLocalStorageBackup() {
             setEditorMode('editorRight', mode, null);
         }
 
-        // Keeps the shared toggle's active-button highlight in sync with the panels'
+        // #editorSharedModeToggle / #editorSharedModeToggleFocus are each a single
+        // .split-toggle button (like the old Line/Grid view-mode button) rather than two
+        // independent buttons -- clicking anywhere on it just flips to the other view.
+        function toggleEditorModeShared() {
+            const leftTree = document.getElementById('editorLeftTree');
+            const currentlyTree = leftTree && leftTree.style.display !== 'none';
+            setEditorModeShared(currentlyTree ? 'edit' : 'tree');
+        }
+
+        // Keeps the shared toggle's active-half highlight (and title) in sync with the panels'
         // actual mode. Panel A is used as the reference; the two panels are always
         // switched together by setEditorModeShared, but a programmatic per-panel
         // switch (e.g. search forcing just one panel into Tree mode) can still leave
@@ -1942,8 +1953,12 @@ function exportLocalStorageBackup() {
             // still reachable in Focus mode, which hides the normal toolbar). Keep both in sync.
             const leftTree = document.getElementById('editorLeftTree');
             const mode = leftTree && leftTree.style.display !== 'none' ? 'tree' : 'edit';
-            document.querySelectorAll('#editorSharedModeToggle .editor-mode-btn[data-mode], #editorSharedModeToggleFocus .editor-mode-btn[data-mode]').forEach(b => {
-                b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+            const title = mode === 'tree' ? 'Tree view (both panels) — click for Edit view' : 'Edit view (both panels) — click for Tree view';
+            document.querySelectorAll('#editorSharedModeToggle, #editorSharedModeToggleFocus').forEach(btn => {
+                btn.title = title;
+                btn.querySelectorAll('.split-toggle-half[data-mode]').forEach(b => {
+                    b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+                });
             });
         }
 
