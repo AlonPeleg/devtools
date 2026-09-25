@@ -987,10 +987,10 @@
        duplicate the normal one. */
     #editorSharedModeToggleFocus { display: none; }
     #editor-pane.editor-focus #editorSharedModeToggleFocus { display: flex; }
-    /* Same idea for "Format Both": #editorFormatBothFocusBtn is a second copy of the icon button
-       living in .swap-toolbar-row so it stays reachable in Focus mode too. */
-    #editorFormatBothFocusBtn { display: none; }
-    #editor-pane.editor-focus #editorFormatBothFocusBtn { display: flex; }
+    /* The view-seg, options and share controls are relocated (real DOM nodes moved, not
+       duplicated) into the diff-stats toolbar while in Focus mode -- see
+       restoreEditorFocusControlsHome()/positionEditorFocusControls() in the script. */
+    .diff-stats-toolbar { display: flex; align-items: center; gap: 8px; }
 
     /* ---------- Compare options menu (Sort keys / Wrap lines) ---------- */
     .compare-options { position: relative; }
@@ -1012,7 +1012,10 @@
     .diff-stats b { color: var(--vscode-foreground); }
     .diff-stats-top-btn, .diff-stats-copy-btn { display: flex; align-items: center; gap: 4px; background: var(--vscode-editor-lineHighlightBackground); border: 1px solid var(--vscode-panel-border); color: var(--vscode-tab-inactiveForeground); font-family: inherit; font-size: 10.5px; padding: 3px 9px; border-radius: 5px; cursor: pointer; }
     .diff-stats-top-btn:hover, .diff-stats-copy-btn:hover { color: var(--vscode-foreground); background: var(--vscode-toolbar-hoverBackground); }
-    .diff-stats-copy-btn { margin-left: auto; }
+    /* The toolbar (view-seg/options/share, relocated here only in Focus mode) carries the auto
+       margin instead of the copy button, so the whole trailing group -- toolbar, Copy diff, Top --
+       stays together at the right edge, whether or not the toolbar currently has anything in it. */
+    .diff-stats-toolbar { margin-left: auto; }
 
     /* ---------- Changes view (structural, path-based) ---------- */
     .changes-row { align-items: flex-start; }
@@ -1159,7 +1162,6 @@
                         <span class="split-toggle-half active" data-mode="edit"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-7.5 7.5-2.8.8.8-2.8 7.5-7.5z"/><path d="M9.5 4.5l2 2"/></svg></span>
                         <span class="split-toggle-half" data-mode="tree"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
                     </button>
-                    <button type="button" class="btn btn-secondary btn-iconbtn" id="editorFormatBothBtn" title="Format Both (beautify)" onclick="formatEditorPanel('editorLeft'); formatEditorPanel('editorRight');"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></button>
                     <button class="btn btn-secondary btn-iconbtn" title="Reset Both Panels" onclick="clearEditorCompareAll()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
@@ -1229,7 +1231,7 @@
                         <span class="split-toggle-half" data-mode="tree"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
                     </button>
                     <div class="btn-icon wrap-toggle" id="editorSharedWrapToggle" title="Wrap long lines (both panels)" onclick="toggleEditorPanelWrapShared(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
-                    <button type="button" class="btn btn-secondary btn-iconbtn" id="editorFormatBothFocusBtn" title="Format Both (beautify)" onclick="formatEditorPanel('editorLeft'); formatEditorPanel('editorRight');"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></button>
+                    <button type="button" class="btn btn-secondary btn-iconbtn" id="editorFormatBothBtn" title="Format Both (beautify)" onclick="formatEditorPanelsShared(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></button>
                     <label class="switch-container" title="Keep both panels scrolled to the same position">
                         <span>Sync Scroll</span>
                         <div class="switch">
@@ -1237,12 +1239,12 @@
                             <span class="slider"></span>
                         </div>
                     </label>
-                    <div class="split-toggle view-seg" id="editorViewSeg" role="group" aria-label="Compare view">
+                    <span id="editorViewSegHome" style="display:none;"></span><div class="split-toggle view-seg" id="editorViewSeg" role="group" aria-label="Compare view">
                         <button type="button" class="split-toggle-half active" id="editorViewBtnChanges" title="Changes — list of changed paths" onclick="setEditorViewMode('changes')"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="2.5" cy="4" r="1"/><circle cx="2.5" cy="8" r="1"/><circle cx="2.5" cy="12" r="1"/><path d="M5.5 4h8.5M5.5 8h8.5M5.5 12h6"/></svg>Changes</button>
                         <button type="button" class="split-toggle-half" id="editorViewBtnSplit" title="Split view" onclick="setEditorViewMode('split')"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="2.5" width="5.5" height="11" rx="1"/><rect x="9" y="2.5" width="5.5" height="11" rx="1"/></svg>Split</button>
                         <button type="button" class="split-toggle-half" id="editorViewBtnUnified" title="Unified view" onclick="setEditorViewMode('unified')"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.5 3.5h2M6 3.5h7.5M2.5 8h2M6 8h7.5M2.5 12.5h2M6 12.5h5"/></svg>Unified</button>
                     </div>
-                    <div class="compare-options" id="editorOptionsWrap">
+                    <span id="editorOptionsWrapHome" style="display:none;"></span><div class="compare-options" id="editorOptionsWrap">
                         <button type="button" class="btn btn-secondary btn-iconbtn" id="editorOptionsBtn" title="Compare options" onclick="toggleEditorOptions()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h7M11.5 4h2.5M2 8h2.5M7 8h7M2 12h9M13.5 12H14"/><circle cx="9" cy="4" r="1.4" fill="var(--vscode-editor-background)"/><circle cx="4.5" cy="8" r="1.4" fill="var(--vscode-editor-background)"/><circle cx="11" cy="12" r="1.4" fill="var(--vscode-editor-background)"/></svg><span class="options-badge" id="editorOptionsBadge" hidden></span><span class="caret">&#9662;</span></button>
                         <div class="compare-options-menu" id="editorOptionsMenu" hidden>
                             <label class="switch-container"><span title="Ignore key order when comparing Split/Unified (Changes always ignores it)">Sort keys</span><div class="switch"><input type="checkbox" id="editorSortKeysToggle" checked onchange="runEditorCompare(); updateEditorOptionsBadge();"><span class="slider"></span></div></label>
@@ -1251,7 +1253,7 @@
                     </div>
                     <button type="button" class="btn btn-secondary btn-iconbtn" id="editorFocusBtn" title="Focus — compact panels, larger results" aria-pressed="false" onclick="toggleEditorFocus()"><svg class="ic" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg></button>
                     <button class="btn" id="runEditorCompareBtn" onclick="runEditorCompare()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="8" height="10" rx="1.2"/><rect x="6.5" y="3" width="8" height="10" rx="1.2" fill="#ffffff" fill-opacity="0.35"/></svg> Compare</button>
-                    <button type="button" class="btn btn-secondary btn-iconbtn" title="Copy a link to this comparison" onclick="shareCompareLink(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg></button>
+                    <span id="editorShareBtnHome" style="display:none;"></span><button type="button" class="btn btn-secondary btn-iconbtn" id="editorShareBtn" title="Copy a link to this comparison" onclick="shareCompareLink(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg></button>
                     <button class="btn btn-secondary btn-iconbtn" id="editorClearBtn" title="Clear Results" onclick="clearEditorCompareResults()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
@@ -1479,6 +1481,7 @@ function exportLocalStorageBackup() {
             clearTimeout(editorLiveCompareTimer);
             editorViewMode = 'changes';
             updateEditorViewToggleUI();
+            restoreEditorFocusControlsHome();
             const results = document.getElementById('editorCompareResults');
             if (results) results.innerHTML = 'Click "Compare" to see the differences between Panel A and Panel B.';
         }
@@ -1553,6 +1556,40 @@ function exportLocalStorageBackup() {
                     const link = document.querySelector('.tab-link[onclick*="viewer-pane"]');
                     if (link) link.click();
                 }
+            }
+            positionEditorFocusControls();
+        }
+
+        // Focus mode relocates the view-seg, options and share controls (their real DOM nodes, not
+        // duplicates) into the diff-stats toolbar rendered above the results, right next to
+        // "Copy diff"/"Top", instead of cluttering the always-visible header. (Format Both lives
+        // permanently in the header itself -- see the swap-toolbar-row markup -- since that row is
+        // never hidden, even in Focus mode, so it needs no relocation.) Each control
+        // has a hidden marker span (id="<control>Home") immediately before its normal position;
+        // restoreEditorFocusControlsHome() puts every control back there via home.after(el), which is
+        // exact and idempotent regardless of what else has moved around. Because the results container
+        // is rebuilt with innerHTML on every render, restoreEditorFocusControlsHome() must be called
+        // before any such wipe (otherwise the wipe would delete the live control nodes), and
+        // positionEditorFocusControls() must be called after a fresh diff-stats bar has been appended
+        // (or after leaving Focus mode) to re-relocate them if appropriate.
+        const EDITOR_FOCUS_RELOCATE_IDS = ['editorViewSeg', 'editorOptionsWrap', 'editorShareBtn'];
+        function restoreEditorFocusControlsHome() {
+            EDITOR_FOCUS_RELOCATE_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                const home = document.getElementById(id + 'Home');
+                if (el && home && el.previousElementSibling !== home) home.after(el);
+            });
+        }
+        function positionEditorFocusControls() {
+            const pane = document.getElementById('editor-pane');
+            const toolbar = document.getElementById('editorStatsToolbar');
+            if (pane && pane.classList.contains('editor-focus') && toolbar) {
+                EDITOR_FOCUS_RELOCATE_IDS.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) toolbar.appendChild(el);
+                });
+            } else {
+                restoreEditorFocusControlsHome();
             }
         }
 
@@ -1989,6 +2026,11 @@ function exportLocalStorageBackup() {
             } catch (e) {
                 alert('Invalid JSON: ' + e.message);
             }
+        }
+        function formatEditorPanelsShared(btnEl) {
+            formatEditorPanel('editorLeft');
+            formatEditorPanel('editorRight');
+            flashIcon(btnEl || document.getElementById('editorFormatBothBtn'));
         }
 
         function setEditorTreeCollapse(panelId, collapse) {
@@ -2903,10 +2945,11 @@ function exportLocalStorageBackup() {
             structural.forEach(d => { if (d.type === 'added') added++; else if (d.type === 'removed') removed++; else changed++; });
             const statsDiv = document.createElement('div');
             statsDiv.className = 'diff-stats';
-            statsDiv.innerHTML = `<span><b>${structural.length}</b> difference${structural.length === 1 ? '' : 's'}</span><span style="color:var(--diff-add, #4ec9b0)"><b>+${added}</b> added</span><span style="color:var(--diff-remove, #f48771)"><b>-${removed}</b> removed</span><span style="color:var(--diff-change, #dcdcaa)"><b>${changed}</b> changed</span><button type="button" class="diff-stats-copy-btn" title="Copy as unified diff" onclick="copyEditorUnifiedDiff(this)"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" style="width:11px;height:11px;"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg>Copy diff</button><button type="button" class="diff-stats-top-btn" title="Scroll to top" onclick="scrollElementToTop('editorCompareResults')">&#9650; Top</button>`;
+            statsDiv.innerHTML = `<span><b>${structural.length}</b> difference${structural.length === 1 ? '' : 's'}</span><span style="color:var(--diff-add, #4ec9b0)"><b>+${added}</b> added</span><span style="color:var(--diff-remove, #f48771)"><b>-${removed}</b> removed</span><span style="color:var(--diff-change, #dcdcaa)"><b>${changed}</b> changed</span><div class="diff-stats-toolbar" id="editorStatsToolbar"></div><button type="button" class="diff-stats-copy-btn" title="Copy as unified diff" onclick="copyEditorUnifiedDiff(this)"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" style="width:11px;height:11px;"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg>Copy diff</button><button type="button" class="diff-stats-top-btn" title="Scroll to top" onclick="scrollElementToTop('editorCompareResults')">&#9650; Top</button>`;
             return statsDiv;
         }
         function renderEditorChanges(structural) {
+            restoreEditorFocusControlsHome();
             const results = document.getElementById('editorCompareResults');
             results.innerHTML = '';
             if (structural.length === 0) {
@@ -2914,6 +2957,7 @@ function exportLocalStorageBackup() {
                 return;
             }
             results.appendChild(renderEditorChangesStats(structural));
+            positionEditorFocusControls();
             structural.forEach(d => results.appendChild(createChangesRow(d)));
         }
         function renderEditorTextualStats(diff) {
@@ -2926,12 +2970,13 @@ function exportLocalStorageBackup() {
             if (hasDiff && similarity >= 100) similarity = 99;
             const statsDiv = document.createElement('div');
             statsDiv.className = 'diff-stats';
-            statsDiv.innerHTML = `<span><b>${similarity}%</b> similar</span><span style="color:var(--diff-add, #4ec9b0)"><b>+${added}</b> added</span><span style="color:var(--diff-remove, #f48771)"><b>-${removed}</b> removed</span><span style="color:var(--diff-change, #dcdcaa)"><b>${changed}</b> changed</span><span><b>${unchanged}</b> unchanged</span><button type="button" class="diff-stats-copy-btn" title="Copy as unified diff" onclick="copyEditorUnifiedDiff(this)"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" style="width:11px;height:11px;"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg>Copy diff</button><button type="button" class="diff-stats-top-btn" title="Scroll to top" onclick="scrollElementToTop('editorCompareResults')">&#9650; Top</button>`;
+            statsDiv.innerHTML = `<span><b>${similarity}%</b> similar</span><span style="color:var(--diff-add, #4ec9b0)"><b>+${added}</b> added</span><span style="color:var(--diff-remove, #f48771)"><b>-${removed}</b> removed</span><span style="color:var(--diff-change, #dcdcaa)"><b>${changed}</b> changed</span><span><b>${unchanged}</b> unchanged</span><div class="diff-stats-toolbar" id="editorStatsToolbar"></div><button type="button" class="diff-stats-copy-btn" title="Copy as unified diff" onclick="copyEditorUnifiedDiff(this)"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" style="width:11px;height:11px;"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg>Copy diff</button><button type="button" class="diff-stats-top-btn" title="Scroll to top" onclick="scrollElementToTop('editorCompareResults')">&#9650; Top</button>`;
             return statsDiv;
         }
         function renderEditorCompareResults(diff) {
             const results = document.getElementById('editorCompareResults');
             if (editorViewMode === 'changes') { renderEditorChanges(diff.structural); return; }
+            restoreEditorFocusControlsHome();
             results.innerHTML = '';
             if (!diff.textual) { results.innerHTML = '<div style="color:var(--vscode-tab-inactiveForeground)">Comparing…</div>'; return; }
             if (diff.textual.tooLarge) { results.innerHTML = '<div style="color:var(--vscode-errorForeground)">These snippets are too large for a detailed diff — try smaller JSON.</div>'; return; }
@@ -2940,6 +2985,7 @@ function exportLocalStorageBackup() {
             const removed = groups.filter(g => g.type === 'remove').length;
             const changed = groups.filter(g => g.type === 'changed').length;
             results.appendChild(renderEditorTextualStats(diff.textual));
+            positionEditorFocusControls();
             if (added === 0 && removed === 0 && changed === 0) {
                 const ok = document.createElement('div');
                 ok.style.color = '#89d185';
@@ -2985,6 +3031,7 @@ function exportLocalStorageBackup() {
                     if (editorViewMode !== 'changes') renderEditorCompareResults(lastEditorDiff);
                 }
             } catch (e) {
+                restoreEditorFocusControlsHome();
                 results.innerHTML = "<div style='color:var(--vscode-errorForeground)'>❌ Error: " + e.message + "</div>";
                 lastEditorDiff = null;
             }
@@ -3290,7 +3337,7 @@ function exportLocalStorageBackup() {
             document.getElementById('editorRight').value = b.r || '';
             document.getElementById('editorRightName').value = b.n || '';
             const big = ((a.r || '').length + (b.r || '').length) > 200000;
-            if (big) { const results = document.getElementById('editorCompareResults'); if (results) results.innerHTML = 'Large comparison — click "Compare" above to run it.'; }
+            if (big) { restoreEditorFocusControlsHome(); const results = document.getElementById('editorCompareResults'); if (results) results.innerHTML = 'Large comparison — click "Compare" above to run it.'; }
             else runEditorCompare();
         }
         function handleJsonFileUpload(fileList) {

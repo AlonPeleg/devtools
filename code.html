@@ -995,9 +995,12 @@
     .diff-stats-top-btn, .diff-stats-copy-btn { display: flex; align-items: center; gap: 4px; background: var(--bg-elevated); border: 1px solid var(--border-soft); color: var(--text-dim); font-family: var(--font-ui); font-size: 10.5px; padding: 3px 9px; border-radius: 5px; cursor: pointer; }
     .diff-stats-top-btn:hover:not(:disabled), .diff-stats-copy-btn:hover:not(:disabled) { color: var(--text-bright); background: var(--hover-bg); }
     .diff-stats-top-btn:disabled, .diff-stats-copy-btn:disabled { opacity: 0.35; cursor: default; }
-    /* Copy comes right before Top in the markup; margin-left:auto on it pushes both trailing
-       buttons over to the right edge of the stats bar together, past the stat counts. */
-    .diff-stats-copy-btn { margin-left: auto; }
+    /* Focus mode relocates the view-seg, options and share controls (real DOM nodes, not
+       duplicates) into this toolbar -- see restoreCompareFocusControlsHome()/
+       positionCompareFocusControls() in the script. It carries the auto margin (rather than the
+       copy button) so the whole trailing group -- toolbar, Copy diff, Top -- stays together at the
+       right edge of the stats bar, whether or not the toolbar currently has anything in it. */
+    .diff-stats-toolbar { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 
     /* No bottom padding here -- the docked side-diff scrollbar (position:sticky;bottom:0) supplies
        its own small bottom padding instead, so the track sits close to the box's actual bottom
@@ -1432,16 +1435,17 @@
                 <div class="btn-group">
                     <div class="btn-icon mode-toggle" id="compareSharedModeToggleFocus" title="Switch both panels to plain text editor" onclick="toggleComparePanelModeShared()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
                     <div class="btn-icon wrap-toggle" id="compareSharedWrapToggle" title="Wrap long lines (both panels)" onclick="toggleComparePanelWrapShared(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
+                    <button type="button" class="btn btn-secondary btn-iconbtn" id="compareFormatBothBtn" title="Format Both (beautify)" onclick="formatComparePanelsShared(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></button>
                     <label class="switch-container" title="Keep both panels scrolled to the same position">
+                        <span>Sync Scroll</span>
                         <div class="switch"><input type="checkbox" id="compareSyncScrollToggle" checked><span class="slider"></span></div>
-                        Sync Scroll
                     </label>
-                    <div class="split-toggle view-seg" id="compareViewSeg" role="group" aria-label="Compare view">
+                    <span id="compareViewSegHome" style="display:none;"></span><div class="split-toggle view-seg" id="compareViewSeg" role="group" aria-label="Compare view">
                         <button type="button" class="split-toggle-half active" id="compareViewBtnList" title="List view — only the changed lines" onclick="setCompareViewMode('list')"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>List</button>
                         <button type="button" class="split-toggle-half" id="compareViewBtnSide" title="Side-by-side view" onclick="setCompareViewMode('side')"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="2.5" width="5.5" height="11" rx="1"/><rect x="9" y="2.5" width="5.5" height="11" rx="1"/></svg>Side-by-side</button>
                         <button type="button" class="split-toggle-half" id="compareViewBtnUnified" title="Unified view" onclick="setCompareViewMode('unified')"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.5 3.5h2M6 3.5h7.5M2.5 8h2M6 8h7.5M2.5 12.5h2M6 12.5h5"/></svg>Unified</button>
                     </div>
-                    <div class="compare-options" id="compareOptionsWrap">
+                    <span id="compareOptionsWrapHome" style="display:none;"></span><div class="compare-options" id="compareOptionsWrap">
                         <button type="button" class="btn btn-secondary btn-iconbtn" id="compareOptionsBtn" title="Compare options" onclick="toggleCompareOptions()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h7M11.5 4h2.5M2 8h2.5M7 8h7M2 12h9M13.5 12H14"/><circle cx="9" cy="4" r="1.4" fill="var(--bg-panel)"/><circle cx="4.5" cy="8" r="1.4" fill="var(--bg-panel)"/><circle cx="11" cy="12" r="1.4" fill="var(--bg-panel)"/></svg><span class="options-badge" id="compareOptionsBadge" hidden></span><span class="caret">&#9662;</span></button>
                         <div class="compare-options-menu" id="compareOptionsMenu" hidden>
                             <label class="switch-container"><div class="switch"><input type="checkbox" id="ignoreWhitespaceToggle" onchange="runCompare(); updateCompareOptionsBadge();"><span class="slider"></span></div>Ignore whitespace</label>
@@ -1452,7 +1456,7 @@
                     </div>
                     <button type="button" class="btn btn-secondary btn-iconbtn" id="compareFocusBtn" title="Focus — compact panels, larger results" aria-pressed="false" onclick="toggleCompareFocus()"><svg class="ic" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg></button>
                     <button class="btn" id="runCompareBtn" onclick="runCompare()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="8" height="10" rx="1.2"/><rect x="6.5" y="3" width="8" height="10" rx="1.2" fill="#ffffff" fill-opacity="0.35"/></svg>Compare</button>
-                    <button type="button" class="btn btn-secondary btn-iconbtn" title="Copy a link to this comparison" onclick="shareCompareLink(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg></button>
+                    <span id="compareShareBtnHome" style="display:none;"></span><button type="button" class="btn btn-secondary btn-iconbtn" id="compareShareBtn" title="Copy a link to this comparison" onclick="shareCompareLink(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12.5" cy="3.5" r="2"/><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="12.5" r="2"/><line x1="5.3" y1="7" x2="10.8" y2="4.2"/><line x1="5.3" y1="9" x2="10.8" y2="11.8"/></svg></button>
                     <button class="btn btn-secondary btn-iconbtn" id="compareClearBtn" title="Clear Results" onclick="clearCompareResults()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
@@ -3712,7 +3716,7 @@ function loadSharedCompare(data) {
     document.getElementById('compareRightName').value = b.n || '';
     refreshCompareBadge('compareRight');
     const big = ((a.c || '').length + (b.c || '').length) > 200000;
-    if (big) { const results = document.getElementById('compareResults'); if (results) results.innerHTML = 'Large comparison — click "Compare" above to run it.'; }
+    if (big) { restoreCompareFocusControlsHome(); const results = document.getElementById('compareResults'); if (results) results.innerHTML = 'Large comparison — click "Compare" above to run it.'; }
     else runCompare();
 }
 function handleFileUpload(files) {
@@ -4156,6 +4160,10 @@ async function formatComparePanel(panelId, btnEl) {
         if (btnEl) flashIcon(btnEl);
     }
 }
+async function formatComparePanelsShared(btnEl) {
+    await Promise.all([formatComparePanel('compareLeft', null), formatComparePanel('compareRight', null)]);
+    flashIcon(btnEl || document.getElementById('compareFormatBothBtn'));
+}
 
 /* ---- Viewer "Compare" pick-two mode ---- */
 let cmpPickOn = false, cmpPickFirst = null, cmpPickSig = '';
@@ -4414,6 +4422,39 @@ function toggleCompareFocus() {
             if (link) link.click();
         }
     }
+    positionCompareFocusControls();
+}
+// Focus mode relocates the view-seg, options and share controls (their real DOM nodes, not
+// duplicates) into the diff-stats toolbar rendered above the results, right next to
+// "Copy diff"/"Top", instead of cluttering the always-visible header. (Format Both lives
+// permanently in the header itself -- see the swap-toolbar-row markup -- since that row is never
+// hidden, even in Focus mode, so it needs no relocation.) Each control has a hidden
+// marker span (id="<control>Home") immediately before its normal position; restoreCompareFocusControlsHome()
+// puts every control back there via home.after(el), which is exact and idempotent regardless of
+// what else has moved around. Because the results container is rebuilt with innerHTML on every
+// render, restoreCompareFocusControlsHome() must be called before any such wipe (otherwise the wipe
+// would delete the live control nodes), and positionCompareFocusControls() must be called after a
+// fresh diff-stats bar has been appended (or after leaving Focus mode) to re-relocate them if
+// appropriate.
+const COMPARE_FOCUS_RELOCATE_IDS = ['compareViewSeg', 'compareOptionsWrap', 'compareShareBtn'];
+function restoreCompareFocusControlsHome() {
+    COMPARE_FOCUS_RELOCATE_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        const home = document.getElementById(id + 'Home');
+        if (el && home && el.previousElementSibling !== home) home.after(el);
+    });
+}
+function positionCompareFocusControls() {
+    const pane = document.getElementById('compare-pane');
+    const toolbar = document.getElementById('compareStatsToolbar');
+    if (pane && pane.classList.contains('compare-focus') && toolbar) {
+        COMPARE_FOCUS_RELOCATE_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) toolbar.appendChild(el);
+        });
+    } else {
+        restoreCompareFocusControlsHome();
+    }
 }
 // Generic "jump to top" for any scrollable element (currently just the diff results — the two
 // source panels are Monaco editors now and use scrollComparePanelToTop instead).
@@ -4592,8 +4633,8 @@ function runCompare() {
     const results = document.getElementById('compareResults');
     const codeA = getPanelCode('compareLeft');
     const codeB = getPanelCode('compareRight');
-    if (!codeA.trim() && !codeB.trim()) { results.innerHTML = 'Load code into each panel, then click "Compare".'; lastDiffResult = null; return; }
-    if (!codeA.trim() || !codeB.trim()) { results.innerHTML = '<div style="color:var(--diff-remove)">❌ Error: Both Panel A and Panel B need code to compare.</div>'; lastDiffResult = null; return; }
+    if (!codeA.trim() && !codeB.trim()) { restoreCompareFocusControlsHome(); results.innerHTML = 'Load code into each panel, then click "Compare".'; lastDiffResult = null; return; }
+    if (!codeA.trim() || !codeB.trim()) { restoreCompareFocusControlsHome(); results.innerHTML = '<div style="color:var(--diff-remove)">❌ Error: Both Panel A and Panel B need code to compare.</div>'; lastDiffResult = null; return; }
     const opts = {
         ignoreWhitespace: document.getElementById('ignoreWhitespaceToggle').checked,
         ignoreCase: document.getElementById('ignoreCaseToggle').checked,
@@ -4607,12 +4648,14 @@ function runCompare() {
         // back, the older in-flight response is just dropped when it arrives.
         const myReq = ++compareReqSeq;
         if (btn) btn.disabled = true;
+        restoreCompareFocusControlsHome();
         results.innerHTML = '<div style="color:var(--text-dim)">Comparing…</div>';
         const onMsg = (e) => {
             if (e.data.id !== myReq) return;
             worker.removeEventListener('message', onMsg);
             if (btn) btn.disabled = false;
             if (!e.data.ok) {
+                restoreCompareFocusControlsHome();
                 results.innerHTML = '<div style="color:var(--diff-remove)">Comparison failed: ' + escapeHtml(e.data.error || 'unknown error') + '</div>';
                 lastDiffResult = null;
                 return;
@@ -4635,9 +4678,11 @@ function clearCompareResults() {
     clearTimeout(liveCompareTimer);
     compareViewMode = 'list';
     updateCompareViewToggleUI();
+    restoreCompareFocusControlsHome();
     document.getElementById('compareResults').innerHTML = 'Load code into each panel, then click "Compare".';
 }
 function renderCompareResults(diff) {
+    restoreCompareFocusControlsHome();
     const results = document.getElementById('compareResults');
     results.innerHTML = '';
     if (diff.tooLarge) {
@@ -4653,8 +4698,9 @@ function renderCompareResults(diff) {
     if (hasDiff && similarity >= 100) similarity = 99; // never claim "100% similar" when a real difference exists
     const statsDiv = document.createElement('div');
     statsDiv.className = 'diff-stats';
-    statsDiv.innerHTML = `<span><b>${similarity}%</b> similar</span><span style="color:var(--diff-add)"><b>+${added}</b> added</span><span style="color:var(--diff-remove)"><b>-${removed}</b> removed</span><span style="color:var(--diff-change)"><b>${changed}</b> changed</span><span><b>${unchanged}</b> unchanged</span><button type="button" class="diff-stats-copy-btn" title="Copy as unified diff" onclick="copyCompareUnifiedDiff(this)"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" style="width:11px;height:11px;"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg>Copy diff</button><button type="button" class="diff-stats-top-btn" title="Scroll to top" onclick="scrollElementToTop('compareResults')">&#9650; Top</button>`;
+    statsDiv.innerHTML = `<span><b>${similarity}%</b> similar</span><span style="color:var(--diff-add)"><b>+${added}</b> added</span><span style="color:var(--diff-remove)"><b>-${removed}</b> removed</span><span style="color:var(--diff-change)"><b>${changed}</b> changed</span><span><b>${unchanged}</b> unchanged</span><div class="diff-stats-toolbar" id="compareStatsToolbar"></div><button type="button" class="diff-stats-copy-btn" title="Copy as unified diff" onclick="copyCompareUnifiedDiff(this)"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" style="width:11px;height:11px;"><path d="M4 4V1h11v11h-3v3H1V4h3zm10-2H5v9h9V2zM2 14h9V5H2v9z"/></svg>Copy diff</button><button type="button" class="diff-stats-top-btn" title="Scroll to top" onclick="scrollElementToTop('compareResults')">&#9650; Top</button>`;
     results.appendChild(statsDiv);
+    positionCompareFocusControls();
 
     if (added === 0 && removed === 0 && changed === 0) {
         const ok = document.createElement('div');
