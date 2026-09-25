@@ -2981,9 +2981,15 @@ window.addEventListener('beforeinstallprompt', function (e) {
       return txP(tx);
     });
   }
+  // wipeAllData() empties every tool unconditionally, so the shell already knows the true new
+  // count (0) for all three without waiting on each tool's pane to reload and self-report --
+  // only the active tab gets reloaded immediately (see resetPanes), so without this the other
+  // two tabs' badges would keep showing their pre-wipe counts (and, now that counts are cached
+  // to localStorage, would keep doing so even across a refresh) until each was visited again.
+  function zeroAllTabCounts() { TOOLS.forEach(function (t) { updateTabCount(t, 0); }); }
   function clearAllData() {
     if (!confirm('Delete ALL your snippets, JSON / XML entries and CSV / XLSX files?\n\nSettings and shortcuts are kept. This can’t be undone (Export all first if you want a copy).')) return;
-    wipeAllData().then(function () { resetPanes(); toast('All data cleared.'); })
+    wipeAllData().then(function () { zeroAllTabCounts(); resetPanes(); toast('All data cleared.'); })
       .catch(function (err) { toast('Couldn’t clear the data: ' + ((err && err.message) || 'unknown error')); });
   }
   function resetApp() {
@@ -2992,7 +2998,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
       [LEGACY_THEME_KEY, LAST_TAB_KEY, USAGE_KEY, 'code_viewer_layout_mode', 'json_viewer_layout_mode', 'sheet_viewer_layout_mode', 'code_viewer_theme_v1', 'json_viewer_theme_v1', 'sheet_viewer_theme_v1'].forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
       usage = {};
       settings = sanitize(JSON.parse(JSON.stringify(DEFAULTS))); commit();
-      resetPanes(); toast('The app was reset.');
+      zeroAllTabCounts(); resetPanes(); toast('The app was reset.');
     }).catch(function (err) { toast('Couldn’t reset the app: ' + ((err && err.message) || 'unknown error')); });
   }
   function buildAbout() {

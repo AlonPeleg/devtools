@@ -680,7 +680,12 @@
         .btn-delete:hover { opacity: 1; }
         .breadcrumb-bar { position: sticky; top: 0; z-index: 20; background: var(--vscode-editor-background); border-bottom: 1px solid var(--vscode-panel-border); padding: 2px 8px; font-size: 9px; font-family: monospace; color: var(--vscode-textLink-foreground); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .breadcrumb-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .content { padding: 8px; font-family: var(--dt-mono, "Cascadia Code", "Consolas", monospace); font-size: var(--dt-fs, 11px); overflow: auto; line-height: 1.35; transition: background-color 0.2s; flex: 1 1 auto; min-width: 0; }
+        /* white-space is inherited, so setting it once here cascades to every .header-line/.footer
+           row the tree renders -- nowrap (no wrap, horizontal scroll) is the default, matching the
+           Edit & Compare panels, and .wrap-on (via each entry's wrap-toggle button) switches back
+           to the original wrapped behavior. */
+        .content { padding: 8px; font-family: var(--dt-mono, "Cascadia Code", "Consolas", monospace); font-size: var(--dt-fs, 11px); overflow: auto; line-height: 1.35; transition: background-color 0.2s; flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+        .content.wrap-on { white-space: normal; overflow-wrap: anywhere; }
 
         /* ---------- Minimap (VS Code-style; one toggle per snippet, off by default, only offered
            while that snippet is focused/maximized — see .entry.focused-entry rules below) ---------- */
@@ -728,11 +733,28 @@
         .xml-tag { color: var(--tok-tag, #569cd6); } .xml-attr { color: var(--tok-key, #9cdcfe); } .xml-text { color: var(--vscode-foreground); }
         
         .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 300px; flex-shrink: 0; }
-        .compare-col { display: flex; flex-direction: column; gap: 4px; height: 100%; min-height: 0; }
+        /* min-width: 0 overrides the grid item's implicit min-width:auto (which otherwise expands
+           to fit its widest unbroken descendant, e.g. a long JSON value with no wrap opportunities
+           in Tree view) so the editor-grid's 1fr/1fr columns actually stay equal width and the
+           panel's own overflow:auto can scroll instead of the whole layout stretching past it. */
+        .compare-col { display: flex; flex-direction: column; gap: 4px; height: 100%; min-height: 0; min-width: 0; position: relative; }
         .compare-header { display: flex; justify-content: space-between; align-items: center; padding: 2px 4px; }
         .compare-label { font-size: 10px; text-transform: uppercase; opacity: 0.7; font-weight: bold; }
         
-        .diff-output { margin-top: 15px; border: 1px solid var(--vscode-panel-border); padding: 10px; background: var(--vscode-editor-background); font-family: var(--dt-mono, monospace); font-size: calc(var(--dt-fs, 11px) + 1px); border-radius: 4px; overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; min-height: 120px; }
+        /* No bottom padding here -- the docked side-diff scrollbar (position:sticky;bottom:0) supplies
+           its own small bottom padding instead, so the track sits close to the box's actual bottom
+           edge rather than floating with a visible gap below it. */
+        /* display:flex column (rather than plain block) so the side-by-side dock's flex spacer (see
+           .side-diff-flex-spacer) can push the dock down to the box's true bottom edge even when the
+           diff is short enough that there's nothing to scroll -- position:sticky alone only pins an
+           element once its normal in-flow position has been scrolled past, so a short diff left it
+           sitting right after the content instead of at the visible bottom of the (flex-grown) box. */
+        .diff-output { margin-top: 15px; border: 1px solid var(--vscode-panel-border); padding: 10px 10px 0 10px; background: var(--vscode-editor-background); font-family: var(--dt-mono, monospace); font-size: calc(var(--dt-fs, 11px) + 1px); border-radius: 4px; overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column; }
+        /* Only present for the side-by-side view (inserted between the diff blocks and the dock) --
+           has no natural height of its own, so it collapses to nothing once the blocks overflow the
+           box (letting the normal scrollbar + sticky dock take over) and otherwise expands to fill
+           whatever room is left, which is what carries the dock down to the bottom. */
+        .side-diff-flex-spacer { flex: 1 1 auto; min-height: 0; }
         .diff-line { padding: 4px 8px; border-radius: 2px; margin-bottom: 2px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; transition: background 0.1s; max-width: 100%; }
         .diff-line:hover { background: var(--vscode-list-hoverBackground); }
         .diff-content-box { display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0; flex: 1 1 auto; }
@@ -767,8 +789,16 @@
         .editor-mode-toggle { display: flex; gap: 4px; align-items: center; }
         .editor-mode-btn { font-size: 10px; padding: 2px 7px; opacity: 0.6; }
         .editor-mode-btn.active { opacity: 1; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-        .editor-textarea { flex-grow: 1; height: 100%; resize: none; margin-bottom: 0; font-family: var(--dt-mono, monospace); font-size: var(--dt-fs, 11px); }
-        .editor-tree-view { flex-grow: 1; height: 100%; overflow: auto; border: 1px solid var(--vscode-input-border); border-radius: 4px; background: var(--vscode-input-background); padding: 8px; font-family: var(--dt-mono, var(--vscode-editor-font-family)); font-size: var(--dt-fs, 11px); box-sizing: border-box; }
+        /* No-wrap (horizontal scroll) is the default per-panel state, matching the Code tool's
+           compare panels; .wrap-on switches to soft-wrap. */
+        .editor-textarea { flex-grow: 1; height: 100%; resize: none; margin-bottom: 0; font-family: var(--dt-mono, monospace); font-size: var(--dt-fs, 11px); white-space: pre; overflow: auto; }
+        .editor-textarea.wrap-on { white-space: pre-wrap; word-break: break-word; }
+        .wrap-toggle svg { width: 14px; height: 14px; }
+        /* white-space is inherited, so setting it once here cascades to every .header-line/.footer
+           row the tree renders -- nowrap (no wrap, horizontal scroll) is the default, matching the
+           Edit-mode textarea, and .wrap-on switches both to the original wrapped behavior. */
+        .editor-tree-view { flex-grow: 1; height: 100%; overflow: auto; border: 1px solid var(--vscode-input-border); border-radius: 4px; background: var(--vscode-input-background); padding: 8px; font-family: var(--dt-mono, var(--vscode-editor-font-family)); font-size: var(--dt-fs, 11px); box-sizing: border-box; white-space: nowrap; }
+        .editor-tree-view.wrap-on { white-space: normal; overflow-wrap: anywhere; }
         .compare-col.drop-target { outline: 2px dashed var(--vscode-focusBorder); outline-offset: 4px; border-radius: 6px; }
         .editor-chip[draggable="true"] { cursor: grab; }
         .editor-chip[draggable="true"]:active { cursor: grabbing; }
@@ -953,6 +983,13 @@
     #editor-pane.editor-focus .swap-toolbar-row { order: -1; margin-top: 0 !important; }
     #editor-pane.editor-focus #editorFocusBtn, #editor-pane.editor-focus #editorClearBtn { display: none; }
     #editorFocusBtn[aria-pressed="true"] { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+    /* The shared Edit/Tree toggle normally lives in the top "Edit & Compare" toolbar, which the
+       rule above hides in Focus mode. #editorSharedModeToggleFocus is a second copy of the same
+       toggle living inside .swap-toolbar-row (which Focus mode keeps and promotes to the header),
+       so the view switch stays reachable while focused -- hidden outside Focus mode so it doesn't
+       duplicate the normal one. */
+    #editorSharedModeToggleFocus { display: none; }
+    #editor-pane.editor-focus #editorSharedModeToggleFocus { display: flex; }
 
     /* ---------- Compare options menu (Sort keys / Wrap lines) ---------- */
     .compare-options { position: relative; }
@@ -987,14 +1024,19 @@
     .changes-copy-path-btn { border: none; background: transparent; color: var(--vscode-tab-inactiveForeground); opacity: 0.55; cursor: pointer; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; align-self: center; }
     .changes-copy-path-btn:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground); }
 
-    /* ---------- Split view: full-context two-column grid, one row per source line ---------- */
+    /* ---------- Split view: a vertical stack of two-column "blocks", one row per source line.
+       Horizontal scroll is NOT interactive on the columns (overflow:hidden) -- it's pushed in
+       from the one pair of docked scrollbars at the bottom of the results area instead, so a
+       long diff with several collapse-bars shows exactly one scroll control, not one scattered
+       per block. See setupSideDiffSyncScroll / makeSideDiffHScrollDock. That dock is
+       unconditional and independent of the Sync Scroll toggle above (which only syncs the
+       Panel A/B source editors); the diff itself always keeps its two sides lined up. ---------- */
     .side-diff-block { display: flex; gap: 0 10px; }
-    .side-diff-col { flex: 1 1 0; min-width: 0; overflow-x: auto; overflow-y: hidden; }
-    /* With Wrap lines off (the default), a long line is truncated with an ellipsis rather than
-       given its own horizontal scrollbar -- a per-cell scrollbar let the two columns fall out of
-       sync with each other, hiding differences off-screen; truncating keeps every row's height
-       (and so both columns' alignment) identical regardless of line length. Wrap lines on
-       switches to wrapping instead, which keeps the full text visible at the cost of row height. */
+    .side-diff-col { flex: 1 1 0; min-width: 0; overflow: hidden; }
+    .side-diff-hscroll-dock { position: sticky; bottom: 0; z-index: 6; display: flex; gap: 0 10px; background: var(--vscode-editor-background); padding-top: 3px; padding-bottom: 3px; margin-top: 2px; border-top: 1px solid var(--vscode-panel-border); }
+    .side-diff-hscroll-dock.no-overflow { display: none; }
+    .side-diff-hscroll { flex: 1 1 0; min-width: 0; overflow-x: auto; overflow-y: hidden; height: 13px; }
+    .side-diff-hscroll-spacer { height: 1px; }
     .side-cell { padding: 3px 7px 3px 5px; border-radius: 2px; white-space: pre; font-family: var(--dt-mono, monospace); font-size: calc(var(--dt-fs, 11px) + 0.5px); display: flex; gap: 6px; border-left: 3px solid transparent; border-bottom: 1px solid rgba(128,128,128,0.12); box-shadow: inset 0 0 0 999px rgba(0,0,0,0); transition: box-shadow 0.08s; width: max-content; min-width: 100%; box-sizing: border-box; }
     .side-cell:not(.blank) { cursor: pointer; }
     .side-cell .ln { flex: 0 0 auto; opacity: 0.45; width: 2.8em; text-align: right; user-select: none; white-space: nowrap; }
@@ -1030,6 +1072,13 @@
     .unified-row.changed-add { background: rgba(220,220,170,0.14); border-left-color: var(--diff-change, #dcdcaa); }
     .unified-row.row-hover { box-shadow: inset 0 0 0 999px rgba(255,255,255,0.055); }
     .unified-row.row-active { box-shadow: inset 0 0 0 999px rgba(0,122,204,0.20); outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+
+    /* Floating "scroll to top" button for a Panel A/B source panel -- matches the Code tab's:
+       fades in only once you've scrolled down, floats over the bottom-right corner of the
+       content instead of sitting in the header row as a permanent text button. */
+    .scroll-top-btn { position: absolute; right: 10px; bottom: 10px; width: 26px; height: 26px; border-radius: 50%; background: var(--vscode-menu-background); border: 1px solid var(--vscode-menu-border); color: var(--vscode-foreground); display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.45); opacity: 0; pointer-events: none; transition: opacity 0.15s; z-index: 5; font-size: 11px; padding: 0; }
+    .scroll-top-btn.visible { opacity: 0.8; pointer-events: auto; }
+    .scroll-top-btn:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground); }
 
     /* Sticky prev/next-change nav (Split/Unified). */
     .diff-nav-sticky { grid-column: 1 / -1; position: sticky; top: 4px; height: 0; overflow: visible; z-index: 6; pointer-events: none; margin-bottom: 2px; }
@@ -1105,6 +1154,11 @@
             <div class="toolbar">
                 <h3 style="margin:0; font-size:14px;">Edit &amp; Compare (Side by Side)</h3>
                 <div class="btn-group">
+                    <div class="editor-mode-toggle" id="editorSharedModeToggle" title="Applies to both panels">
+                        <button class="btn btn-secondary editor-mode-btn active" data-mode="edit" onclick="setEditorModeShared('edit')">Edit</button>
+                        <button class="btn btn-secondary editor-mode-btn" data-mode="tree" onclick="setEditorModeShared('tree')">Tree</button>
+                    </div>
+                    <div class="btn-icon wrap-toggle" id="editorSharedWrapToggle" title="Wrap long lines (both panels)" onclick="toggleEditorPanelWrapShared(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                     <button class="btn btn-secondary" onclick="formatEditorPanel('editorLeft'); formatEditorPanel('editorRight');">Format Both</button>
                     <button class="btn btn-secondary btn-iconbtn" title="Reset Both Panels" onclick="clearEditorCompareAll()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
@@ -1118,11 +1172,6 @@
                     <div class="editor-panel-toolbar">
                         <input type="text" class="name-input editor-name" id="editorLeftName" placeholder="Name this file...">
                         <span class="compare-label">Panel A</span>
-                        <div class="editor-mode-toggle">
-                            <button class="btn btn-secondary editor-mode-btn" onclick="scrollPanelToTop('editorLeft')">Top</button>
-                            <button class="btn btn-secondary editor-mode-btn active" data-mode="edit" onclick="setEditorMode('editorLeft','edit', this)">Edit</button>
-                            <button class="btn btn-secondary editor-mode-btn" data-mode="tree" onclick="setEditorMode('editorLeft','tree', this)">Tree</button>
-                        </div>
                     </div>
                     <div class="editor-panel-toolbar">
                         <div class="actions">
@@ -1142,16 +1191,12 @@
                     </div>
                     <textarea id="editorLeft" class="input-box editor-textarea" placeholder="Paste JSON here, or load one of your posted JSONs above..."></textarea>
                     <div id="editorLeftTree" class="editor-tree-view" style="display:none;"></div>
+                    <button type="button" class="scroll-top-btn" id="editorLeftScrollTop" title="Scroll to top" onclick="scrollPanelToTop('editorLeft')">&#9650;</button>
                 </div>
                 <div class="compare-col" id="editorRightCol" ondragover="allowEditorDrop(event)" ondrop="handleEditorDrop(event,'editorRight')" ondragenter="this.classList.add('drop-target')" ondragleave="this.classList.remove('drop-target')">
                     <div class="editor-panel-toolbar">
                         <input type="text" class="name-input editor-name" id="editorRightName" placeholder="Name this file...">
                         <span class="compare-label">Panel B</span>
-                        <div class="editor-mode-toggle">
-                            <button class="btn btn-secondary editor-mode-btn" onclick="scrollPanelToTop('editorRight')">Top</button>
-                            <button class="btn btn-secondary editor-mode-btn active" data-mode="edit" onclick="setEditorMode('editorRight','edit', this)">Edit</button>
-                            <button class="btn btn-secondary editor-mode-btn" data-mode="tree" onclick="setEditorMode('editorRight','tree', this)">Tree</button>
-                        </div>
                     </div>
                     <div class="editor-panel-toolbar">
                         <div class="actions">
@@ -1171,6 +1216,7 @@
                     </div>
                     <textarea id="editorRight" class="input-box editor-textarea" placeholder="Paste JSON here, or load one of your posted JSONs above..."></textarea>
                     <div id="editorRightTree" class="editor-tree-view" style="display:none;"></div>
+                    <button type="button" class="scroll-top-btn" id="editorRightScrollTop" title="Scroll to top" onclick="scrollPanelToTop('editorRight')">&#9650;</button>
                 </div>
             </div>
 
@@ -1178,6 +1224,10 @@
                 <h3 style="margin:0; font-size:12px;">Panel A vs Panel B</h3>
                 <button type="button" class="btn btn-secondary btn-iconbtn swap-panels-btn swap-mid-btn" id="editorSwapBtn" title="Swap Panel A and B" onclick="swapEditorPanels(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h6"/><path d="M12 1.5l3 3-3 3"/><path d="M10 11.5H4"/><path d="M4 8.5l-3 3 3 3"/></svg></button>
                 <div class="btn-group">
+                    <div class="editor-mode-toggle" id="editorSharedModeToggleFocus" title="Applies to both panels">
+                        <button class="btn btn-secondary editor-mode-btn active" data-mode="edit" onclick="setEditorModeShared('edit')">Edit</button>
+                        <button class="btn btn-secondary editor-mode-btn" data-mode="tree" onclick="setEditorModeShared('tree')">Tree</button>
+                    </div>
                     <label class="switch-container" title="Keep both panels scrolled to the same position">
                         <span>Sync Scroll</span>
                         <div class="switch">
@@ -1374,16 +1424,29 @@ function exportLocalStorageBackup() {
             const target = getEditorScrollEl(targetPanelId);
             if (!source || !target) return;
             isEditorSyncing = true;
-            const srcMax = source.scrollHeight - source.clientHeight;
-            const percentage = srcMax > 0 ? source.scrollTop / srcMax : 0;
-            target.scrollTop = percentage * Math.max(0, target.scrollHeight - target.clientHeight);
+            const srcMaxV = source.scrollHeight - source.clientHeight;
+            const vRatio = srcMaxV > 0 ? source.scrollTop / srcMaxV : 0;
+            target.scrollTop = vRatio * Math.max(0, target.scrollHeight - target.clientHeight);
+            // Horizontal sync too -- a panel scrolled sideways to read a long value/line stays in
+            // step with the other panel's horizontal position, not just its vertical one.
+            const srcMaxH = source.scrollWidth - source.clientWidth;
+            const hRatio = srcMaxH > 0 ? source.scrollLeft / srcMaxH : 0;
+            target.scrollLeft = hRatio * Math.max(0, target.scrollWidth - target.clientWidth);
             setTimeout(() => { isEditorSyncing = false; }, 20);
+        }
+        // Shows/hides a panel's floating "scroll to top" button based on whichever of Edit/Tree
+        // is currently visible -- same fade-in-once-scrolled behavior as the Code tab's.
+        function updateEditorScrollTopBtn(panelId) {
+            const el = getEditorScrollEl(panelId);
+            const btn = document.getElementById(panelId + 'ScrollTop');
+            if (!el || !btn) return;
+            btn.classList.toggle('visible', el.scrollTop > 40);
         }
 
         ['editorLeft', 'editorRight', 'editorLeftTree', 'editorRightTree'].forEach(elId => {
             const el = document.getElementById(elId);
             const panelId = elId.replace('Tree', '');
-            el.addEventListener('scroll', () => handleEditorSyncScroll(panelId));
+            el.addEventListener('scroll', () => { handleEditorSyncScroll(panelId); updateEditorScrollTopBtn(panelId); });
         });
         // Once Compare has run at least once, real typing into either panel re-runs it after a
         // short pause (see scheduleEditorLiveCompare below).
@@ -1391,10 +1454,8 @@ function exportLocalStorageBackup() {
         editorRightScroll.addEventListener('input', () => scheduleEditorLiveCompare());
 
         function scrollPanelToTop(panelId) {
-            const textarea = document.getElementById(panelId);
-            const treeDiv = document.getElementById(panelId + 'Tree');
-            textarea.scrollTop = 0;
-            treeDiv.scrollTop = 0;
+            const el = getEditorScrollEl(panelId);
+            if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function clearEditorPanel(panelId) {
@@ -1824,15 +1885,28 @@ function exportLocalStorageBackup() {
             return document.getElementById(panelId).closest('.compare-col');
         }
 
+        // Wrap toggle -- one shared button (#editorSharedWrapToggle, in the top toolbar) drives
+        // BOTH panels at once, and for each panel it drives BOTH the Edit-mode textarea and the
+        // Tree view, matching the Code tool's compare panels: no-wrap (horizontal scroll) is the
+        // default, this switches to soft-wrap in whichever mode is currently shown (and the class
+        // carries over to the other mode too, so switching Edit<->Tree afterwards keeps whatever
+        // wrap preference was last chosen).
+        function setEditorPanelWrap(panelId, on) {
+            const ta = document.getElementById(panelId);
+            const treeDiv = document.getElementById(panelId + 'Tree');
+            if (ta) ta.classList.toggle('wrap-on', on);
+            if (treeDiv) treeDiv.classList.toggle('wrap-on', on);
+        }
+        function toggleEditorPanelWrapShared(btnEl) {
+            const leftTa = document.getElementById('editorLeft');
+            const on = !(leftTa && leftTa.classList.contains('wrap-on'));
+            setEditorPanelWrap('editorLeft', on);
+            setEditorPanelWrap('editorRight', on);
+            if (!btnEl) btnEl = document.getElementById('editorSharedWrapToggle');
+            if (btnEl) btnEl.classList.toggle('toggle-active', on);
+        }
+
         function setEditorMode(panelId, mode, btnEl) {
-            const col = getEditorPanelCol(panelId);
-            col.querySelectorAll('.editor-mode-btn[data-mode]').forEach(b => b.classList.remove('active'));
-            if (btnEl && btnEl.hasAttribute('data-mode')) {
-                btnEl.classList.add('active');
-            } else {
-                const target = col.querySelector(`.editor-mode-btn[data-mode="${mode}"]`);
-                if (target) target.classList.add('active');
-            }
             const textarea = document.getElementById(panelId);
             const treeDiv = document.getElementById(panelId + 'Tree');
             if (mode === 'tree') {
@@ -1844,6 +1918,33 @@ function exportLocalStorageBackup() {
                 textarea.style.display = 'block';
                 textarea.focus();
             }
+            updateEditorScrollTopBtn(panelId);
+            updateSharedEditorModeToggleUI();
+        }
+
+        // Manual, user-facing Edit/Tree toggle — one shared control that switches both
+        // panels together. Programmatic mode switches (search, collapse/expand-all,
+        // jump-to-line, jump-to-path, clear) still call setEditorMode(panelId, ...)
+        // directly for just the one panel that needs it; those stay independent.
+        function setEditorModeShared(mode) {
+            setEditorMode('editorLeft', mode, null);
+            setEditorMode('editorRight', mode, null);
+        }
+
+        // Keeps the shared toggle's active-button highlight in sync with the panels'
+        // actual mode. Panel A is used as the reference; the two panels are always
+        // switched together by setEditorModeShared, but a programmatic per-panel
+        // switch (e.g. search forcing just one panel into Tree mode) can still leave
+        // them briefly out of step, so this reflects whichever mode Panel A is in.
+        function updateSharedEditorModeToggleUI() {
+            // Two copies of this toggle exist: #editorSharedModeToggle in the normal top toolbar,
+            // and #editorSharedModeToggleFocus (a duplicate living in .swap-toolbar-row so it's
+            // still reachable in Focus mode, which hides the normal toolbar). Keep both in sync.
+            const leftTree = document.getElementById('editorLeftTree');
+            const mode = leftTree && leftTree.style.display !== 'none' ? 'tree' : 'edit';
+            document.querySelectorAll('#editorSharedModeToggle .editor-mode-btn[data-mode], #editorSharedModeToggleFocus .editor-mode-btn[data-mode]').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+            });
         }
 
         function renderEditorTree(panelId) {
@@ -2421,15 +2522,55 @@ function exportLocalStorageBackup() {
             col.className = 'side-diff-col';
             return col;
         }
-        function setupSideDiffSyncScroll(wrap) {
+        // Builds the one pair of docked horizontal scrollbars (left / right, side by side, pinned
+        // to the bottom of the results area) that drives every column's horizontal position. Only
+        // these two elements are ever user-interactive for horizontal scroll -- the columns
+        // themselves are overflow:hidden, so there's exactly one scroll gesture in flight at a
+        // time instead of many blocks' worth of scrollbars all fighting to stay in sync.
+        function makeSideDiffHScrollDock() {
+            const dock = document.createElement('div');
+            dock.className = 'side-diff-hscroll-dock';
+            const leftTrack = document.createElement('div'); leftTrack.className = 'side-diff-hscroll';
+            const leftSpacer = document.createElement('div'); leftSpacer.className = 'side-diff-hscroll-spacer';
+            leftTrack.appendChild(leftSpacer);
+            const rightTrack = document.createElement('div'); rightTrack.className = 'side-diff-hscroll';
+            const rightSpacer = document.createElement('div'); rightSpacer.className = 'side-diff-hscroll-spacer';
+            rightTrack.appendChild(rightSpacer);
+            dock.appendChild(leftTrack); dock.appendChild(rightTrack);
+            return { dock, leftTrack, rightTrack, leftSpacer, rightSpacer };
+        }
+        // Re-measures how far each side actually needs to scroll (the widest line in any block,
+        // visible or still collapsed) and resizes each track's spacer to match. Called after the
+        // initial render and again whenever a collapse-bar is expanded, since a previously-hidden
+        // run of lines can be the widest one.
+        function updateSideDiffHScrollDock(wrap, dockRefs) {
+            let leftMax = 0, rightMax = 0, hasOverflow = false;
+            wrap.querySelectorAll('.side-diff-block').forEach(block => {
+                const cols = block.children;
+                const l = cols[0], r = cols[1];
+                if (l) { leftMax = Math.max(leftMax, l.scrollWidth); if (l.scrollWidth > l.clientWidth + 1) hasOverflow = true; }
+                if (r) { rightMax = Math.max(rightMax, r.scrollWidth); if (r.scrollWidth > r.clientWidth + 1) hasOverflow = true; }
+            });
+            dockRefs.leftSpacer.style.width = leftMax + 'px';
+            dockRefs.rightSpacer.style.width = rightMax + 'px';
+            dockRefs.dock.classList.toggle('no-overflow', !hasOverflow);
+        }
+        // Pushes the dock's horizontal position into every column (both sides, every block --
+        // including ones still hidden inside a collapsed run) and keeps the dock's own two tracks
+        // in lockstep with each other too, so the whole box -- both sides, unconditionally --
+        // always reads as one synced view. Deliberately separate from (and not gated by) the Sync
+        // Scroll toggle above, which only applies to the Panel A/B source editors.
+        function setupSideDiffSyncScroll(wrap, dockRefs) {
             const cols = wrap.querySelectorAll('.side-diff-col');
+            const tracks = [dockRefs.leftTrack, dockRefs.rightTrack];
             let syncing = false;
-            cols.forEach(col => {
-                col.addEventListener('scroll', () => {
+            tracks.forEach(track => {
+                track.addEventListener('scroll', () => {
                     if (syncing) return;
                     syncing = true;
-                    const x = col.scrollLeft;
-                    cols.forEach(other => { if (other !== col) other.scrollLeft = x; });
+                    const x = track.scrollLeft;
+                    tracks.forEach(other => { if (other !== track) other.scrollLeft = x; });
+                    cols.forEach(col => { col.scrollLeft = x; });
                     syncing = false;
                 });
             });
@@ -2437,6 +2578,7 @@ function exportLocalStorageBackup() {
         function renderSideBySide(container, groups, filteredA, filteredB) {
             const wrap = document.createElement('div');
             wrap.className = 'side-diff-wrap';
+            const dockRefs = makeSideDiffHScrollDock();
             const jumpTargets = [];
             let leftCol = null, rightCol = null;
             function openBlock() {
@@ -2475,6 +2617,9 @@ function exportLocalStorageBackup() {
                             const showing = hiddenWrap.style.display !== 'none';
                             hiddenWrap.style.display = showing ? 'none' : 'block';
                             bar.textContent = showing ? `⋯ ${hiddenCount} unchanged line${hiddenCount === 1 ? '' : 's'} — click to expand ⋯` : '⋯ click to collapse ⋯';
+                            // A run that was still collapsed may hold the widest line in the
+                            // whole diff -- re-measure the dock now that it's part of the layout.
+                            if (!showing) updateSideDiffHScrollDock(wrap, dockRefs);
                         };
                         wrap.appendChild(bar);
                         wrap.appendChild(hiddenWrap);
@@ -2505,8 +2650,13 @@ function exportLocalStorageBackup() {
                 i++;
             }
             container.appendChild(wrap);
+            const spacer = document.createElement('div');
+            spacer.className = 'side-diff-flex-spacer';
+            container.appendChild(spacer);
+            container.appendChild(dockRefs.dock);
+            updateSideDiffHScrollDock(wrap, dockRefs);
             setupCompareDiffNav(container, wrap, jumpTargets);
-            setupSideDiffSyncScroll(wrap);
+            setupSideDiffSyncScroll(wrap, dockRefs);
         }
         function makeUnifiedRow(cls, aOrig, bOrig, sign, contentNode) {
             const row = document.createElement('div');
@@ -3297,7 +3447,7 @@ function exportLocalStorageBackup() {
             }
             
             entry.dataset.entryId = entryId;
-            postedEntries.push({ id: entryId, name: savedName, type, data, rawString, timeStr, minimap: false });
+            postedEntries.push({ id: entryId, name: savedName, type, data, rawString, timeStr, minimap: false, wrap: false });
 
             entry.innerHTML = `
                 <div class="header">
@@ -3307,6 +3457,7 @@ function exportLocalStorageBackup() {
                     <input type="text" class="name-input" placeholder="Name entry..." value="${savedName}" oninput="updateEntryName(this)">
                     <div class="actions">
                         <button class="btn-global-icon fold-toggle" title="Collapse all nodes" data-tc="Collapse all nodes" data-te="Expand all nodes" onclick="entryFoldToggle(this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 4.5L8 9l4.5-4.5M3.5 8.5L8 13l4.5-4.5"/></svg></button>
+                        <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleEntryWrapBtn('${entryId}', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                         <div class="btn-icon minimap-toggle" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${entryId}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
                         <div class="btn-icon btn-convert" title="Copy as ${type === 'json' ? 'XML' : 'JSON'}">${type === 'json' ? xmlIconSvg : jsonIconSvg}</div>
                         <div class="btn-icon btn-minify" title="Copy Minified (Unbeautified)">${minifyIconSvg}</div>
@@ -4065,6 +4216,24 @@ function exportLocalStorageBackup() {
             if (!item) return;
             const next = !item.minimap;
             toggleEntryMinimap(id, next);
+            if (btnEl) btnEl.classList.toggle('toggle-active', next);
+        }
+        // Per-entry wrap toggle for the Viewer tab's tree view -- no-wrap (horizontal scroll) is
+        // the default, matching the Edit & Compare panels; this switches to soft-wrap. Purely a
+        // CSS class on .content (white-space is inherited down through the whole tree), so no
+        // re-render is needed either way.
+        function toggleEntryWrap(id, checked) {
+            const item = findEntry(id);
+            if (!item) return;
+            item.wrap = checked;
+            const contentEl = document.getElementById('content-' + id);
+            if (contentEl) contentEl.classList.toggle('wrap-on', checked);
+        }
+        function toggleEntryWrapBtn(id, btnEl) {
+            const item = findEntry(id);
+            if (!item) return;
+            const next = !item.wrap;
+            toggleEntryWrap(id, next);
             if (btnEl) btnEl.classList.toggle('toggle-active', next);
         }
 

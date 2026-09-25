@@ -992,7 +992,20 @@
        buttons over to the right edge of the stats bar together, past the stat counts. */
     .diff-stats-copy-btn { margin-left: auto; }
 
-    .diff-output { margin-top: 10px; border: 1px solid var(--border-soft); padding: 8px; background: var(--bg-panel); font-family: var(--font-mono); font-size: calc(var(--dt-fs, 12px) - 0.5px); tab-size: var(--dt-tab, 4); border-radius: 6px; overflow-y: auto; flex: 1 1 auto; min-height: 100px; }
+    /* No bottom padding here -- the docked side-diff scrollbar (position:sticky;bottom:0) supplies
+       its own small bottom padding instead, so the track sits close to the box's actual bottom
+       edge rather than floating with a visible gap below it. */
+    /* display:flex column (rather than plain block) so the side-by-side dock's flex spacer (see
+       .side-diff-flex-spacer) can push the dock down to the box's true bottom edge even when the
+       diff is short enough that there's nothing to scroll -- position:sticky alone only pins an
+       element once its normal in-flow position has been scrolled past, so a short diff left it
+       sitting right after the content instead of at the visible bottom of the (flex-grown) box. */
+    .diff-output { margin-top: 10px; border: 1px solid var(--border-soft); padding: 8px 8px 0 8px; background: var(--bg-panel); font-family: var(--font-mono); font-size: calc(var(--dt-fs, 12px) - 0.5px); tab-size: var(--dt-tab, 4); border-radius: 6px; overflow-y: auto; flex: 1 1 auto; min-height: 100px; display: flex; flex-direction: column; }
+    /* Only present for the side-by-side view (inserted between the diff blocks and the dock) --
+       has no natural height of its own, so it collapses to nothing once the blocks overflow the
+       box (letting the normal scrollbar + sticky dock take over) and otherwise expands to fill
+       whatever room is left, which is what carries the dock down to the bottom. */
+    .side-diff-flex-spacer { flex: 1 1 auto; min-height: 0; }
     /* Sticky at the top of the scrollable results so the overall stats stay visible while
        scrolling through a long diff, instead of disappearing until you scroll back up.
        Negative margins pull it out to the diff-output's own padding edges, then re-add the
@@ -1017,16 +1030,25 @@
     .diff-char-remove { background: rgba(244,135,113,0.35); border-radius: 2px; text-decoration: line-through; text-decoration-color: rgba(244,135,113,0.7); }
 
     /* Side-by-side is a vertical stack of "blocks" (one per uninterrupted run of rows between
-       collapse-bars), each block a flex row holding exactly two equal-width, independently
-       horizontally-scrollable columns (Panel A / Panel B). min-width:0 on the column is what
-       makes flex actually honor the equal 1-1 split instead of growing a column to fit its
-       widest line. Vertical scrolling stays handled by the single outer results container, so
-       both columns always move together vertically for free; horizontal scroll position is
-       kept in sync between every column (both sides, every block) by JS — see
-       setupSideDiffSyncScroll — so scrolling either side scrolls both, the way a real diff
-       viewer's two panes track each other. */
+       collapse-bars), each block a flex row holding exactly two equal-width columns (Panel A /
+       Panel B). min-width:0 on the column is what makes flex actually honor the equal 1-1 split
+       instead of growing a column to fit its widest line. Vertical scrolling stays handled by
+       the single outer results container, so both columns always move together vertically for
+       free. Horizontal scrolling is NOT interactive on the columns themselves (overflow:hidden —
+       giving every block its own native scrollbar meant a long diff showed several scattered
+       scrollbars, one per block, and syncing that many simultaneously-interactive elements
+       against each other was visibly choppy); instead each column's scroll position is pushed in
+       from the one pair of docked scrollbars at the bottom of the results area (.side-diff-col
+       stays draggable via scrollLeft even with overflow:hidden, it just isn't user-interactive
+       directly) — see setupSideDiffSyncScroll. That dock is unconditional and independent of the
+       Sync Scroll toggle above (which only syncs the Panel A/B source editors); the diff itself
+       always keeps its two sides lined up. */
     .side-diff-block { display: flex; gap: 0 10px; }
-    .side-diff-col { flex: 1 1 0; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+    .side-diff-col { flex: 1 1 0; min-width: 0; overflow: hidden; }
+    .side-diff-hscroll-dock { position: sticky; bottom: 0; z-index: 6; display: flex; gap: 0 10px; background: var(--bg-panel); padding-top: 3px; padding-bottom: 3px; margin-top: 2px; border-top: 1px solid var(--border-soft); }
+    .side-diff-hscroll-dock.no-overflow { display: none; }
+    .side-diff-hscroll { flex: 1 1 0; min-width: 0; overflow-x: auto; overflow-y: hidden; height: 13px; }
+    .side-diff-hscroll-spacer { height: 1px; }
     .side-cell { padding: 3px 7px 3px 5px; border-radius: 2px; white-space: pre; font-size: calc(var(--dt-fs, 12px) - 0.5px); tab-size: var(--dt-tab, 4); display: flex; gap: 6px; border-left: 3px solid transparent; border-bottom: 1px solid rgba(255,255,255,0.035); box-shadow: inset 0 0 0 999px rgba(0,0,0,0); transition: box-shadow 0.08s; width: max-content; min-width: 100%; box-sizing: border-box; }
     .side-cell:not(.blank) { cursor: pointer; }
     .side-cell .ln { flex: 0 0 auto; opacity: 0.45; width: 2.8em; text-align: right; user-select: none; white-space: nowrap; }
@@ -1088,6 +1110,18 @@
     ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 6px; border: 3px solid var(--bg); }
     ::-webkit-scrollbar-thumb:hover { background: #5c5c5c; }
     ::-webkit-scrollbar-corner { background: var(--bg); }
+
+    /* The docked side-by-side diff scrollbar (.side-diff-hscroll, inside .side-diff-hscroll-dock)
+       should look like json.html's -- which never overrides the browser's own scrollbar chrome --
+       instead of this file's rounded/inset custom theme above. Scoped `all: revert` beats the
+       plain ::-webkit-scrollbar rules on specificity (a class beats a bare pseudo-element), so it
+       only resets this one scrollbar back to its native appearance without touching any other
+       scrollbar in the file. */
+    .side-diff-hscroll::-webkit-scrollbar { all: revert; }
+    .side-diff-hscroll::-webkit-scrollbar-track { all: revert; }
+    .side-diff-hscroll::-webkit-scrollbar-thumb { all: revert; }
+    .side-diff-hscroll::-webkit-scrollbar-thumb:hover { all: revert; }
+    .side-diff-hscroll::-webkit-scrollbar-corner { all: revert; }
 
     /* ---------- Light theme ---------- */
     html[data-theme="light"] {
@@ -1316,6 +1350,7 @@
                     <span class="title-sub">Panel A vs Panel B</span>
                 </div>
                 <div class="btn-group">
+                    <div class="btn-icon wrap-toggle" id="compareSharedWrapToggle" title="Wrap long lines (both panels)" onclick="toggleComparePanelWrapShared(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                     <button class="btn btn-secondary btn-iconbtn" title="Reset Both Panels" onclick="resetCompareSection()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
@@ -1341,7 +1376,6 @@
                         <div class="btn-delete" title="Clear Panel A" onclick="clearComparePanel('compareLeft')">×</div>
                     </div>
                     <div class="entry-toolbar-2">
-                        <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleComparePanelWrap('compareLeft', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                         <div class="btn-icon mode-toggle" title="Switch to plain text editor" onclick="toggleComparePanelMode('compareLeft', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
                         <div class="fold-controls">
                           <div class="btn-icon format-entry-btn" title="Format / beautify this panel" onclick="formatComparePanel('compareLeft', this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></div>
@@ -1370,7 +1404,6 @@
                         <div class="btn-delete" title="Clear Panel B" onclick="clearComparePanel('compareRight')">×</div>
                     </div>
                     <div class="entry-toolbar-2">
-                        <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleComparePanelWrap('compareRight', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                         <div class="btn-icon mode-toggle" title="Switch to plain text editor" onclick="toggleComparePanelMode('compareRight', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
                         <div class="fold-controls">
                           <div class="btn-icon format-entry-btn" title="Format / beautify this panel" onclick="formatComparePanel('compareRight', this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></div>
@@ -3841,24 +3874,32 @@ function scrollComparePanelToTop(panelId) {
     if (ce.richMode) { if (ce.editor) ce.editor.setScrollTop(0); }
     else { const ta = document.getElementById('plain-' + panelId); if (ta) ta.scrollTo({ top: 0, behavior: 'smooth' }); }
 }
-// Sync Scroll compares scroll-ratio between the two panels regardless of which side is Monaco vs
-// the plain-textarea fallback, so the toggle keeps working across any combination of modes.
-function syncOtherPanelScroll(panelId, ratio) {
+// Sync Scroll compares scroll-ratio (both vertical AND horizontal) between the two panels
+// regardless of which side is Monaco vs the plain-textarea fallback, so the toggle keeps working
+// across any combination of modes and axes -- a panel scrolled sideways to read a long line stays
+// in step with the other panel's horizontal position too, not just its vertical one.
+function syncOtherPanelScroll(panelId, vRatio, hRatio) {
     const otherId = panelId === 'compareLeft' ? 'compareRight' : 'compareLeft';
     const other = compareEditors[otherId];
     if (!other) return;
     if (other.richMode) {
         if (!other.editor) return;
-        const tgtMax = Math.max(0, other.editor.getScrollHeight() - other.editor.getLayoutInfo().height);
-        // Explicit Immediate scroll type -- setScrollTop defaults to an animated (Smooth) scroll,
-        // and mouse-wheel/trackpad scrolling fires onDidScrollChange far faster than one of those
-        // animations can finish. Left as the default, every tick during a scroll gesture queued
-        // another competing animation on the other panel, so it visibly lagged behind or looked
-        // stuck instead of tracking the source panel 1:1.
-        other.editor.setScrollTop(ratio * tgtMax, monaco.editor.ScrollType.Immediate);
+        const li = other.editor.getLayoutInfo();
+        const tgtMaxV = Math.max(0, other.editor.getScrollHeight() - li.height);
+        const tgtMaxH = Math.max(0, other.editor.getScrollWidth() - li.width);
+        // Explicit Immediate scroll type -- setScrollPosition defaults to an animated (Smooth)
+        // scroll, and mouse-wheel/trackpad scrolling fires onDidScrollChange far faster than one
+        // of those animations can finish. Left as the default, every tick during a scroll gesture
+        // queued another competing animation on the other panel, so it visibly lagged behind or
+        // looked stuck instead of tracking the source panel 1:1. Setting both axes in one call
+        // (rather than separate setScrollTop/setScrollLeft) avoids two competing animations.
+        other.editor.setScrollPosition({ scrollTop: vRatio * tgtMaxV, scrollLeft: hRatio * tgtMaxH }, monaco.editor.ScrollType.Immediate);
     } else {
         const ta = document.getElementById('plain-' + otherId);
-        if (ta) ta.scrollTop = ratio * Math.max(0, ta.scrollHeight - ta.clientHeight);
+        if (ta) {
+            ta.scrollTop = vRatio * Math.max(0, ta.scrollHeight - ta.clientHeight);
+            ta.scrollLeft = hRatio * Math.max(0, ta.scrollWidth - ta.clientWidth);
+        }
     }
 }
 function wireComparePanelSyncScroll(panelId) {
@@ -3868,8 +3909,10 @@ function wireComparePanelSyncScroll(panelId) {
         if (compareSyncing) return;
         if (!document.getElementById('compareSyncScrollToggle').checked) return;
         compareSyncing = true;
-        const srcMax = Math.max(1, ce.editor.getScrollHeight() - ce.editor.getLayoutInfo().height);
-        syncOtherPanelScroll(panelId, ce.editor.getScrollTop() / srcMax);
+        const li = ce.editor.getLayoutInfo();
+        const srcMaxV = Math.max(1, ce.editor.getScrollHeight() - li.height);
+        const srcMaxH = Math.max(1, ce.editor.getScrollWidth() - li.width);
+        syncOtherPanelScroll(panelId, ce.editor.getScrollTop() / srcMaxV, ce.editor.getScrollLeft() / srcMaxH);
         setTimeout(() => { compareSyncing = false; }, 20);
     });
 }
@@ -3880,8 +3923,9 @@ function wireComparePanelSyncScrollPlain(panelId) {
         if (compareSyncing) return;
         if (!document.getElementById('compareSyncScrollToggle').checked) return;
         compareSyncing = true;
-        const ratio = ta.scrollTop / Math.max(1, ta.scrollHeight - ta.clientHeight);
-        syncOtherPanelScroll(panelId, ratio);
+        const vRatio = ta.scrollTop / Math.max(1, ta.scrollHeight - ta.clientHeight);
+        const hRatio = ta.scrollLeft / Math.max(1, ta.scrollWidth - ta.clientWidth);
+        syncOtherPanelScroll(panelId, vRatio, hRatio);
         setTimeout(() => { compareSyncing = false; }, 20);
     };
     const ce = compareEditors[panelId];
@@ -3961,20 +4005,34 @@ function updateComparePanelModeToggleUI(panelId) {
         btn.classList.toggle('toggle-active', !ce.richMode);
         btn.title = ce.richMode ? 'Switch to plain text editor' : 'Switch to code editor (Monaco)';
     }
-    const wrapBtn = col.querySelector('.wrap-toggle');
-    if (wrapBtn) wrapBtn.classList.toggle('toggle-active', !!ce.wrap);
+    updateCompareSharedWrapToggleUI();
 }
-function toggleComparePanelWrap(panelId, btnEl) {
+// Wrap toggle -- one shared button (#compareSharedWrapToggle, in the top toolbar) drives BOTH
+// panels at once. Each panel still tracks its own `wrap` flag in compareEditors[panelId] (applied
+// per-mode: Monaco's wordWrap option, or a plain-textarea CSS class), since richMode can differ
+// per panel and re-mounting a panel re-applies its own ce.wrap -- the shared button just always
+// sets both panels to the same value instead of toggling them independently.
+function setComparePanelWrap(panelId, on) {
     const ce = compareEditors[panelId];
     if (!ce) return;
-    ce.wrap = !ce.wrap;
+    ce.wrap = on;
     if (ce.richMode) {
-        if (ce.editor) ce.editor.updateOptions({ wordWrap: ce.wrap ? 'on' : 'off' });
+        if (ce.editor) ce.editor.updateOptions({ wordWrap: on ? 'on' : 'off' });
     } else {
         const ta = document.getElementById('plain-' + panelId);
-        if (ta) ta.classList.toggle('wrap-on', ce.wrap);
+        if (ta) ta.classList.toggle('wrap-on', on);
     }
-    if (btnEl) btnEl.classList.toggle('toggle-active', ce.wrap);
+}
+function toggleComparePanelWrapShared(btnEl) {
+    const on = !(compareEditors.compareLeft && compareEditors.compareLeft.wrap);
+    setComparePanelWrap('compareLeft', on);
+    setComparePanelWrap('compareRight', on);
+    updateCompareSharedWrapToggleUI();
+}
+function updateCompareSharedWrapToggleUI() {
+    const btn = document.getElementById('compareSharedWrapToggle');
+    if (!btn) return;
+    btn.classList.toggle('toggle-active', !!(compareEditors.compareLeft && compareEditors.compareLeft.wrap));
 }
 // Toggles a single panel between the rich Monaco editor and the plain textarea "normal editing
 // panel" — content, panel name, and language override all carry over untouched either way.
@@ -4104,6 +4162,11 @@ function cmpPickHandle(entryEl) {
     if (cmpPickFirst === id) { cmpPickFirst = null; entryEl.classList.remove('cmp-marked'); return; }
     const a = cmpPickFirst;
     cmpPickSetMode(false);
+    // Picking two snippets from the Viewer is meant to be a clean "just show me the diff"
+    // gesture regardless of what mode either panel happened to be left in from earlier manual
+    // use of the Compare tab -- so always land in the full Monaco editor here, never the plain
+    // textarea fallback.
+    ['compareLeft', 'compareRight'].forEach(panelId => { if (!compareEditors[panelId].richMode) toggleComparePanelMode(panelId); });
     loadEntryIntoPanel(a, 'compareLeft');
     loadEntryIntoPanel(id, 'compareRight');
     const link = document.querySelector('.tab-link[data-tab="compare-pane"]');
@@ -4710,18 +4773,56 @@ function makeSideDiffCol() {
     col.className = 'side-diff-col';
     return col;
 }
-// Every column (both sides, every block — including ones still hidden inside a collapsed
-// run) keeps the same horizontal scroll position as every other, so scrolling any one of them
-// scrolls the whole diff sideways together, like the two panes of a real diff viewer.
-function setupSideDiffSyncScroll(wrap) {
+// Builds the one pair of docked horizontal scrollbars (left / right, side by side, pinned to
+// the bottom of the results area) that drives every column's horizontal position. Only these
+// two elements are ever user-interactive for horizontal scroll -- the columns themselves are
+// overflow:hidden, so there's exactly one scroll gesture in flight at a time instead of many
+// blocks' worth of scrollbars all fighting to stay in sync (which is what made the old
+// one-native-scrollbar-per-block version feel choppy).
+function makeSideDiffHScrollDock() {
+    const dock = document.createElement('div');
+    dock.className = 'side-diff-hscroll-dock';
+    const leftTrack = document.createElement('div'); leftTrack.className = 'side-diff-hscroll';
+    const leftSpacer = document.createElement('div'); leftSpacer.className = 'side-diff-hscroll-spacer';
+    leftTrack.appendChild(leftSpacer);
+    const rightTrack = document.createElement('div'); rightTrack.className = 'side-diff-hscroll';
+    const rightSpacer = document.createElement('div'); rightSpacer.className = 'side-diff-hscroll-spacer';
+    rightTrack.appendChild(rightSpacer);
+    dock.appendChild(leftTrack); dock.appendChild(rightTrack);
+    return { dock, leftTrack, rightTrack, leftSpacer, rightSpacer };
+}
+// Re-measures how far each side actually needs to scroll (the widest line in any block, visible
+// or still collapsed) and resizes each track's spacer to match, so its native scrollbar's thumb
+// size/range stays accurate. Called after the initial render and again whenever a collapse-bar
+// is expanded, since a previously-hidden run of lines can be the widest one.
+function updateSideDiffHScrollDock(wrap, dockRefs) {
+    let leftMax = 0, rightMax = 0, hasOverflow = false;
+    wrap.querySelectorAll('.side-diff-block').forEach(block => {
+        const cols = block.children;
+        const l = cols[0], r = cols[1];
+        if (l) { leftMax = Math.max(leftMax, l.scrollWidth); if (l.scrollWidth > l.clientWidth + 1) hasOverflow = true; }
+        if (r) { rightMax = Math.max(rightMax, r.scrollWidth); if (r.scrollWidth > r.clientWidth + 1) hasOverflow = true; }
+    });
+    dockRefs.leftSpacer.style.width = leftMax + 'px';
+    dockRefs.rightSpacer.style.width = rightMax + 'px';
+    dockRefs.dock.classList.toggle('no-overflow', !hasOverflow);
+}
+// Pushes the dock's horizontal position into every column (both sides, every block — including
+// ones still hidden inside a collapsed run) and keeps the dock's own two tracks in lockstep with
+// each other too, so the whole box — both sides, unconditionally — always reads as one synced
+// view. This is deliberately separate from (and not gated by) the Sync Scroll toggle above,
+// which only applies to the Panel A/B source editors.
+function setupSideDiffSyncScroll(wrap, dockRefs) {
     const cols = wrap.querySelectorAll('.side-diff-col');
+    const tracks = [dockRefs.leftTrack, dockRefs.rightTrack];
     let syncing = false;
-    cols.forEach(col => {
-        col.addEventListener('scroll', () => {
+    tracks.forEach(track => {
+        track.addEventListener('scroll', () => {
             if (syncing) return;
             syncing = true;
-            const x = col.scrollLeft;
-            cols.forEach(other => { if (other !== col) other.scrollLeft = x; });
+            const x = track.scrollLeft;
+            tracks.forEach(other => { if (other !== track) other.scrollLeft = x; });
+            cols.forEach(col => { col.scrollLeft = x; });
             syncing = false;
         });
     });
@@ -4729,6 +4830,7 @@ function setupSideDiffSyncScroll(wrap) {
 function renderSideBySide(container, groups, filteredA, filteredB) {
     const wrap = document.createElement('div');
     wrap.className = 'side-diff-wrap';
+    const dockRefs = makeSideDiffHScrollDock();
     const jumpTargets = [];
     // Rows are grouped into "blocks" — an uninterrupted run of paired rows, rendered as a
     // two-column flex block — broken only where a collapse-bar needs to sit full-width between
@@ -4770,6 +4872,9 @@ function renderSideBySide(container, groups, filteredA, filteredB) {
                     const showing = hiddenWrap.style.display !== 'none';
                     hiddenWrap.style.display = showing ? 'none' : 'block';
                     bar.textContent = showing ? `⋯ ${hiddenCount} unchanged line${hiddenCount === 1 ? '' : 's'} — click to expand ⋯` : '⋯ click to collapse ⋯';
+                    // A run that was still collapsed may hold the widest line in the whole
+                    // diff -- re-measure the dock now that it's part of the visible layout.
+                    if (!showing) updateSideDiffHScrollDock(wrap, dockRefs);
                 };
                 wrap.appendChild(bar);
                 wrap.appendChild(hiddenWrap);
@@ -4800,8 +4905,13 @@ function renderSideBySide(container, groups, filteredA, filteredB) {
         i++;
     }
     container.appendChild(wrap);
+    const spacer = document.createElement('div');
+    spacer.className = 'side-diff-flex-spacer';
+    container.appendChild(spacer);
+    container.appendChild(dockRefs.dock);
+    updateSideDiffHScrollDock(wrap, dockRefs);
     setupCompareDiffNav(container, wrap, jumpTargets);
-    setupSideDiffSyncScroll(wrap);
+    setupSideDiffSyncScroll(wrap, dockRefs);
 }
 function makeUnifiedRow(cls, aOrig, bOrig, sign, contentNode) {
     const row = document.createElement('div');
