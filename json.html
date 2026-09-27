@@ -811,6 +811,10 @@
         .editor-textarea { flex-grow: 1; height: 100%; resize: none; margin-bottom: 0; font-family: var(--dt-mono, monospace); font-size: var(--dt-fs, 11px); white-space: pre; overflow: auto; }
         .editor-textarea.wrap-on { white-space: pre-wrap; word-break: break-word; }
         .wrap-toggle svg { width: 14px; height: 14px; }
+        /* A->Z sort toggle (Viewer entries + Compare header): stroke="currentColor", so it follows the
+           theme/palette like the other toggles and turns green via .toggle-active when on. */
+        .sort-toggle svg { width: 14px; height: 14px; }
+        .entry.editing .sort-toggle { opacity: 0.25; pointer-events: none; }
         /* white-space is inherited, so setting it once here cascades to every .header-line/.footer
            row the tree renders -- nowrap (no wrap, horizontal scroll) is the default, matching the
            Edit-mode textarea, and .wrap-on switches both to the original wrapped behavior. */
@@ -1268,6 +1272,7 @@
                         <span class="split-toggle-half active" data-mode="monaco"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
                     </button>
                     <div class="btn-icon wrap-toggle" id="editorSharedWrapToggle" title="Wrap long lines (both panels)" onclick="toggleEditorPanelWrapShared(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
+                    <div class="btn-icon sort-toggle" id="editorSortToggle" title="Sort keys A→Z (both panels)" onclick="toggleEditorSortShared()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5l3-7.5 3 7.5M4.7 7.8h3.6"/><path d="M3.8 13.5h5.4l-5.4 7h5.4"/><path d="M17 3.5v17M13.5 17l3.5 3.5 3.5-3.5"/></svg></div>
                     <button type="button" class="btn btn-secondary btn-iconbtn" id="editorFormatBothBtn" title="Format Both (beautify)" onclick="formatEditorPanelsShared(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></button>
                     <label class="switch-container" title="Keep both panels scrolled to the same position">
                         <span>Sync Scroll</span>
@@ -1704,6 +1709,7 @@ function exportLocalStorageBackup() {
             const nameInput = document.getElementById(panelId + 'Name');
             setEditorText(panelId, '');
             if (nameInput) nameInput.value = '';
+            editorSortSaved[panelId] = null;
             clearEditorFind(panelId);
             if (editorLiveCompareActive && editorLiveCompareEnabled()) { clearTimeout(editorLiveCompareTimer); runEditorCompare(); }
         }
@@ -1724,6 +1730,7 @@ function exportLocalStorageBackup() {
                 clearEditorPanel(panelId);
                 applyEditorSurface(panelId);
             });
+            resetEditorSort();
             clearEditorCompareResults();
         }
 
@@ -1751,6 +1758,7 @@ function exportLocalStorageBackup() {
             const rName = document.getElementById('editorRightName').value;
             setEditorText('editorLeft', rVal);
             setEditorText('editorRight', lVal);
+            [editorSortSaved.editorLeft, editorSortSaved.editorRight] = [editorSortSaved.editorRight, editorSortSaved.editorLeft];
             document.getElementById('editorLeftName').value = rName;
             document.getElementById('editorRightName').value = lName;
             ['editorLeft', 'editorRight'].forEach(clearEditorFind);
@@ -1906,6 +1914,7 @@ function exportLocalStorageBackup() {
         const jsonIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="#f1c40f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3c-1.5 0-2 1-2 2v4.5c0 1.5-1 2-1 2.5 0 .5 1 1 1 2.5V19c0 1 1 2 2 2M16 3c1.5 0 2 1 2 2v4.5c0 1.5-1 2-1 2.5 0 .5-1 1-1 2.5V19c0 1-1 2-2 2" /></svg>`;
         const xmlIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="#3498db" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 8-5 4 5 4M17 8l5 4-5 4" /></svg>`;
         const focusIconSvg = `<svg viewBox="0 0 16 16"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg>`;
+        const sortAlphaIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5l3-7.5 3 7.5M4.7 7.8h3.6"/><path d="M3.8 13.5h5.4l-5.4 7h5.4"/><path d="M17 3.5v17M13.5 17l3.5 3.5 3.5-3.5"/></svg>`;
         const editPencilIconSvg = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.28 1.72a1 1 0 0 1 1.41 0l1.59 1.59a1 1 0 0 1 0 1.41l-8.5 8.5-3.5 1 1-3.5 8.5-8.5z"/></svg>`;
         const editSubmitIconSvg = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 8.6l3.4 3.4L13.2 4.6"/></svg>`;
         const toViewerIconSvg = `<svg viewBox="0 0 16 16"><path d="M8 0l4.5 4.5-1.06 1.06L8.75 2.87V10h-1.5V2.87L4.56 5.56 3.5 4.5 8 0zM1 12h14v1.5H1V12z"/></svg>`;
@@ -1958,6 +1967,7 @@ function exportLocalStorageBackup() {
             Object.keys(s.panels).forEach(id => {
                 const nm = document.getElementById(id + 'Name');
                 setEditorText(id, s.panels[id].text); if (nm) nm.value = s.panels[id].name;
+                applyEditorSortAfterLoad(id);
                 scheduleEditorLiveCompare();
             });
             if (s.shown) runEditorCompare();
@@ -2139,6 +2149,7 @@ function exportLocalStorageBackup() {
                 return;
             }
             setEditorText(panelId, JSON.stringify(jsonData, null, 4));
+            applyEditorSortAfterLoad(panelId);
             const surface = getEditorEditSurface(panelId);
             if (surface) {
                 surface.classList.add('flash-active');
@@ -3774,6 +3785,7 @@ function exportLocalStorageBackup() {
             setEditorText('editorLeft', a.r || '');
             document.getElementById('editorLeftName').value = a.n || '';
             setEditorText('editorRight', b.r || '');
+            applyEditorSortAfterLoad('editorLeft'); applyEditorSortAfterLoad('editorRight');
             document.getElementById('editorRightName').value = b.n || '';
             const big = ((a.r || '').length + (b.r || '').length) > 200000;
             if (big) { restoreEditorFocusControlsHome(); const results = document.getElementById('editorCompareResults'); if (results) results.innerHTML = 'Large comparison — click "Compare" above to run it.'; }
@@ -3962,6 +3974,7 @@ function exportLocalStorageBackup() {
                     <div class="actions">
                         ${type === 'json' ? `<div class="btn-icon btn-edit-submit" title="Apply changes (Ctrl+Enter)" onclick="submitEntryEdit('${entryId}')">${editSubmitIconSvg}</div><div class="btn-icon btn-edit-toggle" title="Edit JSON" onclick="toggleEntryEdit('${entryId}')">${editPencilIconSvg}</div>` : ''}
                         <button class="btn-global-icon fold-toggle" title="Collapse all nodes" data-tc="Collapse all nodes" data-te="Expand all nodes" onclick="entryFoldToggle(this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 4.5L8 9l4.5-4.5M3.5 8.5L8 13l4.5-4.5"/></svg></button>
+                        ${type === 'json' ? `<div class="btn-icon sort-toggle" title="Sort keys A→Z" onclick="toggleEntrySortBtn('${entryId}', this)">${sortAlphaIconSvg}</div>` : ''}
                         <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleEntryWrapBtn('${entryId}', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                         <div class="btn-icon minimap-toggle" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${entryId}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
                         <div class="btn-icon btn-convert" title="Copy as ${type === 'json' ? 'XML' : 'JSON'}">${type === 'json' ? xmlIconSvg : jsonIconSvg}</div>
@@ -3990,7 +4003,7 @@ function exportLocalStorageBackup() {
             convertBtn.onclick = () => {
                 let result = "";
                 try {
-                    if (type === 'json') result = jsonToXml(item.data);
+                    if (type === 'json') result = jsonToXml(entryViewData(item));
                     else result = JSON.stringify(xmlToJson(item.data.documentElement), null, 4);
                     navigator.clipboard.writeText(result).then(() => {
                         const originalSvg = convertBtn.innerHTML;
@@ -4002,7 +4015,7 @@ function exportLocalStorageBackup() {
 
             const copyBtn = entry.querySelector('.btn-copy');
             copyBtn.onclick = () => {
-                const text = type === 'json' ? JSON.stringify(item.data, null, 4) : stripInternalXmlMarkers(item.rawString);
+                const text = type === 'json' ? JSON.stringify(entryViewData(item), null, 4) : stripInternalXmlMarkers(item.rawString);
                 navigator.clipboard.writeText(text).then(() => {
                     copyBtn.innerHTML = '<span style="color:#89d185; font-size:11px; font-weight:bold;">✓</span>';
                     setTimeout(() => copyBtn.innerHTML = copyIconSvg, 600);
@@ -4011,7 +4024,7 @@ function exportLocalStorageBackup() {
 
             const minifyBtn = entry.querySelector('.btn-minify');
             minifyBtn.onclick = () => {
-                let text = type === 'json' ? JSON.stringify(item.data) : stripInternalXmlMarkers(item.rawString.replace(/>\s+</g, '><').trim());
+                let text = type === 'json' ? JSON.stringify(entryViewData(item)) : stripInternalXmlMarkers(item.rawString.replace(/>\s+</g, '><').trim());
                 navigator.clipboard.writeText(text).then(() => {
                     minifyBtn.innerHTML = '<span style="color:#89d185; font-size:11px; font-weight:bold;">✓</span>';
                     setTimeout(() => minifyBtn.innerHTML = minifyIconSvg, 600);
@@ -4042,7 +4055,7 @@ function exportLocalStorageBackup() {
                     name = `Export_${YYYY}${MM}${DD}_${HH}${min}${ss}`;
                 }
 
-                let dataToSave = type === 'json' ? JSON.stringify(item.data, null, 4) : stripInternalXmlMarkers(new XMLSerializer().serializeToString(item.data));
+                let dataToSave = type === 'json' ? JSON.stringify(entryViewData(item), null, 4) : stripInternalXmlMarkers(new XMLSerializer().serializeToString(item.data));
                 const blob = new Blob([dataToSave], {type: 'text/plain'});
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -4104,6 +4117,113 @@ function exportLocalStorageBackup() {
         }
 
         function findEntry(id) { return postedEntries.find(e => e.id === id); }
+
+        /* =========================================================================
+           Sort keys A→Z (a toggle on each Viewer entry, and one for both Compare panels).
+           Objects' keys are sorted recursively -- natural and case-insensitive, so "item2" comes
+           before "item10" and "b" sits next to "B"; arrays keep their order (only the objects
+           inside them get sorted). Turning it off shows the keys in the order they were pasted.
+           (Integer-like keys such as "1", "10" always come first in ascending order -- that's how
+           JavaScript objects store them, before and after sorting alike.)
+           ========================================================================= */
+        const jsonKeyCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        function jsonKeyCompare(a, b) { return jsonKeyCollator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0); }
+        // defineProperty so a literal "__proto__" key stays an ordinary key instead of a prototype.
+        function setJsonKey(obj, k, v) { Object.defineProperty(obj, k, { value: v, enumerable: true, writable: true, configurable: true }); }
+        function sortJsonKeysDeep(v) {
+            if (Array.isArray(v)) return v.map(sortJsonKeysDeep);
+            if (v && typeof v === 'object') {
+                const out = {};
+                Object.keys(v).sort(jsonKeyCompare).forEach(k => setJsonKey(out, k, sortJsonKeysDeep(v[k])));
+                return out;
+            }
+            return v;
+        }
+        // `cur` with its keys put back in `orig`'s order (keys that aren't in `orig` keep their
+        // current relative order after them) -- used when a sorted Compare panel was edited before
+        // sorting was turned off, so the edits survive and the pasted order comes back.
+        function restoreJsonKeyOrder(cur, orig) {
+            if (Array.isArray(cur)) return cur.map((v, i) => restoreJsonKeyOrder(v, Array.isArray(orig) ? orig[i] : undefined));
+            if (cur && typeof cur === 'object') {
+                const out = {};
+                const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+                if (orig && typeof orig === 'object' && !Array.isArray(orig)) {
+                    Object.keys(orig).forEach(k => { if (has(cur, k)) setJsonKey(out, k, restoreJsonKeyOrder(cur[k], orig[k])); });
+                }
+                Object.keys(cur).forEach(k => { if (!has(out, k)) setJsonKey(out, k, restoreJsonKeyOrder(cur[k], undefined)); });
+                return out;
+            }
+            return cur;
+        }
+
+        // --- Viewer entries: a view toggle. item.data keeps the pasted order (Edit mode edits
+        // that); the tree -- and Copy / Minify / Convert / Save -- show what you see.
+        function entryViewData(item) {
+            if (!item.sorted || item.type !== 'json') return item.data;
+            return item.sortedData || (item.sortedData = sortJsonKeysDeep(item.data));
+        }
+        function toggleEntrySortBtn(id, btn) {
+            const item = findEntry(id), entry = jsonEditEntryEl(id);
+            if (!item || !entry || item.type !== 'json' || item.editing) return;
+            item.sorted = !item.sorted;
+            item.sortedData = null;
+            if (btn) {
+                btn.classList.toggle('toggle-active', item.sorted);
+                btn.title = item.sorted ? 'Sorted A→Z — click for the original order' : 'Sort keys A→Z';
+            }
+            rebuildEntryTree(item, entry);
+        }
+
+        // --- Compare panels: sorts the panels' text; turning it off puts back exactly what was
+        // there (or, if a panel was edited while sorted, the edited JSON in the original key order).
+        let editorSortOn = false;
+        const editorSortSaved = { editorLeft: null, editorRight: null };   // { original, sorted } per panel
+        function sortEditorPanel(panelId) {
+            const text = getEditorText(panelId);
+            editorSortSaved[panelId] = null;
+            if (!text.trim()) return true;
+            let parsed;
+            try { parsed = JSON.parse(text); } catch (e) { return false; }
+            const sorted = JSON.stringify(sortJsonKeysDeep(parsed), null, 4);
+            editorSortSaved[panelId] = { original: text, sorted };
+            if (sorted !== text) setEditorText(panelId, sorted);
+            return true;
+        }
+        function unsortEditorPanel(panelId) {
+            const s = editorSortSaved[panelId];
+            editorSortSaved[panelId] = null;
+            if (!s) return;
+            const text = getEditorText(panelId);
+            if (text === s.sorted) { setEditorText(panelId, s.original); return; }
+            let cur, orig;
+            try { cur = JSON.parse(text); orig = JSON.parse(s.original); } catch (e) { return; }   // no longer valid JSON: leave it as it is
+            setEditorText(panelId, JSON.stringify(restoreJsonKeyOrder(cur, orig), null, 4));
+        }
+        function toggleEditorSortShared() {
+            editorSortOn = !editorSortOn;
+            const bad = [];
+            EDITOR_PANEL_IDS.forEach(id => {
+                if (!editorSortOn) unsortEditorPanel(id);
+                else if (!sortEditorPanel(id)) bad.push(id === 'editorLeft' ? 'Panel A' : 'Panel B');
+            });
+            updateEditorSortToggleUI();
+            if (editorLiveCompareActive && editorLiveCompareEnabled()) { clearTimeout(editorLiveCompareTimer); runEditorCompare(); }
+            if (bad.length) alert(bad.join(' and ') + (bad.length > 1 ? ' aren’t' : ' isn’t') + ' valid JSON, so ' + (bad.length > 1 ? 'they were' : 'it was') + ' left unsorted.');
+        }
+        // After content is loaded into a panel while sorting is on, sort it too (and remember what
+        // was loaded as that panel's "original").
+        function applyEditorSortAfterLoad(panelId) { if (editorSortOn) sortEditorPanel(panelId); }
+        function resetEditorSort() {
+            editorSortOn = false;
+            editorSortSaved.editorLeft = editorSortSaved.editorRight = null;
+            updateEditorSortToggleUI();
+        }
+        function updateEditorSortToggleUI() {
+            const btn = document.getElementById('editorSortToggle');
+            if (!btn) return;
+            btn.classList.toggle('toggle-active', editorSortOn);
+            btn.title = editorSortOn ? 'Sorted A→Z (both panels) — click for the original order' : 'Sort keys A→Z (both panels)';
+        }
 
         /* =========================================================================
            Edit mode for a Viewer entry (JSON only for now).
@@ -4372,6 +4492,7 @@ function exportLocalStorageBackup() {
                 return;
             }
             item.data = parsed;
+            item.sortedData = null;   // re-sorted from the new data if the A→Z view is on
             item.rawString = JSON.stringify(parsed, null, 4);
             finishEntryEdit(item, entry, true);
         }
@@ -4422,7 +4543,7 @@ function exportLocalStorageBackup() {
             if (fold) { fold.classList.remove('is-collapsed'); fold.title = fold.dataset.tc || 'Collapse all nodes'; }
             content.classList.remove('cv-big');
             content.innerHTML = '';
-            content.appendChild(renderTree(item.data, null, 'root'));
+            content.appendChild(renderTree(entryViewData(item), null, 'root'));
             dtApplyExpand(content);
             dtMarkBigTree(content);
             applyMinimapForEntry(item);
@@ -4574,6 +4695,7 @@ function exportLocalStorageBackup() {
                     const an = document.getElementById('editorLeftName'), bn = document.getElementById('editorRightName');
                     if (!a || !b) return false;
                     const t = getEditorText('editorLeft'); setEditorText('editorLeft', getEditorText('editorRight')); setEditorText('editorRight', t);
+                    [editorSortSaved.editorLeft, editorSortSaved.editorRight] = [editorSortSaved.editorRight, editorSortSaved.editorLeft];
                     if (an && bn) { const n = an.value; an.value = bn.value; bn.value = n; }
                     refreshPanel('editorLeft'); refreshPanel('editorRight');
                     if (editorLiveCompareActive && editorLiveCompareEnabled()) runEditorCompare();
