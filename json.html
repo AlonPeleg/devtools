@@ -814,8 +814,10 @@
         /* white-space is inherited, so setting it once here cascades to every .header-line/.footer
            row the tree renders -- nowrap (no wrap, horizontal scroll) is the default, matching the
            Edit-mode textarea, and .wrap-on switches both to the original wrapped behavior. */
-        .editor-tree-view { flex-grow: 1; height: 100%; overflow: auto; border: 1px solid var(--vscode-input-border); border-radius: 4px; background: var(--vscode-input-background); padding: 8px; font-family: var(--dt-mono, var(--vscode-editor-font-family)); font-size: var(--dt-fs, 11px); box-sizing: border-box; white-space: nowrap; }
-        .editor-tree-view.wrap-on { white-space: normal; overflow-wrap: anywhere; }
+        /* Folding needs the code editor; the plain text box can't fold. */
+        .compare-col.plain-mode .editor-fold-btn { opacity: 0.3; pointer-events: none; }
+        .editor-find-match { background: rgba(234, 179, 8, 0.28); border-radius: 2px; }
+        .editor-find-current { background: rgba(234, 179, 8, 0.7); outline: 1px solid rgba(180, 130, 0, 0.9); border-radius: 2px; }
         /* Monaco "code editor" surface for each panel's Edit view (the textarea stays as the plain
            text editor and as the fallback when Monaco can't load -- see the Compare editor block
            in the script). The placeholder overlay stands in for Monaco's missing placeholder option. */
@@ -823,7 +825,6 @@
         .editor-monaco-host { position: absolute; inset: 0; }
         .editor-monaco-ph { position: absolute; top: 3px; left: 62px; right: 12px; pointer-events: none; font-family: var(--dt-mono, monospace); font-size: calc(var(--dt-fs, 11px) + 1px); opacity: 0.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: none; }
         .editor-monaco-wrap.is-empty .editor-monaco-ph { display: block; }
-        .editor-rich-toggle svg { width: 14px; height: 14px; }
         .editor-line-flash { background: rgba(255, 213, 79, 0.28); }
         .compare-col.drop-target { outline: 2px dashed var(--vscode-focusBorder); outline-offset: 4px; border-radius: 6px; }
         .editor-chip[draggable="true"] { cursor: grab; }
@@ -960,6 +961,11 @@
        swap-toolbar-row just adds the positioning context; it doesn't otherwise change that row. */
     .swap-toolbar-row { position: relative; }
     .swap-mid-btn { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding-left: 24px; padding-right: 24px; z-index: 2; }
+    /* When the header's buttons would run into the centered swap button (narrower windows, Focus
+       mode), it drops into the row instead -- the row is space-between, so it then sits centered
+       in the gap between the title and the buttons (see layoutEditorSwapButton). */
+    .swap-toolbar-row.swap-inline { flex-wrap: wrap; row-gap: 6px; }
+    .swap-toolbar-row.swap-inline .swap-mid-btn { position: static; transform: none; }
     /* Color styles for the swap button, chosen in Settings -> General -> "Swap button color".
        Each is built from the same theme tokens every other button uses (here, the vscode-* ones),
        so it re-tints correctly under any palette rather than only looking right in the stock theme. */
@@ -1009,13 +1015,10 @@
     #editor-pane.editor-focus .swap-toolbar-row { order: -1; margin-top: 0 !important; }
     #editor-pane.editor-focus #editorFocusBtn, #editor-pane.editor-focus #editorClearBtn { display: none; }
     #editorFocusBtn[aria-pressed="true"] { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-    /* The shared Edit/Tree toggle normally lives in the top "Edit & Compare" toolbar, which the
-       rule above hides in Focus mode. #editorSharedModeToggleFocus is a second copy of the same
-       toggle living inside .swap-toolbar-row (which Focus mode keeps and promotes to the header),
-       so the view switch stays reachable while focused -- hidden outside Focus mode so it doesn't
-       duplicate the normal one. */
-    #editorSharedModeToggleFocus { display: none; }
-    #editor-pane.editor-focus #editorSharedModeToggleFocus { display: flex; }
+    /* The Monaco/plain toggle normally lives in the top "Edit & Compare" toolbar, which the rule
+       above hides in Focus mode. #editorRichToggleFocus is a second copy living inside
+       .swap-toolbar-row (which Focus mode keeps and promotes to the header), hidden outside Focus
+       mode so it doesn't duplicate the normal one. */
     #editorRichToggleFocus { display: none; }
     #editor-pane.editor-focus #editorRichToggleFocus { display: flex; }
     /* The view-seg, options and share controls are relocated (real DOM nodes moved, not
@@ -1023,7 +1026,7 @@
        restoreEditorFocusControlsHome()/positionEditorFocusControls() in the script. */
     .diff-stats-toolbar { display: flex; align-items: center; gap: 8px; }
 
-    /* ---------- Compare options menu (Sort keys / Wrap lines) ---------- */
+    /* ---------- Compare options menu (Wrap lines) ---------- */
     .compare-options { position: relative; }
     .options-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); font-size: 9px; font-weight: 700; margin-left: 5px; }
     .options-badge[hidden] { display: none; }
@@ -1089,6 +1092,9 @@
     .side-cell.row-active { box-shadow: inset 0 0 0 999px rgba(0,122,204,0.20); outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
     .diff-char-add { background: rgba(78,201,176,0.35); border-radius: 2px; }
     .diff-char-remove { background: rgba(244,135,113,0.35); border-radius: 2px; text-decoration: line-through; text-decoration-color: rgba(244,135,113,0.7); }
+    .diff-truncated-bar { margin: 10px 0 4px; padding: 8px 10px; font-size: 11px; color: var(--vscode-foreground); background: var(--vscode-editor-lineHighlightBackground); border: 1px dashed var(--vscode-panel-border); border-radius: 4px; text-align: center; }
+    .diff-truncated-bar button { margin-left: 6px; font: inherit; font-weight: 600; padding: 2px 10px; border-radius: 4px; border: 1px solid var(--vscode-panel-border); background: var(--vscode-button-background); color: var(--vscode-button-foreground); cursor: pointer; }
+    .diff-truncated-bar button:disabled { opacity: 0.6; cursor: default; }
     .collapse-bar { grid-column: 1 / -1; padding: 4px 8px; font-size: 10.5px; color: var(--vscode-tab-inactiveForeground); cursor: pointer; text-align: center; background: var(--vscode-editor-lineHighlightBackground); border-radius: 3px; margin: 2px 0; }
     .collapse-bar:hover { color: var(--vscode-foreground); }
 
@@ -1189,11 +1195,10 @@
             <div class="toolbar">
                 <h3 style="margin:0; font-size:14px;">Edit &amp; Compare (Side by Side)</h3>
                 <div class="btn-group">
-                    <button type="button" id="editorSharedModeToggle" class="split-toggle editor-mode-split" title="Edit view (both panels) — click for Tree view" onclick="toggleEditorModeShared()">
-                        <span class="split-toggle-half active" data-mode="edit"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-7.5 7.5-2.8.8.8-2.8 7.5-7.5z"/><path d="M9.5 4.5l2 2"/></svg></span>
-                        <span class="split-toggle-half" data-mode="tree"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
+                    <button type="button" id="editorRichToggle" class="split-toggle editor-mode-split editor-rich-toggle" title="Code editor (Monaco) for both panels — click for plain text" onclick="toggleEditorRichShared()">
+                        <span class="split-toggle-half" data-mode="plain"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-7.5 7.5-2.8.8.8-2.8 7.5-7.5z"/><path d="M9.5 4.5l2 2"/></svg></span>
+                        <span class="split-toggle-half active" data-mode="monaco"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
                     </button>
-                    <div class="btn-icon mode-toggle editor-rich-toggle" id="editorRichToggle" title="Switch both panels to plain text editor" onclick="toggleEditorRichShared()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
                     <button class="btn btn-secondary btn-iconbtn" title="Reset Both Panels" onclick="clearEditorCompareAll()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
@@ -1209,8 +1214,8 @@
                     </div>
                     <div class="editor-panel-toolbar">
                         <div class="actions">
-                            <button class="btn-global-icon" title="Collapse All Nodes" onclick="setEditorTreeCollapse('editorLeft', true)"><svg viewBox="0 0 16 16"><path d="M9 9H5V5h4v4zm5-7H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
-                            <button class="btn-global-icon" title="Expand All Nodes" onclick="setEditorTreeCollapse('editorLeft', false)"><svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
+                            <button class="btn-global-icon editor-fold-btn" title="Collapse all" onclick="setEditorPanelFold('editorLeft', true)"><svg viewBox="0 0 16 16"><path d="M9 9H5V5h4v4zm5-7H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
+                            <button class="btn-global-icon editor-fold-btn" title="Expand all" onclick="setEditorPanelFold('editorLeft', false)"><svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
                             <div class="btn-icon btn-convert" id="editorLeftIconConvert" title="Copy as XML" onclick="editorCopyAsXml('editorLeft')"></div>
                             <div class="btn-icon btn-minify" id="editorLeftIconMinify" title="Copy Minified" onclick="editorCopyMinified('editorLeft')"></div>
                             <div class="btn-icon btn-copy" id="editorLeftIconCopy" title="Copy Formatted (as JSON)" onclick="editorCopyFormatted('editorLeft')"></div>
@@ -1218,14 +1223,13 @@
                             <div class="btn-icon btn-viewer" id="editorLeftIconViewer" title="Save to Viewer" onclick="editorSaveToViewer('editorLeft')"></div>
                         </div>
                         <div class="search-container">
-                            <input type="text" class="search-inline" placeholder="Find..." oninput="editorSearch('editorLeft', this)" onkeydown="editorSearchNav(event, 'editorLeft')">
+                            <input type="text" class="search-inline" placeholder="Find..." oninput="editorSearch('editorLeft', this)" onkeydown="editorSearchNav(event, 'editorLeft')" title="Find in this panel (Enter: next, Shift+Enter: previous)">
                             <span class="search-counter" id="editorLeftCounter">0/0</span>
                         </div>
                         <div class="btn-delete" title="Clear Panel A" onclick="clearEditorPanel('editorLeft')">×</div>
                     </div>
                     <textarea id="editorLeft" class="input-box editor-textarea" placeholder="Paste JSON here, or load one of your posted JSONs above..."></textarea>
                     <div class="editor-monaco-wrap" id="editorLeftMonacoWrap" style="display:none;"><div class="editor-monaco-host" id="editorLeftMonaco"></div><div class="editor-monaco-ph">Paste JSON here, or load one of your posted JSONs above...</div></div>
-                    <div id="editorLeftTree" class="editor-tree-view" style="display:none;"></div>
                     <button type="button" class="scroll-top-btn" id="editorLeftScrollTop" title="Scroll to top" onclick="scrollPanelToTop('editorLeft')">&#9650;</button>
                 </div>
                 <div class="compare-col" id="editorRightCol" ondragover="allowEditorDrop(event)" ondrop="handleEditorDrop(event,'editorRight')" ondragenter="this.classList.add('drop-target')" ondragleave="this.classList.remove('drop-target')">
@@ -1235,8 +1239,8 @@
                     </div>
                     <div class="editor-panel-toolbar">
                         <div class="actions">
-                            <button class="btn-global-icon" title="Collapse All Nodes" onclick="setEditorTreeCollapse('editorRight', true)"><svg viewBox="0 0 16 16"><path d="M9 9H5V5h4v4zm5-7H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
-                            <button class="btn-global-icon" title="Expand All Nodes" onclick="setEditorTreeCollapse('editorRight', false)"><svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
+                            <button class="btn-global-icon editor-fold-btn" title="Collapse all" onclick="setEditorPanelFold('editorRight', true)"><svg viewBox="0 0 16 16"><path d="M9 9H5V5h4v4zm5-7H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
+                            <button class="btn-global-icon editor-fold-btn" title="Expand all" onclick="setEditorPanelFold('editorRight', false)"><svg viewBox="0 0 16 16"><path d="M11 11H5V5h6v6zm3-9H2v12h12V2zM3 13V3h10v10H3z"/></svg></button>
                             <div class="btn-icon btn-convert" id="editorRightIconConvert" title="Copy as XML" onclick="editorCopyAsXml('editorRight')"></div>
                             <div class="btn-icon btn-minify" id="editorRightIconMinify" title="Copy Minified" onclick="editorCopyMinified('editorRight')"></div>
                             <div class="btn-icon btn-copy" id="editorRightIconCopy" title="Copy Formatted (as JSON)" onclick="editorCopyFormatted('editorRight')"></div>
@@ -1244,14 +1248,13 @@
                             <div class="btn-icon btn-viewer" id="editorRightIconViewer" title="Save to Viewer" onclick="editorSaveToViewer('editorRight')"></div>
                         </div>
                         <div class="search-container">
-                            <input type="text" class="search-inline" placeholder="Find..." oninput="editorSearch('editorRight', this)" onkeydown="editorSearchNav(event, 'editorRight')">
+                            <input type="text" class="search-inline" placeholder="Find..." oninput="editorSearch('editorRight', this)" onkeydown="editorSearchNav(event, 'editorRight')" title="Find in this panel (Enter: next, Shift+Enter: previous)">
                             <span class="search-counter" id="editorRightCounter">0/0</span>
                         </div>
                         <div class="btn-delete" title="Clear Panel B" onclick="clearEditorPanel('editorRight')">×</div>
                     </div>
                     <textarea id="editorRight" class="input-box editor-textarea" placeholder="Paste JSON here, or load one of your posted JSONs above..."></textarea>
                     <div class="editor-monaco-wrap" id="editorRightMonacoWrap" style="display:none;"><div class="editor-monaco-host" id="editorRightMonaco"></div><div class="editor-monaco-ph">Paste JSON here, or load one of your posted JSONs above...</div></div>
-                    <div id="editorRightTree" class="editor-tree-view" style="display:none;"></div>
                     <button type="button" class="scroll-top-btn" id="editorRightScrollTop" title="Scroll to top" onclick="scrollPanelToTop('editorRight')">&#9650;</button>
                 </div>
             </div>
@@ -1260,11 +1263,10 @@
                 <h3 style="margin:0; font-size:12px;">Panel A vs Panel B</h3>
                 <button type="button" class="btn btn-secondary btn-iconbtn swap-panels-btn swap-mid-btn" id="editorSwapBtn" title="Swap Panel A and B" onclick="swapEditorPanels(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h6"/><path d="M12 1.5l3 3-3 3"/><path d="M10 11.5H4"/><path d="M4 8.5l-3 3 3 3"/></svg></button>
                 <div class="btn-group">
-                    <button type="button" id="editorSharedModeToggleFocus" class="split-toggle editor-mode-split" title="Edit view (both panels) — click for Tree view" onclick="toggleEditorModeShared()">
-                        <span class="split-toggle-half active" data-mode="edit"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-7.5 7.5-2.8.8.8-2.8 7.5-7.5z"/><path d="M9.5 4.5l2 2"/></svg></span>
-                        <span class="split-toggle-half" data-mode="tree"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
+                    <button type="button" id="editorRichToggleFocus" class="split-toggle editor-mode-split editor-rich-toggle" title="Code editor (Monaco) for both panels — click for plain text" onclick="toggleEditorRichShared()">
+                        <span class="split-toggle-half" data-mode="plain"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-7.5 7.5-2.8.8.8-2.8 7.5-7.5z"/><path d="M9.5 4.5l2 2"/></svg></span>
+                        <span class="split-toggle-half active" data-mode="monaco"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
                     </button>
-                    <div class="btn-icon mode-toggle editor-rich-toggle" id="editorRichToggleFocus" title="Switch both panels to plain text editor" onclick="toggleEditorRichShared()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
                     <div class="btn-icon wrap-toggle" id="editorSharedWrapToggle" title="Wrap long lines (both panels)" onclick="toggleEditorPanelWrapShared(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                     <button type="button" class="btn btn-secondary btn-iconbtn" id="editorFormatBothBtn" title="Format Both (beautify)" onclick="formatEditorPanelsShared(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></button>
                     <label class="switch-container" title="Keep both panels scrolled to the same position">
@@ -1282,7 +1284,6 @@
                     <span id="editorOptionsWrapHome" style="display:none;"></span><div class="compare-options" id="editorOptionsWrap">
                         <button type="button" class="btn btn-secondary btn-iconbtn" id="editorOptionsBtn" title="Compare options" onclick="toggleEditorOptions()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h7M11.5 4h2.5M2 8h2.5M7 8h7M2 12h9M13.5 12H14"/><circle cx="9" cy="4" r="1.4" fill="var(--vscode-editor-background)"/><circle cx="4.5" cy="8" r="1.4" fill="var(--vscode-editor-background)"/><circle cx="11" cy="12" r="1.4" fill="var(--vscode-editor-background)"/></svg><span class="options-badge" id="editorOptionsBadge" hidden></span><span class="caret">&#9662;</span></button>
                         <div class="compare-options-menu" id="editorOptionsMenu" hidden>
-                            <label class="switch-container"><span title="Sort keys alphabetically before comparing Split/Unified, so objects whose keys are in a different order still line up (Changes always ignores key order). Off: the diff follows your panels' own order.">Sort keys</span><div class="switch"><input type="checkbox" id="editorSortKeysToggle" onchange="runEditorCompare(); updateEditorOptionsBadge();"><span class="slider"></span></div></label>
                             <label class="switch-container"><span title="Wrap long lines instead of truncating them">Wrap lines</span><div class="switch"><input type="checkbox" id="editorWrapLinesToggle" onchange="toggleEditorWrapLines(); updateEditorOptionsBadge();"><span class="slider"></span></div></label>
                         </div>
                     </div>
@@ -1447,10 +1448,9 @@ function exportLocalStorageBackup() {
         }
 
         /* =========================================================================
-           Compare panels: Edit view = Monaco ("code editor") or the plain <textarea>.
-           Each panel has three surfaces in its column -- the textarea (#editorLeft), a Monaco host
-           (#editorLeftMonacoWrap) and the Tree view (#editorLeftTree) -- and exactly one is shown:
-           Tree when the Edit/Tree toggle says Tree, otherwise Monaco when the Monaco/plain toggle
+           Compare panels: Monaco ("code editor") or the plain <textarea>.
+           Each panel has two surfaces in its column -- the textarea (#editorLeft) and a Monaco host
+           (#editorLeftMonacoWrap) -- and exactly one is shown: Monaco when the Monaco/plain toggle
            says Monaco AND Monaco has loaded, otherwise the textarea (which is also the automatic
            fallback when the CDN can't be reached).
            While a panel's Monaco model exists IT holds the text (the hidden textarea is stale);
@@ -1463,12 +1463,8 @@ function exportLocalStorageBackup() {
         try { if (localStorage.getItem(EDITOR_RICH_KEY) === '0') editorRichPref = false; } catch (e) {}
         let editorMonacoFailed = false;
 
-        function isEditorTreeShown(panelId) {
-            const treeDiv = document.getElementById(panelId + 'Tree');
-            return !!treeDiv && treeDiv.style.display !== 'none';
-        }
         function isEditorRichShown(panelId) {
-            return !!editorRich[panelId].editor && !isEditorTreeShown(panelId);
+            return !!editorRich[panelId].editor;
         }
         function getEditorText(panelId) {
             const r = editorRich[panelId];
@@ -1503,14 +1499,15 @@ function exportLocalStorageBackup() {
             const r = editorRich[panelId];
             if (wrap) wrap.classList.toggle('is-empty', !!r.model && r.model.getValueLength() === 0);
         }
-        // Shows the right surface for a panel's current Edit/Tree + Monaco/plain state.
+        // Shows the right surface for a panel's current Monaco/plain state.
         function applyEditorSurface(panelId) {
             const ta = document.getElementById(panelId);
             const wrap = document.getElementById(panelId + 'MonacoWrap');
-            const tree = isEditorTreeShown(panelId);
             const rich = !!editorRich[panelId].editor;
-            ta.style.display = (!tree && !rich) ? 'block' : 'none';
-            if (wrap) wrap.style.display = (!tree && rich) ? 'block' : 'none';
+            ta.style.display = rich ? 'none' : 'block';
+            if (wrap) wrap.style.display = rich ? 'block' : 'none';
+            const col = document.getElementById(panelId + 'Col');
+            if (col) col.classList.toggle('plain-mode', !rich);
             updateEditorScrollTopBtn(panelId);
         }
 
@@ -1525,7 +1522,7 @@ function exportLocalStorageBackup() {
             const o = jsonEditFontOpts();
             const model = monaco.editor.createModel(ta.value, 'json');
             // Show the wrap first so Monaco measures a real size on creation.
-            if (!isEditorTreeShown(panelId)) { ta.style.display = 'none'; document.getElementById(panelId + 'MonacoWrap').style.display = 'block'; }
+            ta.style.display = 'none'; document.getElementById(panelId + 'MonacoWrap').style.display = 'block';
             const editor = monaco.editor.create(host, {
                 model: model,
                 theme: window.DT ? DT.monacoTheme() : (document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark'),
@@ -1599,18 +1596,20 @@ function exportLocalStorageBackup() {
                 updateEditorRichToggleUI();
             }
         }
+        // Split toggle, like the old Edit/Tree one: tree half = Monaco (default), pencil half =
+        // plain text. Clicking anywhere on it flips to the other editor.
         function updateEditorRichToggleUI() {
             const plain = !editorRichPref || editorMonacoFailed;
             const title = editorMonacoFailed
                 ? 'Code editor couldn’t load (offline?) — using plain text. Click to try again'
-                : (editorRichPref ? 'Switch both panels to plain text editor' : 'Switch both panels to code editor (Monaco)');
+                : (plain ? 'Plain text editor for both panels — click for the code editor (Monaco)' : 'Code editor (Monaco) for both panels — click for plain text');
             document.querySelectorAll('#editorRichToggle, #editorRichToggleFocus').forEach(btn => {
-                btn.classList.toggle('toggle-active', plain);
                 btn.title = title;
+                btn.querySelectorAll('.split-toggle-half[data-mode]').forEach(h => h.classList.toggle('active', h.dataset.mode === (plain ? 'plain' : 'monaco')));
             });
         }
 
-        // Scroll geometry of whichever surface a panel is showing (Tree div, Monaco, or textarea),
+        // Scroll geometry of whichever surface a panel is showing (Monaco or the textarea),
         // so sync scroll and scroll-to-top work the same across every combination of modes.
         function getEditorScrollGeom(panelId) {
             if (isEditorRichShown(panelId)) {
@@ -1624,7 +1623,7 @@ function exportLocalStorageBackup() {
                     toTop: () => ed.setScrollTop(0, monaco.editor.ScrollType.Smooth)
                 };
             }
-            const el = isEditorTreeShown(panelId) ? document.getElementById(panelId + 'Tree') : document.getElementById(panelId);
+            const el = document.getElementById(panelId);
             if (!el) return null;
             return {
                 top: el.scrollTop, left: el.scrollLeft,
@@ -1662,16 +1661,38 @@ function exportLocalStorageBackup() {
             btn.classList.toggle('visible', g.top > 40);
         }
 
-        ['editorLeft', 'editorRight', 'editorLeftTree', 'editorRightTree'].forEach(elId => {
-            const el = document.getElementById(elId);
-            const panelId = elId.replace('Tree', '');
-            el.addEventListener('scroll', () => { handleEditorSyncScroll(panelId); updateEditorScrollTopBtn(panelId); });
+        ['editorLeft', 'editorRight'].forEach(panelId => {
+            document.getElementById(panelId).addEventListener('scroll', () => { handleEditorSyncScroll(panelId); updateEditorScrollTopBtn(panelId); });
         });
         // Once Compare has run at least once, real typing into either panel re-runs it after a
         // short pause (see scheduleEditorLiveCompare below). Monaco's own change listener does the
         // same for the code-editor surface (see mountEditorPanelMonaco).
         editorLeftScroll.addEventListener('input', () => scheduleEditorLiveCompare());
         editorRightScroll.addEventListener('input', () => scheduleEditorLiveCompare());
+
+        // Keeps the centered swap button from sitting on top of the header's buttons: centered while
+        // it fits, in the row's flow (between the title and the buttons) when it doesn't. Measured
+        // with the class off so the decision can go either way; both measurements happen before
+        // the next paint, so there's no flicker.
+        function layoutEditorSwapButton() {
+            const row = document.querySelector('#editor-pane .swap-toolbar-row');
+            const swap = document.getElementById('editorSwapBtn');
+            if (!row || !swap || !row.offsetParent) return;
+            row.classList.remove('swap-inline');
+            const s = swap.getBoundingClientRect();
+            const title = row.querySelector('h3'), group = row.querySelector('.btn-group');
+            const tr = title ? title.getBoundingClientRect().right : -Infinity;
+            const gl = group ? group.getBoundingClientRect().left : Infinity;
+            row.classList.toggle('swap-inline', tr > s.left - 8 || gl < s.right + 8);
+        }
+        (function () {
+            const row = document.querySelector('#editor-pane .swap-toolbar-row');
+            let queued = false;
+            const schedule = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; layoutEditorSwapButton(); }); };
+            window.addEventListener('resize', schedule);
+            if (row && 'ResizeObserver' in window) new ResizeObserver(schedule).observe(row);
+            window.layoutEditorSwapButtonSoon = schedule;
+        })();
 
         function scrollPanelToTop(panelId) {
             const g = getEditorScrollGeom(panelId);
@@ -1681,13 +1702,9 @@ function exportLocalStorageBackup() {
         function clearEditorPanel(panelId) {
             const textarea = document.getElementById(panelId);
             const nameInput = document.getElementById(panelId + 'Name');
-            const treeDiv = document.getElementById(panelId + 'Tree');
-            const counter = document.getElementById(panelId + 'Counter');
-
             setEditorText(panelId, '');
             if (nameInput) nameInput.value = '';
-            if (treeDiv) treeDiv.innerHTML = '';
-            if (counter) counter.textContent = '0/0';
+            clearEditorFind(panelId);
             if (editorLiveCompareActive && editorLiveCompareEnabled()) { clearTimeout(editorLiveCompareTimer); runEditorCompare(); }
         }
 
@@ -1705,10 +1722,7 @@ function exportLocalStorageBackup() {
         function clearEditorCompareAll() {
             ['editorLeft', 'editorRight'].forEach(panelId => {
                 clearEditorPanel(panelId);
-                setEditorMode(panelId, 'edit', null);
-                editorSearchState[panelId] = { matches: [], index: -1 };
-                const searchInput = document.querySelector(`#${panelId}Col .search-inline`);
-                if (searchInput) searchInput.value = '';
+                applyEditorSurface(panelId);
             });
             clearEditorCompareResults();
         }
@@ -1739,10 +1753,7 @@ function exportLocalStorageBackup() {
             setEditorText('editorRight', lVal);
             document.getElementById('editorLeftName').value = rName;
             document.getElementById('editorRightName').value = lName;
-            ['editorLeft', 'editorRight'].forEach(panelId => {
-                const treeDiv = document.getElementById(panelId + 'Tree');
-                if (treeDiv && treeDiv.style.display !== 'none') renderEditorTree(panelId);
-            });
+            ['editorLeft', 'editorRight'].forEach(clearEditorFind);
             if (editorLiveCompareActive && editorLiveCompareEnabled()) { clearTimeout(editorLiveCompareTimer); runEditorCompare(); }
         }
         // Focus mode: turns the whole Edit & Compare layout into a full-screen floating card over a
@@ -1947,7 +1958,6 @@ function exportLocalStorageBackup() {
             Object.keys(s.panels).forEach(id => {
                 const nm = document.getElementById(id + 'Name');
                 setEditorText(id, s.panels[id].text); if (nm) nm.value = s.panels[id].name;
-                if (isEditorTreeShown(id)) renderEditorTree(id);
                 scheduleEditorLiveCompare();
             });
             if (s.shown) runEditorCompare();
@@ -2138,8 +2148,7 @@ function exportLocalStorageBackup() {
             const nameInput = document.getElementById(panelId + 'Name');
             if (nameInput) nameInput.value = item.name || '';
 
-            const treeDiv = document.getElementById(panelId + 'Tree');
-            if (treeDiv && treeDiv.style.display !== 'none') renderEditorTree(panelId);
+            clearEditorFind(panelId);
             if (editorLiveCompareActive && editorLiveCompareEnabled()) { clearTimeout(editorLiveCompareTimer); runEditorCompare(); }
         }
 
@@ -2147,17 +2156,13 @@ function exportLocalStorageBackup() {
             return document.getElementById(panelId).closest('.compare-col');
         }
 
-        // Wrap toggle -- one shared button (#editorSharedWrapToggle, in the top toolbar) drives
-        // BOTH panels at once, and for each panel it drives BOTH the Edit-mode textarea and the
-        // Tree view, matching the Code tool's compare panels: no-wrap (horizontal scroll) is the
-        // default, this switches to soft-wrap in whichever mode is currently shown (and the class
-        // carries over to the other mode too, so switching Edit<->Tree afterwards keeps whatever
-        // wrap preference was last chosen).
+        // Wrap toggle -- one shared button (#editorSharedWrapToggle) drives BOTH panels at once,
+        // in whichever editor each panel shows: no-wrap (horizontal scroll) is the default, this
+        // switches to soft-wrap. The class on the textarea is also the stored preference Monaco is
+        // mounted with, so switching Monaco<->plain keeps it.
         function setEditorPanelWrap(panelId, on) {
             const ta = document.getElementById(panelId);
-            const treeDiv = document.getElementById(panelId + 'Tree');
-            if (ta) ta.classList.toggle('wrap-on', on);   // also the stored wrap state Monaco is mounted with
-            if (treeDiv) treeDiv.classList.toggle('wrap-on', on);
+            if (ta) ta.classList.toggle('wrap-on', on);
             const r = editorRich[panelId];
             if (r.editor) r.editor.updateOptions({ wordWrap: on ? 'on' : 'off' });
         }
@@ -2170,82 +2175,17 @@ function exportLocalStorageBackup() {
             if (btnEl) btnEl.classList.toggle('toggle-active', on);
         }
 
-        function setEditorMode(panelId, mode, btnEl) {
-            const treeDiv = document.getElementById(panelId + 'Tree');
-            if (mode === 'tree') {
-                treeDiv.style.display = 'block';
-                applyEditorSurface(panelId);
-                renderEditorTree(panelId);
-            } else {
-                treeDiv.style.display = 'none';
-                applyEditorSurface(panelId);
-                const r = editorRich[panelId];
-                if (r.editor) r.editor.focus();
-                else document.getElementById(panelId).focus();
-            }
-            updateEditorScrollTopBtn(panelId);
-            updateSharedEditorModeToggleUI();
-        }
-
-        // Manual, user-facing Edit/Tree toggle — one shared control that switches both
-        // panels together. Programmatic mode switches (search, collapse/expand-all,
-        // jump-to-line, jump-to-path, clear) still call setEditorMode(panelId, ...)
-        // directly for just the one panel that needs it; those stay independent.
-        function setEditorModeShared(mode) {
-            setEditorMode('editorLeft', mode, null);
-            setEditorMode('editorRight', mode, null);
-        }
-
-        // #editorSharedModeToggle / #editorSharedModeToggleFocus are each a single
-        // .split-toggle button (like the old Line/Grid view-mode button) rather than two
-        // independent buttons -- clicking anywhere on it just flips to the other view.
-        function toggleEditorModeShared() {
-            const leftTree = document.getElementById('editorLeftTree');
-            const currentlyTree = leftTree && leftTree.style.display !== 'none';
-            setEditorModeShared(currentlyTree ? 'edit' : 'tree');
-        }
-
-        // Keeps the shared toggle's active-half highlight (and title) in sync with the panels'
-        // actual mode. Panel A is used as the reference; the two panels are always
-        // switched together by setEditorModeShared, but a programmatic per-panel
-        // switch (e.g. search forcing just one panel into Tree mode) can still leave
-        // them briefly out of step, so this reflects whichever mode Panel A is in.
-        function updateSharedEditorModeToggleUI() {
-            // Two copies of this toggle exist: #editorSharedModeToggle in the normal top toolbar,
-            // and #editorSharedModeToggleFocus (a duplicate living in .swap-toolbar-row so it's
-            // still reachable in Focus mode, which hides the normal toolbar). Keep both in sync.
-            const leftTree = document.getElementById('editorLeftTree');
-            const mode = leftTree && leftTree.style.display !== 'none' ? 'tree' : 'edit';
-            const title = mode === 'tree' ? 'Tree view (both panels) — click for Edit view' : 'Edit view (both panels) — click for Tree view';
-            document.querySelectorAll('#editorSharedModeToggle, #editorSharedModeToggleFocus').forEach(btn => {
-                btn.title = title;
-                btn.querySelectorAll('.split-toggle-half[data-mode]').forEach(b => {
-                    b.classList.toggle('active', b.getAttribute('data-mode') === mode);
-                });
-            });
-        }
-
-        function renderEditorTree(panelId) {
-            const treeDiv = document.getElementById(panelId + 'Tree');
-            const raw = getEditorText(panelId).trim();
-            treeDiv.innerHTML = '';
-            if (!raw) {
-                treeDiv.innerHTML = '<div style="opacity:0.5;">Nothing to preview yet — type or load some JSON.</div>';
-                return;
-            }
-            try {
-                const parsed = JSON.parse(raw);
-                treeDiv.appendChild(renderTree(parsed, null, 'root'));
-            } catch (e) {
-                treeDiv.innerHTML = '<div style="color:var(--vscode-errorForeground)">❌ Invalid JSON: ' + e.message + '</div>';
-            }
+        // Shows a panel's editor (used by the diff jumps before they select/scroll in it).
+        function setEditorMode(panelId) {
+            applyEditorSurface(panelId);
+            const r = editorRich[panelId];
+            if (r.editor) r.editor.focus();
+            else document.getElementById(panelId).focus({ preventScroll: true });
         }
 
         function formatEditorPanel(panelId) {
             try {
                 setEditorText(panelId, JSON.stringify(JSON.parse(getEditorText(panelId)), null, 4));
-                const treeDiv = document.getElementById(panelId + 'Tree');
-                if (treeDiv.style.display !== 'none') renderEditorTree(panelId);
                 if (editorLiveCompareActive && editorLiveCompareEnabled()) { clearTimeout(editorLiveCompareTimer); runEditorCompare(); }
             } catch (e) {
                 alert('Invalid JSON: ' + e.message);
@@ -2257,14 +2197,16 @@ function exportLocalStorageBackup() {
             flashIcon(btnEl || document.getElementById('editorFormatBothBtn'));
         }
 
-        function setEditorTreeCollapse(panelId, collapse) {
-            setEditorMode(panelId, 'tree', null);
-            const treeDiv = document.getElementById(panelId + 'Tree');
-            // Same rule as the viewer tab: leave the root node itself expanded, only
-            // collapse its descendants (anything nested inside a .json-tree wrapper).
-            treeDiv.querySelectorAll('.json-tree .json-node.is-object, .json-tree .json-node.is-array').forEach(n => {
-                collapse ? n.classList.add('collapsed') : n.classList.remove('collapsed');
-            });
+        // Collapse all / Expand all for a Compare panel: Monaco folding (the root object stays open,
+        // like the Viewer's collapse-all). The plain text box can't fold, so the buttons are dimmed
+        // there (see .compare-col.plain-mode).
+        function setEditorPanelFold(panelId, collapse) {
+            const ed = editorRich[panelId].editor;
+            if (!ed) return;
+            if (!collapse) { ed.trigger('dt', 'editor.unfoldAll'); return; }
+            ed.trigger('dt', 'editor.foldAll');
+            ed.trigger('dt', 'editor.unfold', { levels: 1, selectionLines: [0] });
+            ed.setScrollTop(0);
         }
 
         function editorGetName(panelId) {
@@ -2344,78 +2286,87 @@ function exportLocalStorageBackup() {
             }
         }
 
-        let editorSearchState = {
-            editorLeft: { matches: [], index: -1 },
-            editorRight: { matches: [], index: -1 }
+        /* ---------- Per-panel Find box: case-insensitive text search in the panel's editor.
+           Monaco highlights every match (current one stronger) and scrolls to the current one;
+           the plain text box selects and scrolls to it. Enter = next, Shift+Enter = previous.
+           Typing keeps the focus in the Find box. ---------- */
+        const editorFindState = {
+            editorLeft: { query: '', text: null, matches: [], index: -1, decos: [] },
+            editorRight: { query: '', text: null, matches: [], index: -1, decos: [] }
         };
-
-        function editorSearch(panelId, input) {
-            const query = input.value.toLowerCase();
-            setEditorMode(panelId, 'tree', null);
-            const treeDiv = document.getElementById(panelId + 'Tree');
+        function clearEditorFind(panelId) {
+            const st = editorFindState[panelId];
+            const ed = editorRich[panelId].editor;
+            if (ed && st.decos.length) { try { st.decos = ed.deltaDecorations(st.decos, []); } catch (e) {} }
+            st.query = ''; st.text = null; st.matches = []; st.index = -1; st.decos = [];
+            const input = document.querySelector('#' + panelId + 'Col .search-inline');
+            if (input) input.value = '';
             const counter = document.getElementById(panelId + 'Counter');
-            editorSearchState[panelId] = { matches: [], index: -1 };
-            if (!query) { counter.textContent = '0/0'; return; }
-            const walker = document.createTreeWalker(treeDiv, NodeFilter.SHOW_TEXT, null, false);
-            let n, nodes = [];
-            while (n = walker.nextNode()) nodes.push(n);
-            nodes.forEach(node => {
-                let val = node.nodeValue;
-                let lowerVal = val.toLowerCase();
-                let index, startPos = 0;
-                while ((index = lowerVal.indexOf(query, startPos)) !== -1) {
-                    const span = document.createElement('span');
-                    span.className = 'match';
-                    span.textContent = val.substring(index, index + query.length);
-                    const remainingText = node.splitText(index);
-                    remainingText.nodeValue = remainingText.nodeValue.substring(query.length);
-                    node.parentNode.insertBefore(span, remainingText);
-                    editorSearchState[panelId].matches.push(span);
-                    node = remainingText;
-                    val = node.nodeValue;
-                    lowerVal = val.toLowerCase();
-                }
-            });
-            if (editorSearchState[panelId].matches.length > 0) {
-                editorSearchState[panelId].index = 0;
-                updateEditorMatchHighlight(panelId);
-            } else { counter.textContent = '0/0'; }
+            if (counter) counter.textContent = '0/0';
         }
-
+        function runEditorFind(panelId, query) {
+            const st = editorFindState[panelId];
+            const text = getEditorText(panelId);
+            st.query = query; st.text = text; st.matches = []; st.index = -1;
+            if (query) {
+                const hay = text.toLowerCase(), q = query.toLowerCase();
+                for (let pos = hay.indexOf(q); pos !== -1 && st.matches.length < 20000; pos = hay.indexOf(q, pos + q.length)) st.matches.push(pos);
+                if (st.matches.length) st.index = 0;
+            }
+            showEditorFindMatch(panelId);
+        }
+        function showEditorFindMatch(panelId) {
+            const st = editorFindState[panelId];
+            const counter = document.getElementById(panelId + 'Counter');
+            if (counter) counter.textContent = st.matches.length ? (st.index + 1) + '/' + st.matches.length : '0/0';
+            const qlen = st.query.length;
+            const r = editorRich[panelId];
+            if (r.editor) {
+                const model = r.model, cur = st.matches[st.index];
+                const range = off => { const a = model.getPositionAt(off), b = model.getPositionAt(off + qlen); return new monaco.Range(a.lineNumber, a.column, b.lineNumber, b.column); };
+                const decos = st.matches.slice(0, 5000).map((off, i) => ({ range: range(off), options: { inlineClassName: i === st.index ? 'editor-find-current' : 'editor-find-match' } }));
+                if (st.index >= 5000) decos.push({ range: range(cur), options: { inlineClassName: 'editor-find-current' } });
+                st.decos = r.editor.deltaDecorations(st.decos, decos);
+                if (cur != null) r.editor.revealRangeInCenter(range(cur), monaco.editor.ScrollType.Immediate);
+                return;
+            }
+            const cur = st.matches[st.index];
+            if (cur == null) return;
+            const ta = document.getElementById(panelId);
+            ta.setSelectionRange(cur, cur + qlen);
+            try { ta.scrollTop = Math.max(0, getTextareaOffsetTop(ta, cur) - ta.clientHeight / 2); } catch (e) {}
+        }
+        function editorSearch(panelId, input) { runEditorFind(panelId, input.value); }
         function editorSearchNav(e, panelId) {
             if (e.key !== 'Enter') return;
-            const state = editorSearchState[panelId];
-            if (state && state.matches.length > 0) {
-                state.index = (state.index + 1) % state.matches.length;
-                updateEditorMatchHighlight(panelId);
+            e.preventDefault();
+            const st = editorFindState[panelId];
+            if (st.text !== getEditorText(panelId)) {   // panel edited since the last search: search again, keep position
+                const keep = st.index;
+                runEditorFind(panelId, e.target.value);
+                if (keep > 0 && st.matches.length) { st.index = Math.min(keep, st.matches.length - 1); showEditorFindMatch(panelId); }
             }
-        }
-
-        function updateEditorMatchHighlight(panelId) {
-            const state = editorSearchState[panelId];
-            const counter = document.getElementById(panelId + 'Counter');
-            state.matches.forEach(m => m.classList.remove('current'));
-            const current = state.matches[state.index];
-            if (!current) return;
-            current.classList.add('current');
-            let p = current.closest('.json-node.collapsed');
-            while (p) { p.classList.remove('collapsed'); p = p.parentElement.closest('.json-node.collapsed'); }
-            current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            counter.textContent = (state.index + 1) + '/' + state.matches.length;
+            if (!st.matches.length) return;
+            st.index = (st.index + (e.shiftKey ? st.matches.length - 1 : 1)) % st.matches.length;
+            showEditorFindMatch(panelId);
         }
 
         /* ---------- diff engine (ported from code.html's Compare tab: Myers diff + grouping +
            char-level diff -- generic over any two arrays of strings, no changes needed here). ---------- */
-        function myersDiff(a, b) {
+        function myersDiff(a, b, maxD) {
             const n = a.length, m = b.length;
             if (n === 0 && m === 0) return [];
             const max = n + m;
+            const limit = maxD == null ? max : Math.min(max, maxD);
             const offset = max;
             const v = new Int32Array(2 * max + 1);
+            // trace[d] keeps only the window of diagonals step d can read (k-1..k+1 for k in -d..d),
+            // so memory grows with d^2 instead of d * (n + m).
             const trace = [];
+            let found = false;
             outer:
-            for (let d = 0; d <= max; d++) {
-                trace.push(v.slice());
+            for (let d = 0; d <= limit; d++) {
+                trace.push(v.slice(offset - d - 1 < 0 ? 0 : offset - d - 1, offset + d + 2));
                 for (let k = -d; k <= d; k += 2) {
                     let x;
                     if (k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])) x = v[offset + k + 1];
@@ -2423,18 +2374,20 @@ function exportLocalStorageBackup() {
                     let y = x - k;
                     while (x < n && y < m && a[x] === b[y]) { x++; y++; }
                     v[offset + k] = x;
-                    if (x >= n && y >= m) break outer;
+                    if (x >= n && y >= m) { found = true; break outer; }
                 }
             }
+            if (!found) return null;   // edit distance exceeds maxD
             let x = n, y = m;
             const ops = [];
             for (let d = trace.length - 1; d >= 0; d--) {
                 const v2 = trace[d];
+                const base = offset - d - 1 < 0 ? offset : d + 1;   // v2[k + base] === v[offset + k] at snapshot time
                 const k = x - y;
                 let prevK;
-                if (k === -d || (k !== d && v2[offset + k - 1] < v2[offset + k + 1])) prevK = k + 1;
+                if (k === -d || (k !== d && v2[base + k - 1] < v2[base + k + 1])) prevK = k + 1;
                 else prevK = k - 1;
-                const prevX = v2[offset + prevK];
+                const prevX = v2[base + prevK];
                 const prevY = prevX - prevK;
                 while (x > prevX && y > prevY) { ops.push({ type: 'equal', aIdx: x - 1, bIdx: y - 1 }); x--; y--; }
                 if (d > 0) {
@@ -2443,6 +2396,63 @@ function exportLocalStorageBackup() {
                 }
             }
             return ops.reverse();
+        }
+        // Line diff that scales to large documents. Matching lines at both ends are peeled off;
+        // what's left goes to Myers when that's affordable (exact, minimal diff), and otherwise is
+        // split on "anchor" lines -- lines that occur exactly once on each side, kept in order
+        // (patience diff, as git uses) -- with each gap between anchors diffed the same way. A gap
+        // with no anchors and too much in it for Myers is shown as a straight replacement.
+        function lineDiffScalable(a, b) {
+            const ops = [];
+            function seg(a0, a1, b0, b1) {
+                while (a0 < a1 && b0 < b1 && a[a0] === b[b0]) { ops.push({ type: 'equal', aIdx: a0, bIdx: b0 }); a0++; b0++; }
+                let s = 0;
+                while (a1 - s > a0 && b1 - s > b0 && a[a1 - 1 - s] === b[b1 - 1 - s]) s++;
+                middle(a0, a1 - s, b0, b1 - s);
+                for (let k = 0; k < s; k++) ops.push({ type: 'equal', aIdx: a1 - s + k, bIdx: b1 - s + k });
+            }
+            function replace(a0, a1, b0, b1) {
+                for (let i = a0; i < a1; i++) ops.push({ type: 'remove', aIdx: i });
+                for (let j = b0; j < b1; j++) ops.push({ type: 'add', bIdx: j });
+            }
+            function middle(a0, a1, b0, b1) {
+                const n = a1 - a0, m = b1 - b0;
+                if (n === 0 || m === 0) { replace(a0, a1, b0, b1); return; }
+                // Small enough: always exact. Bigger: exact only if the edit distance is modest
+                // (bounded work and memory), otherwise fall through to anchoring.
+                const res = myersDiff(a.slice(a0, a1), b.slice(b0, b1), n * m <= 4000000 ? null : 1500);
+                if (res) {
+                    res.forEach(op => ops.push(op.type === 'equal' ? { type: 'equal', aIdx: op.aIdx + a0, bIdx: op.bIdx + b0 }
+                        : op.type === 'remove' ? { type: 'remove', aIdx: op.aIdx + a0 } : { type: 'add', bIdx: op.bIdx + b0 }));
+                    return;
+                }
+                const seenA = new Map(), seenB = new Map();
+                for (let i = a0; i < a1; i++) seenA.set(a[i], seenA.has(a[i]) ? -1 : i);
+                for (let j = b0; j < b1; j++) seenB.set(b[j], seenB.has(b[j]) ? -1 : j);
+                const pairs = [];
+                for (let i = a0; i < a1; i++) {
+                    if (seenA.get(a[i]) !== i) continue;
+                    const j = seenB.get(a[i]);
+                    if (j !== undefined && j >= 0) pairs.push([i, j]);
+                }
+                // Longest run of anchors increasing in B too (patience sorting, O(k log k)).
+                const tails = [], prev = new Array(pairs.length);
+                pairs.forEach((p, idx) => {
+                    let lo = 0, hi = tails.length;
+                    while (lo < hi) { const mid = (lo + hi) >> 1; if (pairs[tails[mid]][1] < p[1]) lo = mid + 1; else hi = mid; }
+                    prev[idx] = lo > 0 ? tails[lo - 1] : -1;
+                    tails[lo] = idx;
+                });
+                const anchors = [];
+                for (let t = tails.length ? tails[tails.length - 1] : -1; t >= 0; t = prev[t]) anchors.push(pairs[t]);
+                anchors.reverse();
+                if (!anchors.length) { replace(a0, a1, b0, b1); return; }
+                let pa = a0, pb = b0;
+                anchors.forEach(([i, j]) => { seg(pa, i, pb, j); ops.push({ type: 'equal', aIdx: i, bIdx: j }); pa = i + 1; pb = j + 1; });
+                seg(pa, a1, pb, b1);
+            }
+            seg(0, a.length, 0, b.length);
+            return ops;
         }
         function groupDiff(ops) {
             const groups = [];
@@ -2483,33 +2493,23 @@ function exportLocalStorageBackup() {
             if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // Recursively sorts every object's keys alphabetically (arrays are mapped, not reordered) --
-        // used only to build the TEXTUAL diff when "Sort keys" is on, so a key-order-only change
-        // doesn't show up as line noise in Split/Unified. The structural Changes diff (findDiffs,
-        // above) already ignores key order entirely, regardless of this toggle.
-        function sortKeysDeep(v) {
-            if (Array.isArray(v)) return v.map(sortKeysDeep);
-            if (v && typeof v === 'object') {
-                const out = {};
-                Object.keys(v).sort().forEach(k => { out[k] = sortKeysDeep(v[k]); });
-                return out;
-            }
-            return v;
-        }
 
         // Textual (line-based) diff over two pretty-printed JSON strings. Unlike code.html's Compare
         // tab there are no ignore-whitespace/case/blank-line options -- JSON has no such ambiguity --
-        // so this is just split-into-lines + Myers, with the same size guard against a pathological
-        // pair of huge, unrelated documents.
+        // so this is just split-into-lines + lineDiffScalable (exact Myers where affordable, anchored
+        // on unique lines otherwise).
         function computeEditorCompareDiff(textA, textB) {
             const linesA = textA.split('\n');
             const linesB = textB.split('\n');
             const filteredA = linesA.map((t, i) => ({ orig: i, text: t }));
             const filteredB = linesB.map((t, i) => ({ orig: i, text: t }));
-            if (filteredA.length * filteredB.length > 30000000) return { tooLarge: true };
+            // lineDiffScalable handles big documents (it used to be a hard n*m cap here, which
+            // blocked e.g. two 400-record samples); this only stops absurd sizes the page couldn't
+            // render anyway.
+            if (filteredA.length + filteredB.length > 400000) return { tooLarge: true };
             const ta = filteredA.map(o => o.text);
             const tb = filteredB.map(o => o.text);
-            const ops = myersDiff(ta, tb);
+            const ops = lineDiffScalable(ta, tb);
             const groups = groupDiff(ops);
             return { tooLarge: false, groups, filteredA, filteredB };
         }
@@ -2525,6 +2525,7 @@ function exportLocalStorageBackup() {
             try {
                 const src = [
                     myersDiff.toString(),
+                    lineDiffScalable.toString(),
                     groupDiff.toString(),
                     computeEditorCompareDiff.toString(),
                     'self.onmessage = function (e) {',
@@ -2597,7 +2598,7 @@ function exportLocalStorageBackup() {
             btn.classList.add('swap-style-' + (['b', 'c', 'd', 'e'].includes(style) ? style : 'c'));
         }
 
-        /* ---------- Compare options menu (Sort keys / Wrap lines) ---------- */
+        /* ---------- Compare options menu (Wrap lines) ---------- */
         function toggleEditorOptions(forceOpen) {
             const menu = document.getElementById('editorOptionsMenu');
             const btn = document.getElementById('editorOptionsBtn');
@@ -2605,12 +2606,9 @@ function exportLocalStorageBackup() {
             menu.hidden = !open;
             btn.classList.toggle('active', open);
         }
-        // Both options default OFF (Sort keys used to default on, which made Split/Unified show
-        // keys alphabetically instead of in the panels' order); the badge counts non-default states.
+        // The badge counts options that are on (Wrap lines defaults off).
         function updateEditorOptionsBadge() {
-            const sortNonDefault = document.getElementById('editorSortKeysToggle').checked;
-            const wrapNonDefault = document.getElementById('editorWrapLinesToggle').checked;
-            const count = (sortNonDefault ? 1 : 0) + (wrapNonDefault ? 1 : 0);
+            const count = document.getElementById('editorWrapLinesToggle').checked ? 1 : 0;
             const badge = document.getElementById('editorOptionsBadge');
             badge.hidden = count === 0;
             badge.textContent = count;
@@ -2702,9 +2700,9 @@ function exportLocalStorageBackup() {
         // Jumps both panels together to a matched pair of textual-diff line indices (either side
         // may be null for a pure add/remove -- see annotateDiffAnchors below).
         //
-        // The Split/Unified diff is computed on a normalized copy of each side (pretty-printed, and
-        // key-sorted when "Sort keys" is on), so its line numbers don't match the panels' lines --
-        // e.g. an added "bla" key sorts to line 2 of the diff but sits at line 69 of Panel B. Rather
+        // The Split/Unified diff is computed on a normalized (re-pretty-printed) copy of each side, in
+        // the document's own key order, so its line numbers can differ from the panels' lines (other
+        // indentation, minified text, a panel edited since the last Compare). Rather
         // than guessing by searching for similar-looking text (which lands on the wrong "}," or
         // "1," all the time), each diff line is mapped to the JSON path it belongs to, and that path
         // is looked up in the panel's real text. Something that only exists on one side is shown on
@@ -2794,7 +2792,7 @@ function exportLocalStorageBackup() {
 
         // Split/Unified gutters show each line's number IN ITS PANEL (not its index in the
         // normalized diff text): identical when the panel is pretty-printed in the same key order,
-        // mapped by JSON path otherwise (other indentation, or Sort keys on). A panel that can't be
+        // mapped by JSON path otherwise (e.g. other indentation). A panel that can't be
         // mapped line-for-line (minified onto one line, or no longer parsing) keeps the diff's own
         // numbering.
         let editorDiffLineLabels = null;
@@ -3410,7 +3408,7 @@ function exportLocalStorageBackup() {
             restoreEditorFocusControlsHome();
             results.innerHTML = '';
             if (!diff.textual) { results.innerHTML = '<div style="color:var(--vscode-tab-inactiveForeground)">Comparing…</div>'; return; }
-            if (diff.textual.tooLarge) { results.innerHTML = '<div style="color:var(--vscode-errorForeground)">These snippets are too large for a detailed diff — try smaller JSON.</div>'; return; }
+            if (diff.textual.tooLarge) { results.innerHTML = '<div style="color:var(--vscode-errorForeground)">These documents are too large for a line-by-line diff (over 400,000 lines combined) — the Changes view still works.</div>'; return; }
             const { groups, filteredA, filteredB } = diff.textual;
             const added = groups.filter(g => g.type === 'add').length;
             const removed = groups.filter(g => g.type === 'remove').length;
@@ -3426,12 +3424,42 @@ function exportLocalStorageBackup() {
             }
             annotateDiffAnchors(groups, filteredA, filteredB);
             computeEditorDiffLineLabels();
-            if (editorViewMode === 'split') renderSideBySide(results, groups, filteredA, filteredB);
-            else renderUnifiedView(results, groups, filteredA, filteredB);
+            // Two big, mostly-unrelated documents can produce tens of thousands of changed rows,
+            // and laying those out takes seconds -- for no benefit, since "everything differs" is
+            // clear after the first screenfuls. Past the budget, render the first part and offer
+            // the rest on request (editorDiffShowAll resets on every new Compare run).
+            const diffRows = added + removed + changed;
+            let shown = groups;
+            if (!editorDiffShowAll && diffRows > EDITOR_DIFF_ROW_BUDGET) {
+                let seen = 0, cut = groups.length;
+                for (let i = 0; i < groups.length; i++) {
+                    if (groups[i].type !== 'equal' && ++seen > EDITOR_DIFF_ROW_BUDGET) { cut = i; break; }
+                }
+                shown = groups.slice(0, cut);
+            }
+            if (editorViewMode === 'split') renderSideBySide(results, shown, filteredA, filteredB);
+            else renderUnifiedView(results, shown, filteredA, filteredB);
+            if (shown !== groups) {
+                const more = document.createElement('div');
+                more.className = 'diff-truncated-bar';
+                const msg = document.createElement('span');
+                msg.textContent = 'Showing the first ' + EDITOR_DIFF_ROW_BUDGET.toLocaleString() + ' of ' + diffRows.toLocaleString() +
+                    ' changed lines — these documents are mostly different. ';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = 'Show all';
+                btn.title = 'Render every changed line (can take a few seconds)';
+                btn.onclick = () => { editorDiffShowAll = true; btn.disabled = true; btn.textContent = 'Rendering…'; setTimeout(() => renderEditorCompareResults(lastEditorDiff), 30); };
+                more.appendChild(msg); more.appendChild(btn);
+                results.appendChild(more);
+            }
         }
+        const EDITOR_DIFF_ROW_BUDGET = 2000;
+        let editorDiffShowAll = false;
 
         function runEditorCompare() {
             editorLiveCompareActive = true;
+            editorDiffShowAll = false;
             const results = document.getElementById('editorCompareResults');
             try {
                 const lVal = getEditorText('editorLeft');
@@ -3443,9 +3471,9 @@ function exportLocalStorageBackup() {
                 lastEditorDiff = { structural, textual: null };
                 renderEditorCompareResults(lastEditorDiff);
 
-                const sortOn = document.getElementById('editorSortKeysToggle').checked;
-                const textA = JSON.stringify(sortOn ? sortKeysDeep(left) : left, null, 4);
-                const textB = JSON.stringify(sortOn ? sortKeysDeep(right) : right, null, 4);
+                // Always the document's own key order -- the diff should read like the JSON as written.
+                const textA = JSON.stringify(left, null, 4);
+                const textB = JSON.stringify(right, null, 4);
                 // Kept so a click on a Split/Unified row can map its line to a JSON path (see jumpToDiffPair).
                 lastEditorDiff.textA = textA;
                 lastEditorDiff.textB = textB;
@@ -4458,10 +4486,7 @@ function exportLocalStorageBackup() {
 
             function panelText(id) { return document.getElementById(id) ? getEditorText(id) : ''; }
 
-            function refreshPanel(id) {
-                const tree = document.getElementById(id + 'Tree');
-                if (tree && tree.style.display !== 'none') renderEditorTree(id);
-            }
+            function refreshPanel(id) { clearEditorFind(id); }
 
             let diffIdx = -1;
             function diffRows() {
@@ -4487,7 +4512,7 @@ function exportLocalStorageBackup() {
                 return true;
             }
 
-            const EDITOR_COMPARE_OPTS = { sortKeys: ['editorSortKeysToggle', 'Sort keys'], wrap: ['editorWrapLinesToggle', 'Wrap lines'] };
+            const EDITOR_COMPARE_OPTS = { wrap: ['editorWrapLinesToggle', 'Wrap lines'] };
 
             window.DTAPI = {
                 tool: 'json',
