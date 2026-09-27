@@ -508,6 +508,7 @@
         var ta = e.target;
         if (!ta || ta.tagName !== 'TEXTAREA' || ta.readOnly || ta.disabled) return;
         if (ta.closest && ta.closest('.monaco-editor')) return;
+        if (ta.classList && ta.classList.contains('json-edit-ta')) return;   // the Viewer's JSON edit box indents with spaces itself
         if (e.key === 'Escape') { tabEscape = true; return; }
         if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) { if (e.key !== 'Shift') tabEscape = false; return; }
         if (tabEscape) { tabEscape = false; return; }
@@ -667,6 +668,25 @@
         .btn-icon.toggle-active { background: rgba(137, 209, 133, 0.16); color: #89d185; opacity: 1; }
         .btn-icon.toggle-active:hover { background: rgba(137, 209, 133, 0.26); }
 
+        /* --- Edit mode for a JSON entry (pencil toggle + check to apply) ---
+           The check sits to the LEFT of the pencil so turning edit mode on/off never moves the
+           pencil out from under the cursor (the .actions group is right-anchored). Tree-only
+           controls are dimmed rather than hidden for the same reason. */
+        .btn-edit-toggle svg, .btn-edit-submit svg { width: 13px; height: 13px; }
+        .btn-edit-submit { display: none; color: #89d185; opacity: 0.9; }
+        .entry.editing .btn-edit-submit { display: flex; }
+        .entry.editing .content-row, .entry.editing .breadcrumb-bar { display: none; }
+        .entry.editing .fold-toggle, .entry.editing .minimap-toggle { opacity: 0.25; pointer-events: none; }
+        .entry.editing .search-container { visibility: hidden; }
+        .json-edit-area { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+        .entry.collapsed-entry .json-edit-area { display: none; }
+        .json-edit-error { flex-shrink: 0; padding: 4px 8px; font-size: 11px; font-family: var(--dt-mono, monospace); color: var(--vscode-errorForeground); background: rgba(244, 135, 113, 0.1); border-bottom: 1px solid rgba(244, 135, 113, 0.35); white-space: normal; overflow-wrap: anywhere; }
+        .json-edit-host { position: relative; height: var(--edit-h, 240px); flex: 0 1 auto; min-height: 90px; }
+        .entry.focused-entry .json-edit-host { height: 74vh; }
+        .json-edit-loading { padding: 12px; font-size: 11px; font-family: var(--dt-mono, monospace); opacity: 0.7; }
+        .json-edit-ta { display: block; width: 100%; height: 100%; box-sizing: border-box; margin: 0; resize: none; border: 0; outline: none; padding: 8px; background: var(--vscode-editor-background); color: var(--vscode-foreground); font-family: var(--dt-mono, "Cascadia Code", Consolas, monospace); font-size: calc(var(--dt-fs, 11px) + 1px); line-height: 1.45; white-space: pre; overflow: auto; tab-size: 4; }
+        .json-edit-ta.wrap-on { white-space: pre-wrap; overflow-wrap: anywhere; }
+
         /* --- Focus mode (pop-up single entry, blurred background) --- */
         #focus-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 30px; box-sizing: border-box; }
         #focus-overlay.active { display: flex; }
@@ -796,6 +816,15 @@
            Edit-mode textarea, and .wrap-on switches both to the original wrapped behavior. */
         .editor-tree-view { flex-grow: 1; height: 100%; overflow: auto; border: 1px solid var(--vscode-input-border); border-radius: 4px; background: var(--vscode-input-background); padding: 8px; font-family: var(--dt-mono, var(--vscode-editor-font-family)); font-size: var(--dt-fs, 11px); box-sizing: border-box; white-space: nowrap; }
         .editor-tree-view.wrap-on { white-space: normal; overflow-wrap: anywhere; }
+        /* Monaco "code editor" surface for each panel's Edit view (the textarea stays as the plain
+           text editor and as the fallback when Monaco can't load -- see the Compare editor block
+           in the script). The placeholder overlay stands in for Monaco's missing placeholder option. */
+        .editor-monaco-wrap { flex: 1 1 auto; min-height: 0; position: relative; border: 1px solid var(--vscode-input-border); border-radius: 4px; overflow: hidden; background: var(--vscode-editor-background); }
+        .editor-monaco-host { position: absolute; inset: 0; }
+        .editor-monaco-ph { position: absolute; top: 3px; left: 62px; right: 12px; pointer-events: none; font-family: var(--dt-mono, monospace); font-size: calc(var(--dt-fs, 11px) + 1px); opacity: 0.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: none; }
+        .editor-monaco-wrap.is-empty .editor-monaco-ph { display: block; }
+        .editor-rich-toggle svg { width: 14px; height: 14px; }
+        .editor-line-flash { background: rgba(255, 213, 79, 0.28); }
         .compare-col.drop-target { outline: 2px dashed var(--vscode-focusBorder); outline-offset: 4px; border-radius: 6px; }
         .editor-chip[draggable="true"] { cursor: grab; }
         .editor-chip[draggable="true"]:active { cursor: grabbing; }
@@ -987,6 +1016,8 @@
        duplicate the normal one. */
     #editorSharedModeToggleFocus { display: none; }
     #editor-pane.editor-focus #editorSharedModeToggleFocus { display: flex; }
+    #editorRichToggleFocus { display: none; }
+    #editor-pane.editor-focus #editorRichToggleFocus { display: flex; }
     /* The view-seg, options and share controls are relocated (real DOM nodes moved, not
        duplicated) into the diff-stats toolbar while in Focus mode -- see
        restoreEditorFocusControlsHome()/positionEditorFocusControls() in the script. */
@@ -1162,6 +1193,7 @@
                         <span class="split-toggle-half active" data-mode="edit"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-7.5 7.5-2.8.8.8-2.8 7.5-7.5z"/><path d="M9.5 4.5l2 2"/></svg></span>
                         <span class="split-toggle-half" data-mode="tree"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
                     </button>
+                    <div class="btn-icon mode-toggle editor-rich-toggle" id="editorRichToggle" title="Switch both panels to plain text editor" onclick="toggleEditorRichShared()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
                     <button class="btn btn-secondary btn-iconbtn" title="Reset Both Panels" onclick="clearEditorCompareAll()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h12"/><path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 4.5l.6 8.4a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></button>
                 </div>
             </div>
@@ -1192,6 +1224,7 @@
                         <div class="btn-delete" title="Clear Panel A" onclick="clearEditorPanel('editorLeft')">×</div>
                     </div>
                     <textarea id="editorLeft" class="input-box editor-textarea" placeholder="Paste JSON here, or load one of your posted JSONs above..."></textarea>
+                    <div class="editor-monaco-wrap" id="editorLeftMonacoWrap" style="display:none;"><div class="editor-monaco-host" id="editorLeftMonaco"></div><div class="editor-monaco-ph">Paste JSON here, or load one of your posted JSONs above...</div></div>
                     <div id="editorLeftTree" class="editor-tree-view" style="display:none;"></div>
                     <button type="button" class="scroll-top-btn" id="editorLeftScrollTop" title="Scroll to top" onclick="scrollPanelToTop('editorLeft')">&#9650;</button>
                 </div>
@@ -1217,6 +1250,7 @@
                         <div class="btn-delete" title="Clear Panel B" onclick="clearEditorPanel('editorRight')">×</div>
                     </div>
                     <textarea id="editorRight" class="input-box editor-textarea" placeholder="Paste JSON here, or load one of your posted JSONs above..."></textarea>
+                    <div class="editor-monaco-wrap" id="editorRightMonacoWrap" style="display:none;"><div class="editor-monaco-host" id="editorRightMonaco"></div><div class="editor-monaco-ph">Paste JSON here, or load one of your posted JSONs above...</div></div>
                     <div id="editorRightTree" class="editor-tree-view" style="display:none;"></div>
                     <button type="button" class="scroll-top-btn" id="editorRightScrollTop" title="Scroll to top" onclick="scrollPanelToTop('editorRight')">&#9650;</button>
                 </div>
@@ -1230,6 +1264,7 @@
                         <span class="split-toggle-half active" data-mode="edit"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-7.5 7.5-2.8.8.8-2.8 7.5-7.5z"/><path d="M9.5 4.5l2 2"/></svg></span>
                         <span class="split-toggle-half" data-mode="tree"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="1.5" width="3" height="3" rx="0.6"/><rect x="1.5" y="11.5" width="3" height="3" rx="0.6"/><rect x="11.5" y="11.5" width="3" height="3" rx="0.6"/><path d="M8 4.5v3M8 7.5H3v4M8 7.5h5v4"/></svg></span>
                     </button>
+                    <div class="btn-icon mode-toggle editor-rich-toggle" id="editorRichToggleFocus" title="Switch both panels to plain text editor" onclick="toggleEditorRichShared()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3h12M2 6.5h12M2 10h8M2 13.5h5"/></svg></div>
                     <div class="btn-icon wrap-toggle" id="editorSharedWrapToggle" title="Wrap long lines (both panels)" onclick="toggleEditorPanelWrapShared(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                     <button type="button" class="btn btn-secondary btn-iconbtn" id="editorFormatBothBtn" title="Format Both (beautify)" onclick="formatEditorPanelsShared(this)"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h11M7 6.2h6.5M7 9.4h6.5M2.5 12.6h11M2.7 6.4l2.2 1.6-2.2 1.6"/></svg></button>
                     <label class="switch-container" title="Keep both panels scrolled to the same position">
@@ -1247,7 +1282,7 @@
                     <span id="editorOptionsWrapHome" style="display:none;"></span><div class="compare-options" id="editorOptionsWrap">
                         <button type="button" class="btn btn-secondary btn-iconbtn" id="editorOptionsBtn" title="Compare options" onclick="toggleEditorOptions()"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h7M11.5 4h2.5M2 8h2.5M7 8h7M2 12h9M13.5 12H14"/><circle cx="9" cy="4" r="1.4" fill="var(--vscode-editor-background)"/><circle cx="4.5" cy="8" r="1.4" fill="var(--vscode-editor-background)"/><circle cx="11" cy="12" r="1.4" fill="var(--vscode-editor-background)"/></svg><span class="options-badge" id="editorOptionsBadge" hidden></span><span class="caret">&#9662;</span></button>
                         <div class="compare-options-menu" id="editorOptionsMenu" hidden>
-                            <label class="switch-container"><span title="Ignore key order when comparing Split/Unified (Changes always ignores it)">Sort keys</span><div class="switch"><input type="checkbox" id="editorSortKeysToggle" checked onchange="runEditorCompare(); updateEditorOptionsBadge();"><span class="slider"></span></div></label>
+                            <label class="switch-container"><span title="Sort keys alphabetically before comparing Split/Unified, so objects whose keys are in a different order still line up (Changes always ignores key order). Off: the diff follows your panels' own order.">Sort keys</span><div class="switch"><input type="checkbox" id="editorSortKeysToggle" onchange="runEditorCompare(); updateEditorOptionsBadge();"><span class="slider"></span></div></label>
                             <label class="switch-container"><span title="Wrap long lines instead of truncating them">Wrap lines</span><div class="switch"><input type="checkbox" id="editorWrapLinesToggle" onchange="toggleEditorWrapLines(); updateEditorOptionsBadge();"><span class="slider"></span></div></label>
                         </div>
                     </div>
@@ -1411,40 +1446,220 @@ function exportLocalStorageBackup() {
             applyViewerLayout();
         }
 
-        // Each panel is either its <textarea> or its Tree view div (setEditorMode swaps which one
-        // is display:none) -- sync scroll needs to read/drive whichever one is actually visible and
-        // scrollable right now, not always the textarea, otherwise switching either panel to Tree
-        // view silently breaks sync (the textarea keeps scrolling internally with no listener, and
-        // nothing is listening on the tree div at all).
-        function getEditorScrollEl(panelId) {
+        /* =========================================================================
+           Compare panels: Edit view = Monaco ("code editor") or the plain <textarea>.
+           Each panel has three surfaces in its column -- the textarea (#editorLeft), a Monaco host
+           (#editorLeftMonacoWrap) and the Tree view (#editorLeftTree) -- and exactly one is shown:
+           Tree when the Edit/Tree toggle says Tree, otherwise Monaco when the Monaco/plain toggle
+           says Monaco AND Monaco has loaded, otherwise the textarea (which is also the automatic
+           fallback when the CDN can't be reached).
+           While a panel's Monaco model exists IT holds the text (the hidden textarea is stale);
+           every read/write of panel text therefore goes through getEditorText / setEditorText.
+           ========================================================================= */
+        const EDITOR_PANEL_IDS = ['editorLeft', 'editorRight'];
+        const EDITOR_RICH_KEY = 'json_compare_rich_editor_v1';
+        const editorRich = { editorLeft: { editor: null, model: null, silent: false }, editorRight: { editor: null, model: null, silent: false } };
+        let editorRichPref = true;   // Monaco by default
+        try { if (localStorage.getItem(EDITOR_RICH_KEY) === '0') editorRichPref = false; } catch (e) {}
+        let editorMonacoFailed = false;
+
+        function isEditorTreeShown(panelId) {
             const treeDiv = document.getElementById(panelId + 'Tree');
-            if (treeDiv && treeDiv.style.display !== 'none') return treeDiv;
-            return document.getElementById(panelId);
+            return !!treeDiv && treeDiv.style.display !== 'none';
         }
+        function isEditorRichShown(panelId) {
+            return !!editorRich[panelId].editor && !isEditorTreeShown(panelId);
+        }
+        function getEditorText(panelId) {
+            const r = editorRich[panelId];
+            if (r && r.model) return r.model.getValue();
+            const ta = document.getElementById(panelId);
+            return ta ? ta.value : '';
+        }
+        // Programmatic content changes (load, swap, format, clear, share links...). The callers
+        // already trigger their own compare re-run, so this doesn't schedule a live compare. In
+        // Monaco the replacement is a single undoable edit, so Ctrl+Z still gets the old text back.
+        function setEditorText(panelId, text) {
+            text = text == null ? '' : String(text);
+            const ta = document.getElementById(panelId);
+            if (ta) ta.value = text;
+            const r = editorRich[panelId];
+            if (r && r.model && r.model.getValue() !== text) {
+                r.silent = true;
+                try {
+                    r.editor.pushUndoStop();
+                    r.model.pushEditOperations([], [{ range: r.model.getFullModelRange(), text: text }], () => null);
+                    r.editor.pushUndoStop();
+                } finally { r.silent = false; }
+            }
+            updateEditorMonacoPlaceholder(panelId);
+        }
+        // Whichever Edit surface is visible (for focus / flash effects).
+        function getEditorEditSurface(panelId) {
+            return editorRich[panelId].editor ? document.getElementById(panelId + 'MonacoWrap') : document.getElementById(panelId);
+        }
+        function updateEditorMonacoPlaceholder(panelId) {
+            const wrap = document.getElementById(panelId + 'MonacoWrap');
+            const r = editorRich[panelId];
+            if (wrap) wrap.classList.toggle('is-empty', !!r.model && r.model.getValueLength() === 0);
+        }
+        // Shows the right surface for a panel's current Edit/Tree + Monaco/plain state.
+        function applyEditorSurface(panelId) {
+            const ta = document.getElementById(panelId);
+            const wrap = document.getElementById(panelId + 'MonacoWrap');
+            const tree = isEditorTreeShown(panelId);
+            const rich = !!editorRich[panelId].editor;
+            ta.style.display = (!tree && !rich) ? 'block' : 'none';
+            if (wrap) wrap.style.display = (!tree && rich) ? 'block' : 'none';
+            updateEditorScrollTopBtn(panelId);
+        }
+
+        function mountEditorPanelMonaco(panelId) {
+            const r = editorRich[panelId];
+            if (r.editor || !window.monaco || !monaco.editor) return;
+            const ta = document.getElementById(panelId);
+            const host = document.getElementById(panelId + 'Monaco');
+            if (!ta || !host) return;
+            const hadFocus = document.activeElement === ta;
+            const caret = ta.selectionStart || 0;
+            const o = jsonEditFontOpts();
+            const model = monaco.editor.createModel(ta.value, 'json');
+            // Show the wrap first so Monaco measures a real size on creation.
+            if (!isEditorTreeShown(panelId)) { ta.style.display = 'none'; document.getElementById(panelId + 'MonacoWrap').style.display = 'block'; }
+            const editor = monaco.editor.create(host, {
+                model: model,
+                theme: window.DT ? DT.monacoTheme() : (document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark'),
+                automaticLayout: true,
+                minimap: { enabled: false },
+                wordWrap: ta.classList.contains('wrap-on') ? 'on' : 'off',
+                tabSize: 4, insertSpaces: true, detectIndentation: false,
+                autoIndent: 'full', formatOnPaste: true, formatOnType: true,
+                autoClosingBrackets: 'always', autoClosingQuotes: 'always',
+                folding: true, stickyScroll: { enabled: false },
+                fontFamily: o.fontFamily, fontSize: o.fontSize, lineHeight: o.lineHeight,
+                scrollBeyondLastLine: false, renderWhitespace: 'selection',
+                smoothScrolling: !!(window.DT && DT.motionOk && DT.motionOk())
+            });
+            r.editor = editor;
+            r.model = model;
+            editor.onDidChangeModelContent(() => {
+                updateEditorMonacoPlaceholder(panelId);
+                if (!r.silent) scheduleEditorLiveCompare();
+            });
+            editor.onDidScrollChange(() => { handleEditorSyncScroll(panelId); updateEditorScrollTopBtn(panelId); });
+            updateEditorMonacoPlaceholder(panelId);
+            applyEditorSurface(panelId);
+            if (hadFocus) {
+                editor.focus();
+                editor.setPosition(model.getPositionAt(caret));
+            }
+        }
+        // Back to the plain textarea for one panel, carrying the text (and caret) over.
+        function unmountEditorPanelMonaco(panelId) {
+            const r = editorRich[panelId];
+            if (!r.editor) return;
+            const ta = document.getElementById(panelId);
+            const hadFocus = r.editor.hasTextFocus();
+            const pos = r.editor.getPosition();
+            const text = r.model.getValue();
+            const caret = pos ? r.model.getOffsetAt(pos) : 0;
+            try { r.editor.dispose(); } catch (e) {}
+            try { r.model.dispose(); } catch (e) {}
+            r.editor = null;
+            r.model = null;
+            ta.value = text;
+            applyEditorSurface(panelId);
+            if (hadFocus && ta.style.display !== 'none') { ta.focus(); ta.setSelectionRange(caret, caret); }
+        }
+
+        // Loads Monaco (once, lazily -- see loadJsonEditMonaco) and mounts it in both panels if
+        // the Monaco/plain toggle is on Monaco. Called whenever the Compare tab is shown.
+        function ensureEditorPanelsRich() {
+            if (!editorRichPref) return;
+            if (EDITOR_PANEL_IDS.every(id => editorRich[id].editor)) return;
+            loadJsonEditMonaco().then(ok => {
+                editorMonacoFailed = !ok;
+                if (ok && editorRichPref) EDITOR_PANEL_IDS.forEach(mountEditorPanelMonaco);
+                updateEditorRichToggleUI();
+            });
+        }
+
+        // The Monaco/plain toggle (#editorRichToggle in the top toolbar, #editorRichToggleFocus in
+        // the Focus-mode header) -- one shared switch for both panels, like the Code tab's.
+        function toggleEditorRichShared() {
+            // A failed load shows as "plain"; clicking then means "try Monaco again".
+            editorRichPref = editorMonacoFailed ? true : !editorRichPref;
+            try { localStorage.setItem(EDITOR_RICH_KEY, editorRichPref ? '1' : '0'); } catch (e) {}
+            if (editorRichPref) {
+                editorMonacoFailed = false;
+                updateEditorRichToggleUI();
+                ensureEditorPanelsRich();
+            } else {
+                EDITOR_PANEL_IDS.forEach(unmountEditorPanelMonaco);
+                updateEditorRichToggleUI();
+            }
+        }
+        function updateEditorRichToggleUI() {
+            const plain = !editorRichPref || editorMonacoFailed;
+            const title = editorMonacoFailed
+                ? 'Code editor couldn’t load (offline?) — using plain text. Click to try again'
+                : (editorRichPref ? 'Switch both panels to plain text editor' : 'Switch both panels to code editor (Monaco)');
+            document.querySelectorAll('#editorRichToggle, #editorRichToggleFocus').forEach(btn => {
+                btn.classList.toggle('toggle-active', plain);
+                btn.title = title;
+            });
+        }
+
+        // Scroll geometry of whichever surface a panel is showing (Tree div, Monaco, or textarea),
+        // so sync scroll and scroll-to-top work the same across every combination of modes.
+        function getEditorScrollGeom(panelId) {
+            if (isEditorRichShown(panelId)) {
+                const ed = editorRich[panelId].editor, li = ed.getLayoutInfo();
+                return {
+                    top: ed.getScrollTop(), left: ed.getScrollLeft(),
+                    maxV: Math.max(0, ed.getScrollHeight() - li.height), maxH: Math.max(0, ed.getScrollWidth() - li.width),
+                    // Immediate, not the default smooth scroll: wheel scrolling fires far faster than
+                    // a smooth animation finishes (same fix as code.html's syncOtherPanelScroll).
+                    set: (t, l) => ed.setScrollPosition({ scrollTop: t, scrollLeft: l }, monaco.editor.ScrollType.Immediate),
+                    toTop: () => ed.setScrollTop(0, monaco.editor.ScrollType.Smooth)
+                };
+            }
+            const el = isEditorTreeShown(panelId) ? document.getElementById(panelId + 'Tree') : document.getElementById(panelId);
+            if (!el) return null;
+            return {
+                top: el.scrollTop, left: el.scrollLeft,
+                maxV: Math.max(0, el.scrollHeight - el.clientHeight), maxH: Math.max(0, el.scrollWidth - el.clientWidth),
+                set: (t, l) => { el.scrollTop = t; el.scrollLeft = l; },
+                toTop: () => el.scrollTo({ top: 0, behavior: 'smooth' })
+            };
+        }
+        // Diff click-to-jump positions EACH panel on its own matching spot; Sync Scroll must not
+        // then drag the other panel to the same scroll ratio (panels of different lengths would end
+        // up misaligned, and the two jumps would fight each other).
+        let editorSyncSuspendedUntil = 0;
+        function suspendEditorSyncScroll(ms) { editorSyncSuspendedUntil = performance.now() + (ms || 400); }
         function handleEditorSyncScroll(sourcePanelId) {
             if (!document.getElementById('editorSyncScrollToggle').checked || isEditorSyncing) return;
+            if (performance.now() < editorSyncSuspendedUntil) return;
             const targetPanelId = sourcePanelId === 'editorLeft' ? 'editorRight' : 'editorLeft';
-            const source = getEditorScrollEl(sourcePanelId);
-            const target = getEditorScrollEl(targetPanelId);
+            const source = getEditorScrollGeom(sourcePanelId);
+            const target = getEditorScrollGeom(targetPanelId);
             if (!source || !target) return;
             isEditorSyncing = true;
-            const srcMaxV = source.scrollHeight - source.clientHeight;
-            const vRatio = srcMaxV > 0 ? source.scrollTop / srcMaxV : 0;
-            target.scrollTop = vRatio * Math.max(0, target.scrollHeight - target.clientHeight);
-            // Horizontal sync too -- a panel scrolled sideways to read a long value/line stays in
-            // step with the other panel's horizontal position, not just its vertical one.
-            const srcMaxH = source.scrollWidth - source.clientWidth;
-            const hRatio = srcMaxH > 0 ? source.scrollLeft / srcMaxH : 0;
-            target.scrollLeft = hRatio * Math.max(0, target.scrollWidth - target.clientWidth);
+            // Vertical and horizontal -- a panel scrolled sideways to read a long value stays in
+            // step with the other panel's horizontal position too.
+            const vRatio = source.maxV > 0 ? source.top / source.maxV : 0;
+            const hRatio = source.maxH > 0 ? source.left / source.maxH : 0;
+            target.set(vRatio * target.maxV, hRatio * target.maxH);
             setTimeout(() => { isEditorSyncing = false; }, 20);
         }
-        // Shows/hides a panel's floating "scroll to top" button based on whichever of Edit/Tree
-        // is currently visible -- same fade-in-once-scrolled behavior as the Code tab's.
+        // Shows/hides a panel's floating "scroll to top" button based on whichever surface is
+        // currently visible -- same fade-in-once-scrolled behavior as the Code tab's.
         function updateEditorScrollTopBtn(panelId) {
-            const el = getEditorScrollEl(panelId);
+            const g = getEditorScrollGeom(panelId);
             const btn = document.getElementById(panelId + 'ScrollTop');
-            if (!el || !btn) return;
-            btn.classList.toggle('visible', el.scrollTop > 40);
+            if (!g || !btn) return;
+            btn.classList.toggle('visible', g.top > 40);
         }
 
         ['editorLeft', 'editorRight', 'editorLeftTree', 'editorRightTree'].forEach(elId => {
@@ -1453,13 +1668,14 @@ function exportLocalStorageBackup() {
             el.addEventListener('scroll', () => { handleEditorSyncScroll(panelId); updateEditorScrollTopBtn(panelId); });
         });
         // Once Compare has run at least once, real typing into either panel re-runs it after a
-        // short pause (see scheduleEditorLiveCompare below).
+        // short pause (see scheduleEditorLiveCompare below). Monaco's own change listener does the
+        // same for the code-editor surface (see mountEditorPanelMonaco).
         editorLeftScroll.addEventListener('input', () => scheduleEditorLiveCompare());
         editorRightScroll.addEventListener('input', () => scheduleEditorLiveCompare());
 
         function scrollPanelToTop(panelId) {
-            const el = getEditorScrollEl(panelId);
-            if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+            const g = getEditorScrollGeom(panelId);
+            if (g) g.toTop();
         }
 
         function clearEditorPanel(panelId) {
@@ -1468,7 +1684,7 @@ function exportLocalStorageBackup() {
             const treeDiv = document.getElementById(panelId + 'Tree');
             const counter = document.getElementById(panelId + 'Counter');
 
-            textarea.value = '';
+            setEditorText(panelId, '');
             if (nameInput) nameInput.value = '';
             if (treeDiv) treeDiv.innerHTML = '';
             if (counter) counter.textContent = '0/0';
@@ -1515,12 +1731,12 @@ function exportLocalStorageBackup() {
         // are currently showing it.
         function swapEditorPanels(btn) {
             animateSwapIcon(btn || document.getElementById('editorSwapBtn'));
-            const lVal = document.getElementById('editorLeft').value;
-            const rVal = document.getElementById('editorRight').value;
+            const lVal = getEditorText('editorLeft');
+            const rVal = getEditorText('editorRight');
             const lName = document.getElementById('editorLeftName').value;
             const rName = document.getElementById('editorRightName').value;
-            document.getElementById('editorLeft').value = rVal;
-            document.getElementById('editorRight').value = lVal;
+            setEditorText('editorLeft', rVal);
+            setEditorText('editorRight', lVal);
             document.getElementById('editorLeftName').value = rName;
             document.getElementById('editorRightName').value = lName;
             ['editorLeft', 'editorRight'].forEach(panelId => {
@@ -1669,7 +1885,7 @@ function exportLocalStorageBackup() {
             document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
             document.getElementById(paneId).classList.add('active');
             element.classList.add('active');
-            if (paneId === 'editor-pane') renderEditorChips();
+            if (paneId === 'editor-pane') { renderEditorChips(); ensureEditorPanelsRich(); }
         }
 
         const saveIconSvg = `<svg viewBox="0 0 16 16"><path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM4 1h8v4H4V1zm10 13H2V2h1v4h10V2h1v12zM5 10h6v3H5v-3z"/></svg>`;
@@ -1679,6 +1895,8 @@ function exportLocalStorageBackup() {
         const jsonIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="#f1c40f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3c-1.5 0-2 1-2 2v4.5c0 1.5-1 2-1 2.5 0 .5 1 1 1 2.5V19c0 1 1 2 2 2M16 3c1.5 0 2 1 2 2v4.5c0 1.5-1 2-1 2.5 0 .5-1 1-1 2.5V19c0 1-1 2-2 2" /></svg>`;
         const xmlIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="#3498db" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 8-5 4 5 4M17 8l5 4-5 4" /></svg>`;
         const focusIconSvg = `<svg viewBox="0 0 16 16"><path d="M1 1h5v1.5H2.5V6H1V1zm14 0v5h-1.5V2.5H10V1h5zM1 15v-5h1.5v3.5H6V15H1zm14 0h-5v-1.5h3.5V10H15v5z"/></svg>`;
+        const editPencilIconSvg = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.28 1.72a1 1 0 0 1 1.41 0l1.59 1.59a1 1 0 0 1 0 1.41l-8.5 8.5-3.5 1 1-3.5 8.5-8.5z"/></svg>`;
+        const editSubmitIconSvg = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 8.6l3.4 3.4L13.2 4.6"/></svg>`;
         const toViewerIconSvg = `<svg viewBox="0 0 16 16"><path d="M8 0l4.5 4.5-1.06 1.06L8.75 2.87V10h-1.5V2.87L4.56 5.56 3.5 4.5 8 0zM1 12h14v1.5H1V12z"/></svg>`;
 
         let currentMatches = [];
@@ -1706,6 +1924,7 @@ function exportLocalStorageBackup() {
             const n = postedEntries.length;
             const snap = { records: dtStore.records(), compare: snapshotCompare() };
             if (typeof setComparePick === 'function') setComparePick(false);
+            postedEntries.forEach(disposeEntryEdit);
             document.getElementById('container').innerHTML = '';
             postedEntries = [];
             saveEntriesToStorage();
@@ -1721,14 +1940,15 @@ function exportLocalStorageBackup() {
         }
         function snapshotCompare() {
             const res = document.getElementById('editorCompareResults'), panels = {};
-            ['editorLeft', 'editorRight'].forEach(id => { const nm = document.getElementById(id + 'Name'); panels[id] = { text: document.getElementById(id).value, name: nm ? nm.value : '' }; });
+            ['editorLeft', 'editorRight'].forEach(id => { const nm = document.getElementById(id + 'Name'); panels[id] = { text: getEditorText(id), name: nm ? nm.value : '' }; });
             return { panels, shown: !!res && res.children.length > 0 && !/^Click "Compare"/.test(res.textContent.trim()) };
         }
         function restoreCompare(s) {
             Object.keys(s.panels).forEach(id => {
-                const ta = document.getElementById(id), nm = document.getElementById(id + 'Name');
-                ta.value = s.panels[id].text; if (nm) nm.value = s.panels[id].name;
-                ta.dispatchEvent(new Event('input', { bubbles: true }));
+                const nm = document.getElementById(id + 'Name');
+                setEditorText(id, s.panels[id].text); if (nm) nm.value = s.panels[id].name;
+                if (isEditorTreeShown(id)) renderEditorTree(id);
+                scheduleEditorLiveCompare();
             });
             if (s.shown) runEditorCompare();
         }
@@ -1771,6 +1991,7 @@ function exportLocalStorageBackup() {
                 const rec = dtStore.recordOf(item);
                 removedStack.push({ rec, index: postedEntries.indexOf(item) });
                 DT.undoToast((rec.name ? '“' + (rec.name.length > 28 ? rec.name.slice(0, 27) + '…' : rec.name) + '” deleted' : 'Entry deleted'), undoRemoveEntry, 'undoRemoveEntry');
+                disposeEntryEdit(item);
             }
             postedEntries = postedEntries.filter(e => e.id !== entry.dataset.entryId);
             entry.remove();
@@ -1907,10 +2128,12 @@ function exportLocalStorageBackup() {
                 alert('Could not convert this entry to JSON: ' + e.message);
                 return;
             }
-            const textarea = document.getElementById(panelId);
-            textarea.value = JSON.stringify(jsonData, null, 4);
-            textarea.classList.add('flash-active');
-            setTimeout(() => textarea.classList.remove('flash-active'), 600);
+            setEditorText(panelId, JSON.stringify(jsonData, null, 4));
+            const surface = getEditorEditSurface(panelId);
+            if (surface) {
+                surface.classList.add('flash-active');
+                setTimeout(() => surface.classList.remove('flash-active'), 600);
+            }
 
             const nameInput = document.getElementById(panelId + 'Name');
             if (nameInput) nameInput.value = item.name || '';
@@ -1933,8 +2156,10 @@ function exportLocalStorageBackup() {
         function setEditorPanelWrap(panelId, on) {
             const ta = document.getElementById(panelId);
             const treeDiv = document.getElementById(panelId + 'Tree');
-            if (ta) ta.classList.toggle('wrap-on', on);
+            if (ta) ta.classList.toggle('wrap-on', on);   // also the stored wrap state Monaco is mounted with
             if (treeDiv) treeDiv.classList.toggle('wrap-on', on);
+            const r = editorRich[panelId];
+            if (r.editor) r.editor.updateOptions({ wordWrap: on ? 'on' : 'off' });
         }
         function toggleEditorPanelWrapShared(btnEl) {
             const leftTa = document.getElementById('editorLeft');
@@ -1946,16 +2171,17 @@ function exportLocalStorageBackup() {
         }
 
         function setEditorMode(panelId, mode, btnEl) {
-            const textarea = document.getElementById(panelId);
             const treeDiv = document.getElementById(panelId + 'Tree');
             if (mode === 'tree') {
-                textarea.style.display = 'none';
                 treeDiv.style.display = 'block';
+                applyEditorSurface(panelId);
                 renderEditorTree(panelId);
             } else {
                 treeDiv.style.display = 'none';
-                textarea.style.display = 'block';
-                textarea.focus();
+                applyEditorSurface(panelId);
+                const r = editorRich[panelId];
+                if (r.editor) r.editor.focus();
+                else document.getElementById(panelId).focus();
             }
             updateEditorScrollTopBtn(panelId);
             updateSharedEditorModeToggleUI();
@@ -2000,9 +2226,8 @@ function exportLocalStorageBackup() {
         }
 
         function renderEditorTree(panelId) {
-            const textarea = document.getElementById(panelId);
             const treeDiv = document.getElementById(panelId + 'Tree');
-            const raw = textarea.value.trim();
+            const raw = getEditorText(panelId).trim();
             treeDiv.innerHTML = '';
             if (!raw) {
                 treeDiv.innerHTML = '<div style="opacity:0.5;">Nothing to preview yet — type or load some JSON.</div>';
@@ -2017,9 +2242,8 @@ function exportLocalStorageBackup() {
         }
 
         function formatEditorPanel(panelId) {
-            const textarea = document.getElementById(panelId);
             try {
-                textarea.value = JSON.stringify(JSON.parse(textarea.value), null, 4);
+                setEditorText(panelId, JSON.stringify(JSON.parse(getEditorText(panelId)), null, 4));
                 const treeDiv = document.getElementById(panelId + 'Tree');
                 if (treeDiv.style.display !== 'none') renderEditorTree(panelId);
                 if (editorLiveCompareActive && editorLiveCompareEnabled()) { clearTimeout(editorLiveCompareTimer); runEditorCompare(); }
@@ -2060,7 +2284,7 @@ function exportLocalStorageBackup() {
         }
 
         function editorParse(panelId) {
-            return JSON.parse(document.getElementById(panelId).value);
+            return JSON.parse(getEditorText(panelId));
         }
 
         function flashEditorIcon(panelId, kind) {
@@ -2109,8 +2333,7 @@ function exportLocalStorageBackup() {
         }
 
         function editorSaveToViewer(panelId) {
-            const textarea = document.getElementById(panelId);
-            const raw = textarea.value.trim();
+            const raw = getEditorText(panelId).trim();
             if (!raw) { alert('Nothing to save — the panel is empty.'); return; }
             const nameInput = document.getElementById(panelId + 'Name');
             const name = nameInput ? nameInput.value.trim() : '';
@@ -2382,10 +2605,10 @@ function exportLocalStorageBackup() {
             menu.hidden = !open;
             btn.classList.toggle('active', open);
         }
-        // Sort keys defaults ON and Wrap lines defaults OFF, so counting raw "checked" state would
-        // misleadingly always show a badge of at least 1 -- count NON-DEFAULT states instead.
+        // Both options default OFF (Sort keys used to default on, which made Split/Unified show
+        // keys alphabetically instead of in the panels' order); the badge counts non-default states.
         function updateEditorOptionsBadge() {
-            const sortNonDefault = !document.getElementById('editorSortKeysToggle').checked;
+            const sortNonDefault = document.getElementById('editorSortKeysToggle').checked;
             const wrapNonDefault = document.getElementById('editorWrapLinesToggle').checked;
             const count = (sortNonDefault ? 1 : 0) + (wrapNonDefault ? 1 : 0);
             const badge = document.getElementById('editorOptionsBadge');
@@ -2439,13 +2662,18 @@ function exportLocalStorageBackup() {
             }
             return Math.max(0, Math.min(hintIdx, max - 1));
         }
-        // Selects and scrolls a plain-textarea panel to a given (0-based) line, reusing the same
-        // mirror-based pixel measurement as scrollToEditorPath, then briefly flashes it.
+        // Fallback for jumpToDiffPair when a row can't be mapped to a JSON path (e.g. the panel no
+        // longer parses): selects the nearest line with matching text and briefly flashes it.
         function revealEditorPanelLine(panelId, origLineIdx, lineText) {
             setEditorMode(panelId, 'edit', null);
-            const el = document.getElementById(panelId);
-            const panelLines = el.value.split('\n');
+            const panelLines = getEditorText(panelId).split('\n');
             const lineIdx = findLineInEditorPanel(panelLines, lineText, origLineIdx);
+            if (editorRich[panelId].editor) {
+                const ln = lineIdx + 1;
+                revealEditorMonacoRange(panelId, new monaco.Range(ln, 1, ln, (panelLines[lineIdx] || '').length + 1));
+                return;
+            }
+            const el = document.getElementById(panelId);
             let charIndex = 0;
             for (let i = 0; i < lineIdx; i++) charIndex += panelLines[i].length + 1;
             const lineLen = (panelLines[lineIdx] || '').length;
@@ -2473,17 +2701,222 @@ function exportLocalStorageBackup() {
         }
         // Jumps both panels together to a matched pair of textual-diff line indices (either side
         // may be null for a pure add/remove -- see annotateDiffAnchors below).
+        //
+        // The Split/Unified diff is computed on a normalized copy of each side (pretty-printed, and
+        // key-sorted when "Sort keys" is on), so its line numbers don't match the panels' lines --
+        // e.g. an added "bla" key sorts to line 2 of the diff but sits at line 69 of Panel B. Rather
+        // than guessing by searching for similar-looking text (which lands on the wrong "}," or
+        // "1," all the time), each diff line is mapped to the JSON path it belongs to, and that path
+        // is looked up in the panel's real text. Something that only exists on one side is shown on
+        // the other side where it WOULD go: right after its previous sibling (in the order of the
+        // side that has it), or at its parent when there is no such sibling.
+        function buildLineStarts(text) {
+            const s = [0];
+            for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) s.push(i + 1);
+            return s;
+        }
+        function lineOfOffset(starts, off) {
+            let lo = 0, hi = starts.length - 1;
+            while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= off) lo = mid; else hi = mid - 1; }
+            return lo;
+        }
+        function parentJsonPath(p) { const i = p.lastIndexOf('.'); return i > 0 ? p.slice(0, i) : null; }
+        // 0-based line -> { path, atEnd } for a pretty-printed JSON text. A line gets the deepest
+        // value that STARTS on it; closing lines ("}," / "]") get the container they close.
+        function diffTextLinePaths(text) {
+            const offs = buildJsonPathOffsets(text), starts = buildLineStarts(text);
+            const map = new Array(starts.length).fill(null);
+            const paths = Object.keys(offs);
+            paths.forEach(path => {
+                const ln = lineOfOffset(starts, offs[path].start);
+                if (!map[ln] || path.length > map[ln].path.length) map[ln] = { path, atEnd: false };
+            });
+            paths.forEach(path => {
+                const o = offs[path];
+                if (o.end <= o.start) return;
+                const ln = lineOfOffset(starts, o.end - 1);
+                if (!map[ln] || (map[ln].atEnd && path.length > map[ln].path.length)) map[ln] = { path, atEnd: true };
+            });
+            return map;
+        }
+        // Path offsets of a panel's current text, cached until the text changes.
+        const editorPathIndexCache = {};
+        function editorPanelPathIndex(panelId) {
+            const text = getEditorText(panelId);
+            const c = editorPathIndexCache[panelId];
+            if (c && c.text === text) return c;
+            let offs = {};
+            try { offs = buildJsonPathOffsets(text); } catch (e) {}
+            return (editorPathIndexCache[panelId] = { text, offs, starts: buildLineStarts(text) });
+        }
+        // Where `path` is (or would be) in a panel: { start, end, exact }. `otherPanelId` supplies
+        // sibling order for a path that's missing here.
+        function locateInEditorPanel(panelId, path, atEnd, otherPanelId) {
+            const idx = editorPanelPathIndex(panelId);
+            const o = idx.offs[path];
+            if (o) return atEnd && o.end > o.start ? { start: o.end - 1, end: o.end, exact: true } : { start: o.start, end: o.end, exact: true };
+            const other = editorPanelPathIndex(otherPanelId).offs;
+            let child = path, parent = parentJsonPath(path);
+            while (parent && !idx.offs[parent]) { child = parent; parent = parentJsonPath(parent); }
+            if (!parent) return null;
+            const sibs = Object.keys(other).filter(p => parentJsonPath(p) === parent).sort((x, y) => other[x].start - other[y].start);
+            const k = sibs.indexOf(child);
+            if (k >= 0) {
+                for (let j = k - 1; j >= 0; j--) { const t = idx.offs[sibs[j]]; if (t) return { start: Math.max(t.start, t.end - 1), end: t.end, exact: false }; }
+                for (let j = k + 1; j < sibs.length; j++) { const t = idx.offs[sibs[j]]; if (t) return { start: t.start, end: t.start, exact: false }; }
+            }
+            const t = idx.offs[parent];
+            return { start: t.start, end: t.start, exact: false };
+        }
+        function editorPathExists(panelId, path) { return !!editorPanelPathIndex(panelId).offs[path]; }
+
+        // The Changes list in document order -- Panel B's order, with removed items placed where
+        // they would have been -- instead of findDiffs' walk order (which lists an object's changed
+        // and removed keys before its added ones, e.g. author.last at line 9 above ggg at line 7).
+        function orderEditorChangesByPosition(structural) {
+            try {
+                const b = editorPanelPathIndex('editorRight');
+                if (!b.offs.root) return structural;
+                const keyed = structural.map((d, i) => {
+                    let pos = null;
+                    const o = b.offs[d.path];
+                    if (o && d.type !== 'removed') pos = o.start;
+                    else {
+                        const loc = locateInEditorPanel('editorRight', d.path, false, 'editorLeft');
+                        if (loc) pos = loc.start + 0.5;   // just after the sibling it followed
+                    }
+                    return { d, i, pos: pos == null ? Infinity : pos };
+                });
+                keyed.sort((x, y) => (x.pos - y.pos) || (x.i - y.i));
+                return keyed.map(k => k.d);
+            } catch (e) { return structural; }
+        }
+
+        // Split/Unified gutters show each line's number IN ITS PANEL (not its index in the
+        // normalized diff text): identical when the panel is pretty-printed in the same key order,
+        // mapped by JSON path otherwise (other indentation, or Sort keys on). A panel that can't be
+        // mapped line-for-line (minified onto one line, or no longer parsing) keeps the diff's own
+        // numbering.
+        let editorDiffLineLabels = null;
+        function ensureEditorDiffLinePaths(d) {
+            if (d.linePathsA) return true;
+            if (d.textA == null || d.textB == null) return false;
+            try { d.linePathsA = diffTextLinePaths(d.textA); d.linePathsB = diffTextLinePaths(d.textB); }
+            catch (e) { d.linePathsA = d.linePathsB = []; }
+            return true;
+        }
+        function computeEditorDiffLineLabels() {
+            editorDiffLineLabels = null;
+            const d = lastEditorDiff;
+            if (!d || !ensureEditorDiffLinePaths(d)) return;
+            const build = (linePaths, panelId) => {
+                const idx = editorPanelPathIndex(panelId);
+                if (!linePaths.length || idx.starts.length < linePaths.length / 2) return null;
+                const labels = new Array(linePaths.length);
+                let mapped = 0;
+                for (let i = 0; i < linePaths.length; i++) {
+                    const info = linePaths[i];
+                    const o = info && idx.offs[info.path];
+                    if (!o) { labels[i] = null; continue; }
+                    labels[i] = lineOfOffset(idx.starts, info.atEnd && o.end > o.start ? o.end - 1 : o.start) + 1;
+                    mapped++;
+                }
+                return mapped ? labels : null;
+            };
+            editorDiffLineLabels = { A: build(d.linePathsA, 'editorLeft'), B: build(d.linePathsB, 'editorRight') };
+        }
+        function editorDiffLineLabel(side, orig) {
+            if (orig == null) return '';
+            const m = editorDiffLineLabels && editorDiffLineLabels[side];
+            if (!m) return orig + 1;
+            return m[orig] != null ? m[orig] : '';
+        }
+
+        // Scrolls a panel so `loc` is centered and flashes that line. `select`: 'range' selects the
+        // value, 'line' selects the whole (trimmed) line, anything else just places the caret.
+        function revealEditorLocation(panelId, loc, select) {
+            setEditorMode(panelId, 'edit', null);
+            const idx = editorPanelPathIndex(panelId);
+            const text = idx.text;
+            let s = loc.start, e = loc.end;
+            if (select === 'line' || !loc.exact) {
+                const ln = lineOfOffset(idx.starts, loc.start);
+                const ls = idx.starts[ln], le = ln + 1 < idx.starts.length ? idx.starts[ln + 1] - 1 : text.length;
+                const lineText = text.slice(ls, le);
+                s = ls + (lineText.length - lineText.replace(/^\s+/, '').length);
+                e = loc.exact ? ls + lineText.replace(/\s+$/, '').length : s;
+            }
+            const r = editorRich[panelId];
+            if (r.editor) {
+                const a = r.model.getPositionAt(s), b = r.model.getPositionAt(e);
+                const ed = r.editor;
+                ed.setSelection(new monaco.Range(a.lineNumber, a.column, b.lineNumber, b.column));
+                ed.revealRangeInCenter(new monaco.Range(a.lineNumber, a.column, a.lineNumber, a.column), monaco.editor.ScrollType.Immediate);
+                const deco = ed.deltaDecorations([], [{ range: new monaco.Range(a.lineNumber, 1, a.lineNumber, 1), options: { isWholeLine: true, className: 'editor-line-flash' } }]);
+                setTimeout(() => { try { ed.deltaDecorations(deco, []); } catch (err) {} }, 1200);
+                return;
+            }
+            const el = document.getElementById(panelId);
+            el.focus({ preventScroll: true });
+            el.setSelectionRange(s, e);
+            let scrollTop;
+            try { scrollTop = getTextareaOffsetTop(el, s) - el.clientHeight / 2; }
+            catch (err) {
+                const lh = parseFloat(window.getComputedStyle(el).lineHeight) || 15;
+                scrollTop = (lineOfOffset(idx.starts, s) - el.clientHeight / lh / 2) * lh;
+            }
+            el.scrollTop = Math.max(0, Math.min(scrollTop, el.scrollHeight - el.clientHeight));
+            el.classList.add('highlight-flash');
+            setTimeout(() => el.classList.remove('highlight-flash'), 1200);
+        }
+
+        // Shows `path` in both panels: exactly where it exists, and at its would-be spot on a side
+        // that doesn't have it. Used by the Changes view and by Split/Unified row clicks.
+        function jumpToEditorPath(path, atEnd, select) {
+            suspendEditorSyncScroll();
+            const inA = editorPathExists('editorLeft', path), inB = editorPathExists('editorRight', path);
+            if (!inA && !inB) return false;
+            const la = locateInEditorPanel('editorLeft', path, atEnd, 'editorRight');
+            const lb = locateInEditorPanel('editorRight', path, atEnd, 'editorLeft');
+            if (la) revealEditorLocation('editorLeft', la, select);
+            if (lb) revealEditorLocation('editorRight', lb, select);
+            suspendEditorSyncScroll();
+            return true;
+        }
+
+        // Jumps both panels to a Split/Unified row. aOrig/bOrig are that row's line indices in the
+        // normalized diff text (for a pure add/remove, the other side's index is only a nearby
+        // anchor -- see annotateDiffAnchors -- so the side whose path is missing on the other side
+        // is treated as the one that was clicked).
         function jumpToDiffPair(aOrig, bOrig) {
-            if (!lastEditorDiff || !lastEditorDiff.textual || lastEditorDiff.textual.tooLarge) return;
-            const t = lastEditorDiff.textual;
-            if (aOrig != null) {
-                const item = t.filteredA[aOrig];
-                if (item) revealEditorPanelLine('editorLeft', aOrig, item.text);
+            const d = lastEditorDiff;
+            if (!d || !d.textual || d.textual.tooLarge) return;
+            if (d.textA != null && d.textB != null) {
+                ensureEditorDiffLinePaths(d);
+                const pa = aOrig != null ? d.linePathsA[aOrig] : null;
+                const pb = bOrig != null ? d.linePathsB[bOrig] : null;
+                let target = null;
+                if (pb && !editorPathExists('editorLeft', pb.path)) target = pb;         // only in B (added)
+                else if (pa && !editorPathExists('editorRight', pa.path)) target = pa;  // only in A (removed)
+                if (target) { if (jumpToEditorPath(target.path, target.atEnd, 'line')) return; }
+                else if (pa || pb) {
+                    // Present on both sides (changed / unchanged line): each side at its own path.
+                    suspendEditorSyncScroll();
+                    let done = false;
+                    [['editorLeft', pa || pb, 'editorRight'], ['editorRight', pb || pa, 'editorLeft']].forEach(([id, info, other]) => {
+                        const loc = locateInEditorPanel(id, info.path, info.atEnd, other);
+                        if (loc) { revealEditorLocation(id, loc, 'line'); done = true; }
+                    });
+                    suspendEditorSyncScroll();
+                    if (done) return;
+                }
             }
-            if (bOrig != null) {
-                const item = t.filteredB[bOrig];
-                if (item) revealEditorPanelLine('editorRight', bOrig, item.text);
-            }
+            // Fallback (panel text no longer parses, etc.): nearest line with matching text.
+            suspendEditorSyncScroll();
+            const t = d.textual;
+            if (aOrig != null && t.filteredA[aOrig]) revealEditorPanelLine('editorLeft', aOrig, t.filteredA[aOrig].text);
+            if (bOrig != null && t.filteredB[bOrig]) revealEditorPanelLine('editorRight', bOrig, t.filteredB[bOrig].text);
+            suspendEditorSyncScroll();
         }
 
         /* ---------- Split / Unified renderers (ported verbatim from code.html's Compare tab --
@@ -2521,10 +2954,10 @@ function exportLocalStorageBackup() {
             });
             return span;
         }
-        function makeSideCell(cls, lineNum, contentNode) {
+        function makeSideCell(cls, lineNum, contentNode, side) {
             const cell = document.createElement('div');
             cell.className = 'side-cell ' + cls;
-            const ln = document.createElement('span'); ln.className = 'ln'; ln.textContent = lineNum != null ? (lineNum + 1) : '';
+            const ln = document.createElement('span'); ln.className = 'ln'; ln.textContent = editorDiffLineLabel(side, lineNum);
             const txt = document.createElement('span'); txt.className = 'txt';
             if (contentNode) txt.appendChild(contentNode);
             cell.appendChild(ln); cell.appendChild(txt);
@@ -2546,8 +2979,8 @@ function exportLocalStorageBackup() {
         }
         function appendEqualRow(leftCol, rightCol, g, filteredA, filteredB) {
             const aLine = filteredA[g.aIdx], bLine = filteredB[g.bIdx];
-            const leftCell = makeSideCell('equal', aLine.orig, document.createTextNode(aLine.text));
-            const rightCell = makeSideCell('equal', bLine.orig, document.createTextNode(bLine.text));
+            const leftCell = makeSideCell('equal', aLine.orig, document.createTextNode(aLine.text), 'A');
+            const rightCell = makeSideCell('equal', bLine.orig, document.createTextNode(bLine.text), 'B');
             const jump = () => { setActiveSideRow(leftCell, rightCell); jumpToDiffPair(aLine.orig, bLine.orig); };
             leftCell.onclick = jump;
             rightCell.onclick = jump;
@@ -2555,8 +2988,8 @@ function exportLocalStorageBackup() {
             leftCol.appendChild(leftCell); rightCol.appendChild(rightCell);
         }
         function appendPairRow(leftCol, rightCol, left, right, anchorAOrig, anchorBOrig) {
-            const leftCell = left ? makeSideCell(left.cls, left.orig, document.createTextNode(left.text)) : makeSideCell('blank', null, null);
-            const rightCell = right ? makeSideCell(right.cls, right.orig, document.createTextNode(right.text)) : makeSideCell('blank', null, null);
+            const leftCell = left ? makeSideCell(left.cls, left.orig, document.createTextNode(left.text), 'A') : makeSideCell('blank', null, null);
+            const rightCell = right ? makeSideCell(right.cls, right.orig, document.createTextNode(right.text), 'B') : makeSideCell('blank', null, null);
             const jump = () => { setActiveSideRow(leftCell, rightCell); syncCompareNavToCell(leftCell); jumpToDiffPair(anchorAOrig, anchorBOrig); };
             leftCell.onclick = jump;
             rightCell.onclick = jump;
@@ -2565,8 +2998,8 @@ function exportLocalStorageBackup() {
             return { leftCell, rightCell };
         }
         function appendChangedRow(leftCol, rightCol, aLine, bLine) {
-            const leftCell = makeSideCell('changed-remove', aLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'remove'));
-            const rightCell = makeSideCell('changed-add', bLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'add'));
+            const leftCell = makeSideCell('changed-remove', aLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'remove'), 'A');
+            const rightCell = makeSideCell('changed-add', bLine.orig, renderCharDiffSpan(aLine.text, bLine.text, 'add'), 'B');
             pairSideCells(leftCell, rightCell);
             const jump = () => { setActiveSideRow(leftCell, rightCell); syncCompareNavToCell(leftCell); jumpToDiffPair(aLine.orig, bLine.orig); };
             leftCell.onclick = jump;
@@ -2718,8 +3151,8 @@ function exportLocalStorageBackup() {
         function makeUnifiedRow(cls, aOrig, bOrig, sign, contentNode) {
             const row = document.createElement('div');
             row.className = 'unified-row ' + cls;
-            const lnA = document.createElement('span'); lnA.className = 'un-ln'; lnA.textContent = aOrig != null ? (aOrig + 1) : '';
-            const lnB = document.createElement('span'); lnB.className = 'un-ln'; lnB.textContent = bOrig != null ? (bOrig + 1) : '';
+            const lnA = document.createElement('span'); lnA.className = 'un-ln'; lnA.textContent = editorDiffLineLabel('A', aOrig);
+            const lnB = document.createElement('span'); lnB.className = 'un-ln'; lnB.textContent = editorDiffLineLabel('B', bOrig);
             const sg = document.createElement('span'); sg.className = 'un-sign'; sg.textContent = sign;
             const txt = document.createElement('span'); txt.className = 'un-text';
             if (contentNode) txt.appendChild(contentNode);
@@ -2933,11 +3366,9 @@ function exportLocalStorageBackup() {
             tag.className = 'diff-tag';
             tag.textContent = '[' + d.type.toUpperCase() + ']';
             div.appendChild(box); div.appendChild(tag);
-            div.onclick = () => {
-                if (d.type === 'removed') scrollToEditorPath(d.path, 'editorLeft');
-                else if (d.type === 'added') scrollToEditorPath(d.path, 'editorRight');
-                else if (d.type === 'changed') { scrollToEditorPath(d.path, 'editorLeft'); scrollToEditorPath(d.path, 'editorRight'); }
-            };
+            // Both panels move: the side(s) that have the path select it, the other side shows
+            // where it would be (see jumpToEditorPath).
+            div.onclick = () => { jumpToEditorPath(d.path, false, 'range'); };
             return div;
         }
         function renderEditorChangesStats(structural) {
@@ -2958,7 +3389,7 @@ function exportLocalStorageBackup() {
             }
             results.appendChild(renderEditorChangesStats(structural));
             positionEditorFocusControls();
-            structural.forEach(d => results.appendChild(createChangesRow(d)));
+            orderEditorChangesByPosition(structural).forEach(d => results.appendChild(createChangesRow(d)));
         }
         function renderEditorTextualStats(diff) {
             const { groups, filteredA, filteredB } = diff;
@@ -2994,6 +3425,7 @@ function exportLocalStorageBackup() {
                 return;
             }
             annotateDiffAnchors(groups, filteredA, filteredB);
+            computeEditorDiffLineLabels();
             if (editorViewMode === 'split') renderSideBySide(results, groups, filteredA, filteredB);
             else renderUnifiedView(results, groups, filteredA, filteredB);
         }
@@ -3002,8 +3434,8 @@ function exportLocalStorageBackup() {
             editorLiveCompareActive = true;
             const results = document.getElementById('editorCompareResults');
             try {
-                const lVal = document.getElementById('editorLeft').value;
-                const rVal = document.getElementById('editorRight').value;
+                const lVal = getEditorText('editorLeft');
+                const rVal = getEditorText('editorRight');
                 if (!lVal || !rVal) throw new Error("Both Panel A and Panel B need JSON to compare.");
                 const left = JSON.parse(lVal);
                 const right = JSON.parse(rVal);
@@ -3014,6 +3446,9 @@ function exportLocalStorageBackup() {
                 const sortOn = document.getElementById('editorSortKeysToggle').checked;
                 const textA = JSON.stringify(sortOn ? sortKeysDeep(left) : left, null, 4);
                 const textB = JSON.stringify(sortOn ? sortKeysDeep(right) : right, null, 4);
+                // Kept so a click on a Split/Unified row can map its line to a JSON path (see jumpToDiffPair).
+                lastEditorDiff.textA = textA;
+                lastEditorDiff.textB = textB;
                 const worker = getEditorCompareWorker();
                 const myReq = ++editorCompareReqSeq;
                 if (worker) {
@@ -3169,40 +3604,14 @@ function exportLocalStorageBackup() {
             return top;
         }
 
-        function scrollToEditorPath(fullPath, panelId) {
-            setEditorMode(panelId, 'edit', null);
-            const el = document.getElementById(panelId);
-            const text = el.value;
-            let range;
-            try {
-                const offsets = buildJsonPathOffsets(text);
-                range = offsets[fullPath];
-            } catch (e) { range = null; }
-            if (!range) return;
-            el.focus();
-            el.setSelectionRange(range.start, range.end);
-
-            let scrollTop;
-            try {
-                const caretTop = getTextareaOffsetTop(el, range.start);
-                scrollTop = caretTop - el.clientHeight / 2;
-            } catch (e) {
-                const styles = window.getComputedStyle(el);
-                let lineHeight = parseFloat(styles.lineHeight);
-                if (!lineHeight || isNaN(lineHeight)) {
-                    const fontSize = parseFloat(styles.fontSize) || 11;
-                    lineHeight = fontSize * 1.35;
-                }
-                const targetLine = text.substring(0, range.start).split('\n').length - 1;
-                const visibleLines = el.clientHeight / lineHeight;
-                scrollTop = (targetLine - visibleLines / 2) * lineHeight;
-            }
-            const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
-            scrollTop = Math.max(0, Math.min(scrollTop, maxScroll));
-            el.scrollTop = scrollTop;
-
-            el.classList.add('highlight-flash');
-            setTimeout(() => el.classList.remove('highlight-flash'), 1200);
+        // Monaco counterpart of the textarea select + center + flash used by the two jump helpers.
+        function revealEditorMonacoRange(panelId, range) {
+            const ed = editorRich[panelId].editor;
+            ed.setSelection(range);
+            ed.revealRangeInCenter(range, monaco.editor.ScrollType.Immediate);
+            ed.focus();
+            const deco = ed.deltaDecorations([], [{ range: range, options: { isWholeLine: true, className: 'editor-line-flash' } }]);
+            setTimeout(() => { try { ed.deltaDecorations(deco, []); } catch (e) {} }, 1200);
         }
 
         ['editorLeft', 'editorRight'].forEach(id => {
@@ -3295,7 +3704,9 @@ function exportLocalStorageBackup() {
             }
         });
 
-        document.getElementById('jsonInput').addEventListener('input', (e) => {
+        document.getElementById('jsonInput').addEventListener('input', jsonAutoOutdentCloser);
+        // Typing a closing } ] (or </tag>) alone on a line steps it back one indent level.
+        function jsonAutoOutdentCloser(e) {
             if (e.inputType !== 'insertText' || !e.data || e.data.length !== 1 || '}]>'.indexOf(e.data) < 0) return;
             const ta = e.target, pos = ta.selectionStart;
             if (ta.selectionEnd !== pos) return;
@@ -3313,7 +3724,7 @@ function exportLocalStorageBackup() {
             try { ok = document.execCommand('delete'); } catch (err) {}
             if (!ok) { ta.setRangeText('', from, from + cut, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true })); }
             ta.setSelectionRange(pos - cut, pos - cut);   // put the caret back after the closer
-        });
+        }
 
         // Called by the shell after decoding a "#share=" link that points at this tool -- adds the
         // shared entry the same way pasting or uploading it would (the user already agreed to add it).
@@ -3321,7 +3732,7 @@ function exportLocalStorageBackup() {
             processInput(String((data && data.r) || '').trim(), (data && data.n) || '');
         }
         function shareCompareLink(btn) {
-            const aVal = document.getElementById('editorLeft').value, bVal = document.getElementById('editorRight').value;
+            const aVal = getEditorText('editorLeft'), bVal = getEditorText('editorRight');
             if (!aVal.trim() && !bVal.trim()) { alert('Load something into Panel A or Panel B first.'); return; }
             const payload = { v: 1, k: 'c', t: 'json',
                 a: { n: document.getElementById('editorLeftName').value || '', r: aVal },
@@ -3332,9 +3743,9 @@ function exportLocalStorageBackup() {
         // since nothing here is saved to the entry list, there's nothing that needs an "Add" confirmation.
         function loadSharedCompare(data) {
             const a = (data && data.a) || {}, b = (data && data.b) || {};
-            document.getElementById('editorLeft').value = a.r || '';
+            setEditorText('editorLeft', a.r || '');
             document.getElementById('editorLeftName').value = a.n || '';
-            document.getElementById('editorRight').value = b.r || '';
+            setEditorText('editorRight', b.r || '');
             document.getElementById('editorRightName').value = b.n || '';
             const big = ((a.r || '').length + (b.r || '').length) > 200000;
             if (big) { restoreEditorFocusControlsHome(); const results = document.getElementById('editorCompareResults'); if (results) results.innerHTML = 'Large comparison — click "Compare" above to run it.'; }
@@ -3509,7 +3920,10 @@ function exportLocalStorageBackup() {
             }
             
             entry.dataset.entryId = entryId;
-            postedEntries.push({ id: entryId, name: savedName, type, data, rawString, timeStr, minimap: false, wrap: false });
+            // The buttons below read item.data / item.rawString at click time (not the data/rawString
+            // arguments), because Edit mode can replace both after the entry was created.
+            const item = { id: entryId, name: savedName, type, data, rawString, timeStr, minimap: false, wrap: false };
+            postedEntries.push(item);
 
             entry.innerHTML = `
                 <div class="header">
@@ -3518,6 +3932,7 @@ function exportLocalStorageBackup() {
                     <span class="type-badge" style="background:${type === 'json' ? '#4ec9b0' : '#569cd6'}">${type}</span>
                     <input type="text" class="name-input" placeholder="Name entry..." value="${savedName}" oninput="updateEntryName(this)">
                     <div class="actions">
+                        ${type === 'json' ? `<div class="btn-icon btn-edit-submit" title="Apply changes (Ctrl+Enter)" onclick="submitEntryEdit('${entryId}')">${editSubmitIconSvg}</div><div class="btn-icon btn-edit-toggle" title="Edit JSON" onclick="toggleEntryEdit('${entryId}')">${editPencilIconSvg}</div>` : ''}
                         <button class="btn-global-icon fold-toggle" title="Collapse all nodes" data-tc="Collapse all nodes" data-te="Expand all nodes" onclick="entryFoldToggle(this)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 4.5L8 9l4.5-4.5M3.5 8.5L8 13l4.5-4.5"/></svg></button>
                         <div class="btn-icon wrap-toggle" title="Wrap long lines" onclick="toggleEntryWrapBtn('${entryId}', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11a3 3 0 0 1 0 6h-1"/><path d="M12 16l-2 2l2 2"/><path d="M4 18h4"/></svg></div>
                         <div class="btn-icon minimap-toggle" title="Show a VS Code-style minimap for this snippet" onclick="toggleEntryMinimapBtn('${entryId}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="10.5" y1="2.5" x2="10.5" y2="13.5"/><line x1="3.2" y1="5" x2="8.3" y2="5"/><line x1="3.2" y1="7.2" x2="7" y2="7.2"/><line x1="3.2" y1="9.4" x2="8.3" y2="9.4"/><line x1="3.2" y1="11.6" x2="6" y2="11.6"/><line x1="11.7" y1="5" x2="13.3" y2="5"/><line x1="11.7" y1="7.2" x2="12.6" y2="7.2"/><line x1="11.7" y1="9.4" x2="13.3" y2="9.4"/></svg></div>
@@ -3547,8 +3962,8 @@ function exportLocalStorageBackup() {
             convertBtn.onclick = () => {
                 let result = "";
                 try {
-                    if (type === 'json') result = jsonToXml(data);
-                    else result = JSON.stringify(xmlToJson(data.documentElement), null, 4);
+                    if (type === 'json') result = jsonToXml(item.data);
+                    else result = JSON.stringify(xmlToJson(item.data.documentElement), null, 4);
                     navigator.clipboard.writeText(result).then(() => {
                         const originalSvg = convertBtn.innerHTML;
                         convertBtn.innerHTML = '<span style="color:#89d185; font-size:11px; font-weight:bold;">✓</span>';
@@ -3559,7 +3974,7 @@ function exportLocalStorageBackup() {
 
             const copyBtn = entry.querySelector('.btn-copy');
             copyBtn.onclick = () => {
-                const text = type === 'json' ? JSON.stringify(data, null, 4) : stripInternalXmlMarkers(rawString);
+                const text = type === 'json' ? JSON.stringify(item.data, null, 4) : stripInternalXmlMarkers(item.rawString);
                 navigator.clipboard.writeText(text).then(() => {
                     copyBtn.innerHTML = '<span style="color:#89d185; font-size:11px; font-weight:bold;">✓</span>';
                     setTimeout(() => copyBtn.innerHTML = copyIconSvg, 600);
@@ -3568,7 +3983,7 @@ function exportLocalStorageBackup() {
 
             const minifyBtn = entry.querySelector('.btn-minify');
             minifyBtn.onclick = () => {
-                let text = type === 'json' ? JSON.stringify(data) : stripInternalXmlMarkers(rawString.replace(/>\s+</g, '><').trim());
+                let text = type === 'json' ? JSON.stringify(item.data) : stripInternalXmlMarkers(item.rawString.replace(/>\s+</g, '><').trim());
                 navigator.clipboard.writeText(text).then(() => {
                     minifyBtn.innerHTML = '<span style="color:#89d185; font-size:11px; font-weight:bold;">✓</span>';
                     setTimeout(() => minifyBtn.innerHTML = minifyIconSvg, 600);
@@ -3578,7 +3993,7 @@ function exportLocalStorageBackup() {
             const shareBtn = entry.querySelector('.btn-share');
             shareBtn.onclick = () => {
                 const name = entry.querySelector('.name-input').value.trim();
-                const payload = { v: 1, k: 'e', t: 'json', ts: Date.now(), d: { n: name, r: rawString } };
+                const payload = { v: 1, k: 'e', t: 'json', ts: Date.now(), d: { n: name, r: item.rawString } };
                 DT.shareEntry(payload, shareBtn, () => entry.querySelector('.btn-save').click(), () => {
                     shareBtn.innerHTML = '<span style="color:#89d185; font-size:11px; font-weight:bold;">✓</span>';
                     setTimeout(() => shareBtn.innerHTML = shareIconSvg, 800);
@@ -3599,7 +4014,7 @@ function exportLocalStorageBackup() {
                     name = `Export_${YYYY}${MM}${DD}_${HH}${min}${ss}`;
                 }
 
-                let dataToSave = type === 'json' ? JSON.stringify(data, null, 4) : stripInternalXmlMarkers(new XMLSerializer().serializeToString(data));
+                let dataToSave = type === 'json' ? JSON.stringify(item.data, null, 4) : stripInternalXmlMarkers(new XMLSerializer().serializeToString(item.data));
                 const blob = new Blob([dataToSave], {type: 'text/plain'});
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -3663,6 +4078,340 @@ function exportLocalStorageBackup() {
         function findEntry(id) { return postedEntries.find(e => e.id === id); }
 
         /* =========================================================================
+           Edit mode for a Viewer entry (JSON only for now).
+           Pencil = enter Edit mode; while editing, pressing the pencil again cancels (the entry is
+           left exactly as it was) and the check applies. Applying re-parses the text: if it isn't
+           valid JSON the error is shown and you stay in Edit mode to fix it.
+           The editor is Monaco (same build as the Code tool), loaded from the CDN only the first
+           time someone edits, so the JSON tool's normal page load stays light. If Monaco can't load
+           (offline / blocked CDN) a plain text box with smart indent is used instead.
+           ========================================================================= */
+        const JSON_EDIT_MONACO_BASE = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min';
+        let jsonEditMonacoPromise = null;
+        function loadJsonEditMonaco() {
+            if (window.monaco && monaco.editor) return Promise.resolve(true);
+            if (jsonEditMonacoPromise) return jsonEditMonacoPromise;
+            const p = new Promise(resolve => {
+                let settled = false;
+                const timer = setTimeout(() => done(false), 15000);
+                function done(ok) { if (settled) return; settled = true; clearTimeout(timer); resolve(ok); }
+                function start() {
+                    try {
+                        window.require.config({ paths: { vs: JSON_EDIT_MONACO_BASE + '/vs' } });
+                        window.MonacoEnvironment = {
+                            // Same worker bootstrap as code.html: blob: first (allowed by stricter
+                            // policies that block data: workers), data: as the fallback.
+                            getWorkerUrl: function () {
+                                const boot = "self.MonacoEnvironment = { baseUrl: '" + JSON_EDIT_MONACO_BASE + "/' };\n" +
+                                    "importScripts('" + JSON_EDIT_MONACO_BASE + "/vs/base/worker/workerMain.js');";
+                                try { return URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })); }
+                                catch (e) { return 'data:text/javascript;charset=utf-8,' + encodeURIComponent(boot); }
+                            }
+                        };
+                        window.require(['vs/editor/editor.main'], () => {
+                            try {
+                                monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+                                    validate: true, allowComments: false, trailingCommas: 'error', schemaValidation: 'ignore', schemas: []
+                                });
+                            } catch (e) {}
+                            done(true);
+                        }, () => done(false));
+                    } catch (e) { done(false); }
+                }
+                if (typeof window.require === 'function' && typeof window.require.config === 'function') { start(); return; }
+                const s = document.createElement('script');
+                s.src = JSON_EDIT_MONACO_BASE + '/vs/loader.js';
+                s.onload = start;
+                s.onerror = () => done(false);
+                document.head.appendChild(s);
+            });
+            jsonEditMonacoPromise = p;
+            p.then(ok => { if (!ok && jsonEditMonacoPromise === p) jsonEditMonacoPromise = null; });   // let a later edit retry
+            return p;
+        }
+
+        function jsonEditFontOpts() {
+            const t = (window.DT && DT.sec && DT.sec()) || {};
+            const fontSize = (Number(t.size) || 11) + 1;
+            return {
+                fontFamily: t.fontStack || '"Cascadia Code", Consolas, "Courier New", monospace',
+                fontSize: fontSize,
+                lineHeight: Math.round(fontSize * (Number(t.lineHeight) || 1.5))
+            };
+        }
+        function jsonEditEntryEl(id) { return document.querySelector('.entry[data-entry-id="' + id + '"]'); }
+
+        function toggleEntryEdit(id) {
+            const item = findEntry(id);
+            if (!item || item.type !== 'json') return;
+            if (item.editing) cancelEntryEdit(id);
+            else startEntryEdit(id);
+        }
+
+        function updateEntryEditButtons(item, entry) {
+            const btn = entry.querySelector('.btn-edit-toggle');
+            if (!btn) return;
+            btn.classList.toggle('toggle-active', !!item.editing);
+            btn.title = item.editing ? 'Cancel editing (discard changes)' : 'Edit JSON';
+        }
+
+        function startEntryEdit(id) {
+            const item = findEntry(id), entry = jsonEditEntryEl(id);
+            if (!item || !entry || item.editing) return;
+            item.editing = true;
+            const token = item.editToken = (item.editToken || 0) + 1;
+            const text = JSON.stringify(item.data, null, 4);
+            entry.classList.remove('collapsed-entry');
+            entry.classList.add('editing');
+            const area = document.createElement('div');
+            area.className = 'json-edit-area';
+            area.innerHTML = '<div class="json-edit-error" hidden></div><div class="json-edit-host"><div class="json-edit-loading">Loading editor…</div></div>';
+            entry.querySelector('.content-row').after(area);
+            const host = area.querySelector('.json-edit-host');
+            const lines = text.split('\n').length;
+            host.style.setProperty('--edit-h', Math.min(Math.max(lines * jsonEditFontOpts().lineHeight + 18, 120), 460) + 'px');
+            updateEntryEditButtons(item, entry);
+            loadJsonEditMonaco().then(ok => {
+                if (!item.editing || item.editToken !== token || !host.isConnected) return;   // cancelled while loading
+                if (ok) { try { mountEntryEditMonaco(item, host, text); return; } catch (e) { console.error(e); } }
+                mountEntryEditTextarea(item, host, text);
+            });
+        }
+
+        function mountEntryEditMonaco(item, host, text) {
+            host.innerHTML = '';
+            const o = jsonEditFontOpts();
+            const model = monaco.editor.createModel(text, 'json');
+            const editor = monaco.editor.create(host, {
+                model: model,
+                theme: window.DT ? DT.monacoTheme() : (document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark'),
+                automaticLayout: true,
+                minimap: { enabled: false },
+                wordWrap: item.wrap ? 'on' : 'off',
+                tabSize: 4, insertSpaces: true, detectIndentation: false,
+                autoIndent: 'full', formatOnPaste: true, formatOnType: true,
+                autoClosingBrackets: 'always', autoClosingQuotes: 'always',
+                folding: true, stickyScroll: { enabled: true },
+                fontFamily: o.fontFamily, fontSize: o.fontSize, lineHeight: o.lineHeight,
+                scrollBeyondLastLine: false, renderWhitespace: 'selection',
+                smoothScrolling: !!(window.DT && DT.motionOk && DT.motionOk())
+            });
+            // addAction (not addCommand): Monaco's addCommand keybindings are shared across every
+            // editor on the page, so with two entries open the wrong one would get applied.
+            editor.addAction({
+                id: 'dt-apply-json-edit', label: 'Apply changes',
+                keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
+                run: () => submitEntryEdit(item.id)
+            });
+            item.editor = editor;
+            item.editModel = model;
+            editor.focus();
+        }
+
+        function mountEntryEditTextarea(item, host, text) {
+            host.innerHTML = '';
+            const ta = document.createElement('textarea');
+            ta.className = 'json-edit-ta' + (item.wrap ? ' wrap-on' : '');
+            ta.spellcheck = false;
+            ta.setAttribute('autocomplete', 'off');
+            ta.setAttribute('autocapitalize', 'off');
+            ta.value = text;
+            ta.addEventListener('keydown', e => jsonEditTextareaKey(e, item.id));
+            ta.addEventListener('input', jsonAutoOutdentCloser);
+            host.appendChild(ta);
+            item.editTextarea = ta;
+            ta.focus();
+            ta.setSelectionRange(0, 0);
+        }
+
+        // Fallback editor keys: Enter keeps/adds indentation (and opens {|} pairs onto their own
+        // lines), Tab / Shift+Tab indent / outdent by 4 spaces (whole lines when several are
+        // selected), Ctrl/Cmd+Enter applies. Esc then Tab still moves focus out, as elsewhere.
+        function jsonEditTextareaKey(e, id) {
+            const ta = e.target;
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submitEntryEdit(id); return; }
+            if (e.key === 'Enter' && !e.altKey && !e.shiftKey && !e.isComposing) { jsonSmartEnter(e); return; }
+            if (e.key === 'Escape') { ta._tabEscape = true; return; }
+            if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                if (ta._tabEscape) { ta._tabEscape = false; return; }
+                e.preventDefault();
+                jsonEditIndent(ta, e.shiftKey);
+                return;
+            }
+            if (e.key !== 'Shift') ta._tabEscape = false;
+        }
+        function jsonEditIndent(ta, outdent) {
+            const UNIT = '    ';
+            const v = ta.value, s = ta.selectionStart, en = ta.selectionEnd;
+            const multi = v.slice(s, en).indexOf('\n') >= 0;
+            if (!outdent && !multi) {
+                const col = s - (v.lastIndexOf('\n', s - 1) + 1);
+                jsonInsertText(ta, s, en, ' '.repeat(UNIT.length - (col % UNIT.length)));
+                return;
+            }
+            const ls = v.lastIndexOf('\n', s - 1) + 1;
+            let end = en;
+            if (end > s && v.charAt(end - 1) === '\n') end--;
+            let first = 0, total = 0, changed = false;
+            const out = v.slice(ls, end).split('\n').map((ln, i) => {
+                if (!outdent) { if (i === 0) first = UNIT.length; total += UNIT.length; changed = true; return UNIT + ln; }
+                const m = /^( {1,4}|\t)/.exec(ln);
+                if (!m) return ln;
+                if (i === 0) first = -m[0].length;
+                total -= m[0].length; changed = true;
+                return ln.slice(m[0].length);
+            });
+            if (!changed) return;
+            jsonInsertText(ta, ls, end, out.join('\n'));
+            ta.setSelectionRange(Math.max(ls, s + first), Math.max(ls, en + total));
+        }
+
+        // Turns a JSON.parse error into { line, col, offset } where the browser tells us where it
+        // stopped. Chrome says "... at position N (line L column C)", older Chrome only "at
+        // position N", Firefox "... at line L column C of the JSON data", and an unfinished document
+        // is "Unexpected end of JSON input".
+        function jsonEditErrorLocation(msg, text) {
+            const fromOffset = off => {
+                off = Math.max(0, Math.min(off, text.length));
+                const before = text.slice(0, off);
+                return { offset: off, line: before.split('\n').length, col: off - before.lastIndexOf('\n') };
+            };
+            let m = /position (\d+)/i.exec(msg);
+            if (m) return fromOffset(Number(m[1]));
+            m = /line (\d+) column (\d+)/i.exec(msg);
+            if (m) {
+                const line = Number(m[1]), col = Number(m[2]);
+                const lines = text.split('\n');
+                let off = 0;
+                for (let i = 0; i < line - 1 && i < lines.length; i++) off += lines[i].length + 1;
+                return { offset: Math.min(off + col - 1, text.length), line, col };
+            }
+            if (/end of (json )?(input|data)/i.test(msg)) return fromOffset(text.replace(/\s+$/, '').length);
+            return null;
+        }
+        function jsonEditCleanMessage(msg) {
+            return String(msg || 'Invalid JSON')
+                .replace(/^JSON\.parse:\s*/i, '')
+                .replace(/\s*in JSON at position \d+(\s*\(line \d+ column \d+\))?/i, '')
+                .replace(/\s*at line \d+ column \d+ of the JSON data/i, '')
+                .replace(/^./, c => c.toUpperCase());
+        }
+
+        function showEntryEditError(item, entry, message, loc) {
+            const errEl = entry.querySelector('.json-edit-error');
+            if (errEl) {
+                errEl.textContent = '✕ ' + (loc ? 'Line ' + loc.line + ', column ' + loc.col + ': ' : '') + message;
+                errEl.hidden = false;
+            }
+            if (item.editor) {
+                if (loc) {
+                    item.editor.setPosition({ lineNumber: loc.line, column: loc.col });
+                    item.editor.revealLineInCenterIfOutsideViewport(loc.line);
+                }
+                item.editor.focus();
+            } else if (item.editTextarea) {
+                const ta = item.editTextarea;
+                ta.focus();
+                if (loc) ta.setSelectionRange(loc.offset, loc.offset);
+            }
+        }
+
+        function submitEntryEdit(id) {
+            const item = findEntry(id), entry = jsonEditEntryEl(id);
+            if (!item || !entry || !item.editing) return;
+            const text = item.editModel ? item.editModel.getValue() : (item.editTextarea ? item.editTextarea.value : null);
+            if (text == null) return;   // editor still loading
+            if (!text.trim()) { showEntryEditError(item, entry, 'The editor is empty — a JSON entry needs an object {…} or an array […].', null); return; }
+            let parsed;
+            try { parsed = JSON.parse(text); }
+            catch (e) {
+                let loc = jsonEditErrorLocation(e.message, text);
+                if (!loc && item.editModel) {
+                    // Some browser messages don't say where parsing stopped -- fall back to where
+                    // Monaco's own JSON validation put its first error squiggle.
+                    try {
+                        const mk = monaco.editor.getModelMarkers({ resource: item.editModel.uri })
+                            .filter(x => x.severity >= monaco.MarkerSeverity.Error)
+                            .sort((a, b) => a.startLineNumber - b.startLineNumber || a.startColumn - b.startColumn)[0];
+                        if (mk) loc = { line: mk.startLineNumber, col: mk.startColumn, offset: item.editModel.getOffsetAt({ lineNumber: mk.startLineNumber, column: mk.startColumn }) };
+                    } catch (err) {}
+                }
+                showEntryEditError(item, entry, jsonEditCleanMessage(e.message), loc);
+                return;
+            }
+            if (parsed === null || typeof parsed !== 'object') {
+                showEntryEditError(item, entry, 'The top level must be an object {…} or an array […].', null);
+                return;
+            }
+            item.data = parsed;
+            item.rawString = JSON.stringify(parsed, null, 4);
+            finishEntryEdit(item, entry, true);
+        }
+
+        function cancelEntryEdit(id) {
+            const item = findEntry(id), entry = jsonEditEntryEl(id);
+            if (!item || !entry || !item.editing) return;
+            finishEntryEdit(item, entry, false);
+        }
+
+        function disposeEntryEdit(item) {
+            if (!item) return;
+            if (item.editor) { try { item.editor.dispose(); } catch (e) {} }
+            if (item.editModel) { try { item.editModel.dispose(); } catch (e) {} }
+            item.editor = null;
+            item.editModel = null;
+            item.editTextarea = null;
+            item.editing = false;
+            item.editToken = (item.editToken || 0) + 1;
+        }
+
+        function finishEntryEdit(item, entry, applied) {
+            disposeEntryEdit(item);
+            entry.classList.remove('editing');
+            const area = entry.querySelector('.json-edit-area');
+            if (area) area.remove();
+            updateEntryEditButtons(item, entry);
+            if (!applied) return;
+            rebuildEntryTree(item, entry);
+            saveEntriesToStorage();
+            renderEditorChips();
+            flashIcon(entry.querySelector('.btn-edit-toggle'));
+        }
+
+        // Re-renders an entry's tree from item.data after an edit, resetting the tree-only state
+        // (search highlights, breadcrumb, collapse-all toggle) that belonged to the old tree.
+        function rebuildEntryTree(item, entry) {
+            const content = entry.querySelector('.content');
+            if (!content) return;
+            if (currentMatches.some(m => content.contains(m))) { currentMatches = []; activeMatchIndex = -1; }
+            const search = entry.querySelector('.search-inline');
+            if (search) search.value = '';
+            const counter = entry.querySelector('.search-counter');
+            if (counter) counter.textContent = '0/0';
+            const crumb = entry.querySelector('.breadcrumb-text');
+            if (crumb) crumb.textContent = 'root';
+            const fold = entry.querySelector('.fold-toggle');
+            if (fold) { fold.classList.remove('is-collapsed'); fold.title = fold.dataset.tc || 'Collapse all nodes'; }
+            content.classList.remove('cv-big');
+            content.innerHTML = '';
+            content.appendChild(renderTree(item.data, null, 'root'));
+            dtApplyExpand(content);
+            dtMarkBigTree(content);
+            applyMinimapForEntry(item);
+        }
+
+        // Theme / palette / font changes while an entry is being edited.
+        function syncEntryEditors() {
+            if (!window.monaco || !monaco.editor) return;
+            // Viewer entries in Edit mode + the two Compare panels when they're on the code editor.
+            const eds = postedEntries.map(it => it.editor).concat(EDITOR_PANEL_IDS.map(id => editorRich[id].editor)).filter(Boolean);
+            if (!eds.length) return;
+            try { monaco.editor.setTheme(window.DT ? DT.monacoTheme() : 'vs-dark'); } catch (e) {}
+            const o = jsonEditFontOpts();
+            eds.forEach(ed => ed.updateOptions({ fontFamily: o.fontFamily, fontSize: o.fontSize, lineHeight: o.lineHeight }));
+        }
+
+        /* =========================================================================
            window.DTAPI - programmatic API for the shell's command palette.
            Wraps the tool's existing functions; every member is guarded and never throws.
            ========================================================================= */
@@ -3707,7 +4456,7 @@ function exportLocalStorageBackup() {
                 setTimeout(() => { btn.innerHTML = svg; }, 700);
             }
 
-            function panelText(id) { const t = document.getElementById(id); return t ? t.value : ''; }
+            function panelText(id) { return document.getElementById(id) ? getEditorText(id) : ''; }
 
             function refreshPanel(id) {
                 const tree = document.getElementById(id + 'Tree');
@@ -3799,7 +4548,7 @@ function exportLocalStorageBackup() {
                     const a = document.getElementById('editorLeft'), b = document.getElementById('editorRight');
                     const an = document.getElementById('editorLeftName'), bn = document.getElementById('editorRightName');
                     if (!a || !b) return false;
-                    const t = a.value; a.value = b.value; b.value = t;
+                    const t = getEditorText('editorLeft'); setEditorText('editorLeft', getEditorText('editorRight')); setEditorText('editorRight', t);
                     if (an && bn) { const n = an.value; an.value = bn.value; bn.value = n; }
                     refreshPanel('editorLeft'); refreshPanel('editorRight');
                     if (editorLiveCompareActive && editorLiveCompareEnabled()) runEditorCompare();
@@ -4290,6 +5039,9 @@ function exportLocalStorageBackup() {
             item.wrap = checked;
             const contentEl = document.getElementById('content-' + id);
             if (contentEl) contentEl.classList.toggle('wrap-on', checked);
+            // Same toggle drives the editor while the entry is in Edit mode.
+            if (item.editor) item.editor.updateOptions({ wordWrap: checked ? 'on' : 'off' });
+            if (item.editTextarea) item.editTextarea.classList.toggle('wrap-on', checked);
         }
         function toggleEntryWrapBtn(id, btnEl) {
             const item = findEntry(id);
@@ -4554,6 +5306,8 @@ function exportLocalStorageBackup() {
 
         loadViewerLayout();
         loadEntriesFromStorage().then(function () { DT.notifyEntryCount(postedEntries.length); });
+        updateEditorRichToggleUI();
+        if (document.getElementById('editor-pane').classList.contains('active')) ensureEditorPanelsRich();
     </script>
 <script>
 (function () {
@@ -4599,6 +5353,7 @@ function exportLocalStorageBackup() {
     // resizes need an explicit repaint (same hooks the code viewer uses).
     function repaintMinimaps() {
         try { postedEntries.forEach(function (item) { if (item.minimap) renderMinimap(item); }); } catch (e) {}
+        try { syncEntryEditors(); } catch (e) {}   // re-theme any JSON entry open in Edit mode
     }
     try {
         new MutationObserver(function () { requestAnimationFrame(repaintMinimaps); })
